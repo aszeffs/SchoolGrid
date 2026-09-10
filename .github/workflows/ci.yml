@@ -54,4 +54,6 @@ jobs:
         with:
           name: coverage
           path: coverage/
+          # Long enough to compare against last week's run, short enough that
+          # the artifact store does not become a filing cabinet.
           retention-days: 14

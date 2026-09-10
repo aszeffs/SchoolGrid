@@ -29,10 +29,18 @@ jobs:
         uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           languages: javascript-typescript
+          # The javascript-typescript extractor reads source directly, so a build
+          # would add minutes for no extra coverage.
           build-mode: none
+          # Wider than the default suite. On a codebase this small the extra
+          # noise costs nothing, and the habit is cheaper to form now than to
+          # retrofit.
           queries: security-and-quality
 
       - name: Analyze
+        # Uploads SARIF to code scanning, which is what puts findings in the
+        # Security tab alongside the secret scan rather than in a log nobody
+        # opens.
         uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           category: /language:javascript-typescript

@@ -12,9 +12,9 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate-cli.ts",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "test:coverage": "vitest run --coverage"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "fastify": "^5.2.1",

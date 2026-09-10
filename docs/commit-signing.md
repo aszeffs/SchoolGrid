@@ -1,8 +1,9 @@
 # Commit signing
 
-Every commit on this repository is signed with an SSH key and shows as Verified
-on GitHub. Branch protection on `main` and `dev` requires it, so an unsigned
-commit cannot be pushed or merged.
+Commits on this repository are signed with an SSH key so they show as Verified
+on GitHub. Signing is not yet enforced: branch protection on `main` and `dev`
+will require it once ticket 12 lands, at which point an unsigned commit can no
+longer be pushed or merged. Until then this is a convention, not a control.
 
 Anyone can set any name and email in `git config`. On a public repository an
 unsigned commit therefore proves nothing about who wrote it. Signing closes

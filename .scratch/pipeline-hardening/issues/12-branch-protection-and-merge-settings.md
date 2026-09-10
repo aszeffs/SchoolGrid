@@ -54,3 +54,7 @@ Three corrections, all found while implementing 01, 02, 03, 04 and 11.
 *Required checks are matched by job name, not workflow name.* GitHub's required-status-check list matches the `name:` of the job as it appears in the checks API, which for these workflows is the job's `name:` field and not the workflow's. Naming them wrongly produces the same silent never-reports failure. The exact strings are now in the ticket. If a job is renamed later, the protection rule must be updated in the same change or trunk becomes unmergeable.
 
 One thing deliberately not changed: required approving reviews stay at zero, and the reasoning in the body still holds.
+
+**2026-09-11 — `npm audit` added to the required list, deliberately.**
+
+The spec enumerates seven required status checks and `npm audit` is not among them, because ticket 03's audit gate did not exist when the spec was written. It is now a job that runs on every pull request and fails on a high or critical advisory, which is exactly the shape of the other required checks. Requiring it is a deliberate addendum to the spec's list rather than an oversight. The alternative — a gate that runs, goes red, and merges anyway — is the advisory-control problem this whole effort exists to fix.

@@ -52,3 +52,9 @@ No threshold is configured and no third-party service was added. Current numbers
 | 37.5% (36/96) | 15.62% (5/32) | 58.82% (10/17) | 37.36% (34/91) |
 
 The formatter has unit tests in `tests/coverage-summary.test.ts` covering the rendered table and the missing-report path.
+
+**2026-09-11 — summary script hardened after review.**
+
+Code review found the summary step could fail the CI job it was meant to only report on. The reader was `readFile(...).then(JSON.parse, () => null)`, and a rejection handler passed to the same `.then` does not catch a throw from its sibling fulfilment handler. A truncated `coverage-summary.json` — what a test run killed mid-write leaves behind, which is precisely the `if: always()` case — escaped as an unhandled `SyntaxError` and exited 1.
+
+Reproduced against a deliberately truncated report, then fixed with a trailing `.catch`. All three states now exit 0: valid report renders the table, truncated report and missing report both render "No coverage report was produced."
