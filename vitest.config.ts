@@ -9,5 +9,14 @@ export default defineConfig({
     // are database guarantees.
     testTimeout: 30_000,
     hookTimeout: 120_000,
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts"],
+      // No threshold. A percentage measured against a walking skeleton says
+      // nothing useful, and a floor set this early only teaches you to game
+      // it. Make the number visible now; set the floor against real code.
+      reporter: ["text", "text-summary", "html", "json-summary"],
+      reportsDirectory: "coverage",
+    },
   },
 });

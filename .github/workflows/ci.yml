@@ -34,8 +34,24 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Test
+      - name: Test with coverage
         # Starts a real PostgreSQL. No service container is needed: the suite
         # provisions its own via embedded-postgres, so CI and local runs
         # exercise the same setup.
-        run: npm test
+        run: npm run test:coverage
+
+      - name: Publish coverage to the job summary
+        # Measured and visible, with no threshold and no third-party service.
+        # Granting an external integration repository access in order to
+        # measure code quality would widen the supply-chain surface this
+        # pipeline exists to narrow.
+        if: always()
+        run: node scripts/coverage-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
