@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        # `npm ci` installs strictly from the lockfile. Install scripts run only
+        # for the exact versions allowlisted in package.json, so a dependency
+        # that starts running code at install time fails here rather than
+        # executing silently.
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        # Starts a real PostgreSQL. No service container is needed: the suite
+        # provisions its own via embedded-postgres, so CI and local runs
+        # exercise the same setup.
+        run: npm test
