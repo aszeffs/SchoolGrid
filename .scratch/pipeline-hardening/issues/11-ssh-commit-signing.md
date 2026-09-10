@@ -10,14 +10,53 @@ SSH signing rather than GPG — an existing SSH key, three config values, one ke
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** blocked-on-owner
 
 - [ ] A signing key exists locally and is registered on the GitHub account with **signing** scope (a key registered only for authentication does not count).
-- [ ] Git is configured with `gpg.format=ssh`, `user.signingkey`, and `commit.gpgsign=true`.
+- [x] Git is configured with `gpg.format=ssh`, `user.signingkey`, and `commit.gpgsign=true`.
 - [ ] A test commit is pushed and confirmed to display as Verified on GitHub.
-- [ ] The setup is documented so it can be reproduced on another machine.
+- [x] The setup is documented so it can be reproduced on another machine.
 - [ ] Confirmed working before ticket 12 begins — this is the ordering that prevents a lockout.
 
 ---
 
 **Note:** the failure mode here is specific. Enable the protection rule before signing works and the next push is rejected, with no remedy except turning the rule back off. Verify first.
+
+## Comments
+
+**2026-09-11 — local half done; one owner-only step remains.**
+
+Local configuration is complete and every commit on this branch is signed.
+
+No SSH key existed on this machine, so a dedicated one was generated rather than an existing key being reused:
+
+```
+~/.ssh/id_ed25519_signing
+SHA256:RJFsjTIpmSca/YW7bJiYWkJ7CkiajoRmiiWznFGuYMI (ED25519)
+```
+
+It has no passphrase, so signing never prompts. That is the usual trade for commit signing — a passphrase means either a prompt per commit or an agent to hold the key — but it does mean the private key protects only as well as the filesystem does. Adding a passphrase later is `ssh-keygen -p -f ~/.ssh/id_ed25519_signing` and does not invalidate anything already signed.
+
+Git config, set `--local` so signing here does not change how unrelated repositories behave:
+
+```
+gpg.format = ssh
+user.signingkey = C:/Users/Ashley/.ssh/id_ed25519_signing.pub
+commit.gpgsign = true
+tag.gpgsign = true
+gpg.ssh.allowedSignersFile = C:/Users/Ashley/.ssh/allowed_signers
+```
+
+`allowedSignersFile` is beyond the ticket's three values and worth having: GitHub verifies against keys it knows, but git verifies against that file, and without it `git log --show-signature` reports every signature as being from an unknown signer even when GitHub shows Verified.
+
+Reproduction instructions are in `docs/commit-signing.md`, including the authentication-versus-signing scope distinction that is the most common way this silently fails.
+
+**Remaining, and only the repository owner can do it.** Register the public key at <https://github.com/settings/ssh/new> with **Key type** set to **Signing Key**:
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/gMN6dCangbxmMB1oDDTtLgFdKoCiRl7KLPx7I7jud rndn.shly@gmail.com (schoolgrid signing)
+```
+
+An Authentication Key registration does not count; commits signed by an auth-only key show as Unverified. Then push and confirm the Verified badge. The `gh` token in use holds `gist`, `read:org`, `repo` and `workflow`, not `admin:ssh_signing_key`, so this cannot be automated from here without widening the token — which would be the wrong trade for a one-time action.
+
+**Ticket 12 must not begin until that badge is confirmed.** This is the ordering the ticket warns about: require signed commits before signing verifies, and the next push is rejected with no remedy but disabling the rule.
