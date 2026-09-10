@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  # Application dependencies. Grouping minor and patch into one pull request
+  # keeps staying current from becoming a queue of trivial reviews; majors are
+  # raised individually because those are the ones worth reading.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Manila
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+    groups:
+      npm-minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Actions are pinned to commit SHAs, which is what stops a moved tag from
+  # changing what runs here. Without this, pinning would decay into running
+  # permanently outdated actions. Dependabot bumps the SHA and its trailing
+  # version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Manila
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
