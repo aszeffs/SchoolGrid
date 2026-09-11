@@ -1,0 +1,87 @@
+# Trivy exceptions.
+#
+# Findings recorded here are excluded from the gate in
+# `.github/workflows/container.yml`. Nothing else is: the threshold stays at
+# HIGH, `ignore-unfixed` stays off, and the gate stays on. This file is the
+# only way around a finding, and it is deliberately the expensive way.
+#
+# Every entry needs three things, and `scripts/check-trivy-exceptions.mjs`
+# fails the build if any is missing:
+#
+#   id          the finding, exactly as Trivy reports it
+#   statement   why it cannot be fixed here, in a sentence someone else can read
+#   expired_at  YYYY-MM-DD, at most 180 days out, when the decision is revisited
+#
+# Entries go under the section matching the scan that raised them:
+# `vulnerabilities:` for a CVE in the image, `misconfigurations:` for a
+# Dockerfile check such as DS-0002.
+#
+# Trivy stops honouring an entry the day it expires, so a forgotten exception
+# reopens the gate rather than quietly holding it shut. That is the intended
+# behaviour; renew it deliberately or delete it.
+#
+# The full process, including what counts as a justification, is in
+# `docs/trivy-exceptions.md`.
+
+vulnerabilities:
+  # All six are the same finding wearing six numbers: libssl3 3.0.18-1~deb12u2
+  # in the distroless base layer.
+  #
+  # Debian has already published the fixes, as 3.0.19-1~deb12u2 and
+  # 3.0.20-1~deb12u2. What does not exist is a distroless image carrying them:
+  # `gcr.io/distroless/nodejs24-debian12:nonroot` still resolves to the digest
+  # pinned in the Dockerfile, so the base this repository builds on is the
+  # newest one published. There is nothing to bump to.
+  #
+  # This is what the gate working looks like rather than the gate misfiring.
+  # The finding is real, the response is to take the rebuilt base as soon as it
+  # exists, and Dependabot's docker ecosystem will raise that as a pull request
+  # without anyone watching for it. Until then the choice is an exception with
+  # a date on it or a threshold lowered permanently, and only one of those
+  # comes back.
+  #
+  # Expiry is short on purpose. Distroless rebuilds run often; if these are
+  # still here in two months the assumption above has stopped being true and
+  # deserves a fresh look rather than a renewal.
+  - id: CVE-2026-31789
+    statement: >-
+      libssl3 in the distroless base. Fixed in Debian as 3.0.19-1~deb12u2, but
+      no rebuilt distroless image carries it yet: the :nonroot tag still
+      resolves to the digest already pinned. Bump the base as soon as one
+      exists.
+    expired_at: 2026-11-11
+  - id: CVE-2026-28387
+    statement: >-
+      libssl3 in the distroless base. Fixed in Debian as 3.0.19-1~deb12u2, but
+      no rebuilt distroless image carries it yet: the :nonroot tag still
+      resolves to the digest already pinned. Bump the base as soon as one
+      exists.
+    expired_at: 2026-11-11
+  - id: CVE-2026-28388
+    statement: >-
+      libssl3 in the distroless base. Fixed in Debian as 3.0.19-1~deb12u2, but
+      no rebuilt distroless image carries it yet: the :nonroot tag still
+      resolves to the digest already pinned. Bump the base as soon as one
+      exists.
+    expired_at: 2026-11-11
+  - id: CVE-2026-28389
+    statement: >-
+      libssl3 in the distroless base. Fixed in Debian as 3.0.19-1~deb12u2, but
+      no rebuilt distroless image carries it yet: the :nonroot tag still
+      resolves to the digest already pinned. Bump the base as soon as one
+      exists.
+    expired_at: 2026-11-11
+  - id: CVE-2026-28390
+    statement: >-
+      libssl3 in the distroless base. Fixed in Debian as 3.0.19-1~deb12u2, but
+      no rebuilt distroless image carries it yet: the :nonroot tag still
+      resolves to the digest already pinned. Bump the base as soon as one
+      exists.
+    expired_at: 2026-11-11
+  - id: CVE-2026-45447
+    statement: >-
+      libssl3 in the distroless base. Fixed in Debian as 3.0.20-1~deb12u2, but
+      no rebuilt distroless image carries it yet: the :nonroot tag still
+      resolves to the digest already pinned. Bump the base as soon as one
+      exists.
+    expired_at: 2026-11-11

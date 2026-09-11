@@ -58,6 +58,13 @@ COPY migrations ./migrations
 # CommonJS and the service does not start.
 COPY package.json ./
 
+# Said out loud rather than inherited. The `nonroot` base tag already sets
+# this, so the line changes nothing about the image that ships today; what it
+# changes is what happens when the base is swapped. A tag edited to a root
+# variant would silently give the property away, and this overrides it. It is
+# also what Trivy's DS-0002 asks for, and the check is right to ask.
+USER nonroot
+
 ENV NODE_ENV=production
 
 EXPOSE 3000
