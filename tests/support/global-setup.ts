@@ -2,7 +2,6 @@ import { createServer } from "node:net";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import EmbeddedPostgres from "embedded-postgres";
 import { toConnectionString } from "../../src/db/connection-string.ts";
 import { createPool } from "../../src/db/pool.ts";
 import { migrate } from "../../src/db/migrate.ts";
@@ -50,10 +49,38 @@ interface GlobalSetup {
   provide(key: "postgres", value: PostgresHandle): void;
 }
 
+// embedded-postgres registers an async-exit-hook at import time so that a
+// cluster is torn down if the script dies. Two of the events it hooks are
+// unusable here. On `beforeExit` the hook force-exits the process with a
+// hardcoded 0, discarding the exit code Vitest set for a failing run; on
+// `exit` it invokes its own async shutdown with no completion callback and
+// throws. Import the module with those two listeners stripped and keep the
+// signal hooks, which are well behaved. Teardown below stops the cluster.
+async function importEmbeddedPostgres() {
+  const knownBeforeExit = new Set(process.listeners("beforeExit"));
+  const knownExit = new Set(process.listeners("exit"));
+
+  const { default: EmbeddedPostgres } = await import("embedded-postgres");
+
+  for (const listener of process.listeners("beforeExit")) {
+    if (!knownBeforeExit.has(listener)) {
+      process.off("beforeExit", listener);
+    }
+  }
+  for (const listener of process.listeners("exit")) {
+    if (!knownExit.has(listener)) {
+      process.off("exit", listener);
+    }
+  }
+
+  return EmbeddedPostgres;
+}
+
 export default async function setup({ provide }: GlobalSetup): Promise<() => Promise<void>> {
   const dataDir = await mkdtemp(path.join(tmpdir(), "schoolgrid-pg-"));
   const port = await findFreePort();
 
+  const EmbeddedPostgres = await importEmbeddedPostgres();
   const postgres = new EmbeddedPostgres({
     databaseDir: dataDir,
     user: USER,
