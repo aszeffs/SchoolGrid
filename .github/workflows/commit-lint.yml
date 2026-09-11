@@ -1,0 +1,34 @@
+name: Commit lint
+
+on:
+  pull_request:
+    branches: [dev, main]
+    # `edited` is what makes this useful: a title corrected after review is
+    # rechecked rather than left with the verdict from the first push.
+    types: [opened, edited, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: Check the pull request title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Check the title against Conventional Commits
+        # The title arrives as an environment variable rather than a `${{ }}`
+        # expansion inside the script line. Interpolating it would let a title
+        # containing shell syntax execute on the runner.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        # No `setup-node` and no `npm ci`, unlike the other workflows that run
+        # Node: this script imports nothing outside `node:`, so installing the
+        # dependency tree would only widen what runs here.
+        #
+        # Merges are squash-only, so this title becomes the commit subject on
+        # the trunk. The script always exits 0: this is the one check guarding
+        # a convention rather than a property of the software, and it must
+        # never be the thing standing between a security fix and `main`.
+        run: node scripts/commit-lint.mjs >> "$GITHUB_STEP_SUMMARY"
