@@ -19,3 +19,7 @@ This is explicitly a prefactor. It delivers no user-facing behaviour; it exists 
 ---
 
 **Note for the implementer:** the seam is deliberate, not incidental. ADR-0002 guarantees that refusals are indistinguishable *to the caller*, which is only assertable where the caller stands. Do not add a second seam below HTTP for convenience later.
+
+---
+
+**Migrated to GitHub issue #3** (https://github.com/aszeffs/SchoolGrid/issues/3). That issue is the source of truth; this file is kept as a record.

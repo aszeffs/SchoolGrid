@@ -17,3 +17,7 @@ Signing is keyless, using the workflow's OIDC identity. There is no private key 
 - [ ] `gh attestation verify` is run against a published image and confirmed to report the expected workflow and commit; the output is recorded here.
 - [ ] Verification is confirmed to work for a user who is not the repository owner.
 - [ ] The README documents how a consumer verifies an image.
+
+---
+
+**Migrated to GitHub issue #19** (https://github.com/aszeffs/SchoolGrid/issues/19). That issue is the source of truth; this file is kept as a record.

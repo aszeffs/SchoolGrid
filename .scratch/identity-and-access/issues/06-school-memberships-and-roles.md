@@ -16,3 +16,7 @@ Revoking one membership must leave every other membership held by the same Perso
 - [ ] A caller may only manage memberships in a School they resolve into; attempts elsewhere return the standard refusal.
 - [ ] Every grant, change, and revocation writes an Audit record in the same transaction.
 - [ ] Authorization for these endpoints goes through the single decision point, not through inline role checks.
+
+---
+
+**Migrated to GitHub issue #8** (https://github.com/aszeffs/SchoolGrid/issues/8). That issue is the source of truth; this file is kept as a record.

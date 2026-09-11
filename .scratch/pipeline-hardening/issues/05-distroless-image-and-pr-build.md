@@ -18,3 +18,7 @@ Building on pull requests without pushing means a vulnerable image is caught bef
 - [ ] A `.dockerignore` keeps `node_modules`, `.git`, `.env` and test files out of the build context.
 - [ ] A workflow builds the image on pull requests to `dev` and `main` and does not push it.
 - [ ] Layer caching is configured so repeat builds do not reinstall unchanged dependencies.
+
+---
+
+**Migrated to GitHub issue #15** (https://github.com/aszeffs/SchoolGrid/issues/15). That issue is the source of truth; this file is kept as a record.

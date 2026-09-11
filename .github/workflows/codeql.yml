@@ -1,0 +1,46 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  schedule:
+    # CodeQL's rules improve over time. The scheduled run is what finds an old
+    # bug with a new rule in code nobody has touched.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze JavaScript/TypeScript
+    runs-on: ubuntu-latest
+    permissions:
+      # Widened only here, and only for what CodeQL needs: reading the code and
+      # writing its findings to the Security tab.
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          languages: javascript-typescript
+          # The javascript-typescript extractor reads source directly, so a build
+          # would add minutes for no extra coverage.
+          build-mode: none
+          # Wider than the default suite. On a codebase this small the extra
+          # noise costs nothing, and the habit is cheaper to form now than to
+          # retrofit.
+          queries: security-and-quality
+
+      - name: Analyze
+        # Uploads SARIF to code scanning, which is what puts findings in the
+        # Security tab alongside the secret scan rather than in a log nobody
+        # opens.
+        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          category: /language:javascript-typescript

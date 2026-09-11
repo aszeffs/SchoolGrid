@@ -24,3 +24,7 @@ Departure is departure only. Records stay with the School and travel nowhere; "t
 ---
 
 **Note for the implementer:** the asymmetry here looks arbitrary and is not — a departed Student still needs their own transcript, whereas a Guardian's standing derives from an active relationship to the School.
+
+---
+
+**Migrated to GitHub issue #10** (https://github.com/aszeffs/SchoolGrid/issues/10). That issue is the source of truth; this file is kept as a record.

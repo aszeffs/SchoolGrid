@@ -17,3 +17,7 @@ The profile is stored, validated, and returned here, but there is nothing yet to
 - [ ] A School Administrator can change a link's profile and can revoke the link entirely.
 - [ ] Every link creation, change, and revocation writes an Audit record in the same transaction.
 - [ ] No endpoint yet consumes the profile's permissions; they are stored and returned only.
+
+---
+
+**Migrated to GitHub issue #9** (https://github.com/aszeffs/SchoolGrid/issues/9). That issue is the source of truth; this file is kept as a record.

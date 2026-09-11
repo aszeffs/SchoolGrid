@@ -1,0 +1,33 @@
+name: Dependency audit
+
+on:
+  pull_request:
+    branches: [dev, main]
+  schedule:
+    # Dependency review only inspects what a pull request adds. A CVE disclosed
+    # against a package nobody is touching would otherwise never fail a build,
+    # so the schedule is the half of this gate that earns its keep.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit the installed dependency tree
+        # High rather than moderate. A gate that fires on advisories nobody is
+        # going to act on gets muted, and a muted gate is not a gate.
+        run: npm audit --audit-level=high

@@ -14,9 +14,9 @@ jobs:
     name: Typecheck, build and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
@@ -34,8 +34,26 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Test
+      - name: Test with coverage
         # Starts a real PostgreSQL. No service container is needed: the suite
         # provisions its own via embedded-postgres, so CI and local runs
         # exercise the same setup.
-        run: npm test
+        run: npm run test:coverage
+
+      - name: Publish coverage to the job summary
+        # Measured and visible, with no threshold and no third-party service.
+        # Granting an external integration repository access in order to
+        # measure code quality would widen the supply-chain surface this
+        # pipeline exists to narrow.
+        if: always()
+        run: node scripts/coverage-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage/
+          # Long enough to compare against last week's run, short enough that
+          # the artifact store does not become a filing cabinet.
+          retention-days: 14
