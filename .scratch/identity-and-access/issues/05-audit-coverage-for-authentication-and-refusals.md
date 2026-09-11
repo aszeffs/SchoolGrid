@@ -18,3 +18,7 @@ This is where the two halves of Safe denial meet: the caller learns nothing abou
 ---
 
 **Note for the implementer:** omitting successful reads is a deliberate choice, not an oversight — it keeps probing visible against a quiet background. Comment it so it is not "fixed" later.
+
+---
+
+**Migrated to GitHub issue #7** (https://github.com/aszeffs/SchoolGrid/issues/7). That issue is the source of truth; this file is kept as a record.

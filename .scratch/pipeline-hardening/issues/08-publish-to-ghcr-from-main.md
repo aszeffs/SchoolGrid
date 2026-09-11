@@ -16,3 +16,7 @@ The package is public so that the provenance and SBOM attestations from ticket 0
 - [ ] The push job uses the workflow's `GITHUB_TOKEN` with `packages: write` granted to that job alone, not the whole workflow.
 - [ ] The package is set to public visibility.
 - [ ] The published image is confirmed pullable and runnable by an unauthenticated user.
+
+---
+
+**Migrated to GitHub issue #18** (https://github.com/aszeffs/SchoolGrid/issues/18). That issue is the source of truth; this file is kept as a record.

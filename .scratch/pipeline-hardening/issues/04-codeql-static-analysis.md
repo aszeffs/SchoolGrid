@@ -34,3 +34,7 @@ Two criteria stay open until this runs on GitHub:
 - *A completed run with findings confirmed visible, including zero findings.* Same. Expect few or none on a walking skeleton; the value is that the control grows with the code rather than being retrofitted later.
 
 Push triggers are included alongside pull requests so `dev` and `main` carry their own baseline, which is what lets code scanning distinguish a finding a pull request introduces from one it inherits.
+
+---
+
+**Migrated to GitHub issue #14** (https://github.com/aszeffs/SchoolGrid/issues/14). That issue is the source of truth; this file is kept as a record.

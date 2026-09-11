@@ -32,3 +32,7 @@ Every `uses:` across all five workflows now references a 40-character commit SHA
 Each SHA was resolved through the GitHub git-refs API from the version tag itself, dereferencing annotated tag objects to the commit they point at, rather than being read off the default branch. A tag whose object type is `tag` resolves to a tag object whose own `object.sha` is the commit; taking the first SHA would have pinned the annotation, not the code.
 
 Two decisions worth recording. The existing workflows referenced floating majors — `actions/checkout@v4` while v7 exists — and this ticket pins rather than upgrades, so each was pinned to the newest patch within the major already in use. Ticket 02's Dependabot config raises the major bumps individually, which is where they get read. The two actions introduced by tickets 03 and 04 had no prior version to preserve and were pinned to current latest.
+
+---
+
+**Not migrated to GitHub:** completed before the tracker moved. Kept here as the record of the work.

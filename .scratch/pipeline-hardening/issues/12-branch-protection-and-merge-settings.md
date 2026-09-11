@@ -58,3 +58,7 @@ One thing deliberately not changed: required approving reviews stay at zero, and
 **2026-09-11 — `npm audit` added to the required list, deliberately.**
 
 The spec enumerates seven required status checks and `npm audit` is not among them, because ticket 03's audit gate did not exist when the spec was written. It is now a job that runs on every pull request and fails on a high or critical advisory, which is exactly the shape of the other required checks. Requiring it is a deliberate addendum to the spec's list rather than an oversight. The alternative — a gate that runs, goes red, and merges anyway — is the advisory-control problem this whole effort exists to fix.
+
+---
+
+**Migrated to GitHub issue #22** (https://github.com/aszeffs/SchoolGrid/issues/22). That issue is the source of truth; this file is kept as a record.

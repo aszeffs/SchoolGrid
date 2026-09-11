@@ -14,3 +14,7 @@ This is the only check in the entire pipeline that runs the real process. The te
 - [ ] Migrations are confirmed to have been applied by the container on startup, not by a separate step.
 - [ ] The container's logs are surfaced on failure, so a failure is diagnosable from the run alone.
 - [ ] The test is demonstrated failing against an image with a deliberately broken entrypoint; evidence recorded here and the change reverted.
+
+---
+
+**Migrated to GitHub issue #17** (https://github.com/aszeffs/SchoolGrid/issues/17). That issue is the source of truth; this file is kept as a record.

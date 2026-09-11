@@ -29,3 +29,7 @@ Two criteria cannot be ticked from a config file, and are not:
 
 - *A Dependabot run producing the expected grouping.* Dependabot does not evaluate the config until it is on the default branch. Verify after this merges to `main`, either by waiting for Monday or by forcing a run from Insights → Dependency graph → Dependabot → Check for updates.
 - *An action update bumping SHA and comment together.* Needs a real action release after this lands. The next `actions/checkout` patch is the natural first test.
+
+---
+
+**Migrated to GitHub issue #13** (https://github.com/aszeffs/SchoolGrid/issues/13). That issue is the source of truth; this file is kept as a record.

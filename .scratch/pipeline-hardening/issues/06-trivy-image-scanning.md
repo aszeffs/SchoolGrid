@@ -20,3 +20,7 @@ Failing at high rather than critical keeps the middle band — where most genuin
 ---
 
 **Note for the implementer:** a high-severity CVE in a base image with no patched version available is a normal occurrence, not a mistake. Handling it with a justified, expiring exception — rather than lowering the threshold or disabling the gate — is the point of the last criterion.
+
+---
+
+**Migrated to GitHub issue #16** (https://github.com/aszeffs/SchoolGrid/issues/16). That issue is the source of truth; this file is kept as a record.

@@ -15,3 +15,7 @@ The check is deliberately advisory. A naming quibble should never be the thing s
 - [ ] A failing title reports clearly but does not block the merge.
 - [ ] Dependabot's own pull request titles pass the check.
 - [ ] The convention and its allowed types are documented in the README.
+
+---
+
+**Migrated to GitHub issue #20** (https://github.com/aszeffs/SchoolGrid/issues/20). That issue is the source of truth; this file is kept as a record.

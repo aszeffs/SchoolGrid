@@ -14,3 +14,7 @@ This ticket is the payoff for ticket 08's decision to derive access rather than 
 - [ ] Guardian links are not silently restored by re-enrolment; a School Administrator links Guardians afresh.
 - [ ] A test walks the full lifecycle in one pass — enrol, depart, confirm narrowed access, return, confirm widened access — asserting through the HTTP boundary at each stage.
 - [ ] The re-enrolment writes an Audit record, and the whole lifecycle is reconstructable from the trail.
+
+---
+
+**Migrated to GitHub issue #11** (https://github.com/aszeffs/SchoolGrid/issues/11). That issue is the source of truth; this file is kept as a record.
