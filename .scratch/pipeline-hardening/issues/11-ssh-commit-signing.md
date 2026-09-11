@@ -10,13 +10,13 @@ SSH signing rather than GPG — an existing SSH key, three config values, one ke
 
 **Blocked by:** None (can start immediately).
 
-**Status:** blocked-on-owner
+**Status:** done
 
-- [ ] A signing key exists locally and is registered on the GitHub account with **signing** scope (a key registered only for authentication does not count).
+- [x] A signing key exists locally and is registered on the GitHub account with **signing** scope (a key registered only for authentication does not count).
 - [x] Git is configured with `gpg.format=ssh`, `user.signingkey`, and `commit.gpgsign=true`.
-- [ ] A test commit is pushed and confirmed to display as Verified on GitHub.
+- [x] A test commit is pushed and confirmed to display as Verified on GitHub.
 - [x] The setup is documented so it can be reproduced on another machine.
-- [ ] Confirmed working before ticket 12 begins — this is the ordering that prevents a lockout.
+- [x] Confirmed working before ticket 12 begins — this is the ordering that prevents a lockout.
 
 ---
 
@@ -60,3 +60,40 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/gMN6dCangbxmMB1oDDTtLgFdKoCiRl7KLPx7I7jud
 An Authentication Key registration does not count; commits signed by an auth-only key show as Unverified. Then push and confirm the Verified badge. The `gh` token in use holds `gist`, `read:org`, `repo` and `workflow`, not `admin:ssh_signing_key`, so this cannot be automated from here without widening the token — which would be the wrong trade for a one-time action.
 
 **Ticket 12 must not begin until that badge is confirmed.** This is the ordering the ticket warns about: require signed commits before signing verifies, and the next push is rejected with no remedy but disabling the rule.
+
+**2026-09-11 — key registered; signing verified end to end.**
+
+The owner-only step is done, and the whole chain now checks out.
+
+The key is registered on the account with **signing** scope. Confirmed through the
+public signing-keys endpoint rather than by eye, because that endpoint lists
+signing keys only — an authentication-scope registration would not appear there,
+which settles the distinction this ticket warns about:
+
+```
+$ gh api users/aszeffs/ssh_signing_keys
+[{"id":1170083,"key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/gMN6dCangbxmMB1oDDTtLgFdKoCiRl7KLPx7I7jud","title":"SchoolGrid"}]
+```
+
+GitHub reports the pushed commits as verified:
+
+```
+958edb2  verified=true  reason=valid
+04dcfe9  verified=true  reason=valid
+cec05da  verified=true  reason=valid
+```
+
+No separate test commit was needed. The branch's existing commits were already
+signed by this key, so registering it verified them retroactively — GitHub
+evaluates the signature against the key at read time, not at push time.
+
+Locally, `git log --show-signature` reports a good signature against the
+allowed-signers file for every commit on the branch, so both verifiers agree.
+
+**Ticket 12 is unblocked on this axis.** The ordering hazard is cleared: signing
+verifies before any rule requires it, so enabling the signed-commits rule cannot
+lock the repository out.
+
+---
+
+**Migrated to GitHub issue #21** (https://github.com/aszeffs/SchoolGrid/issues/21). That issue is the source of truth; this file is kept as a record.
