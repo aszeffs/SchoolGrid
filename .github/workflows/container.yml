@@ -1,6 +1,13 @@
 name: Container
 
 on:
+  # Pull requests are where a bad image gets caught. The `dev` push build
+  # exists only so the layer cache has a branch-scoped entry to warm: a cache
+  # written from a pull request is scoped to that pull request, so without it
+  # every new branch would install dependencies from cold. Neither trigger
+  # publishes anything.
+  push:
+    branches: [dev]
   pull_request:
     branches: [dev, main]
 
@@ -26,9 +33,9 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          # Never on a pull request. A vulnerable image should be caught before
-          # it exists anywhere a deploy could reach; issue #18 adds publication
-          # from `main` alone.
+          # Never, on either trigger. A vulnerable image should be caught
+          # before it exists anywhere a deploy could reach; issue #18 adds
+          # publication from `main` alone.
           push: false
           # Without this the image stays in the builder and the verification
           # step below has nothing to inspect.

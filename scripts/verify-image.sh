@@ -17,6 +17,11 @@ set -euo pipefail
 
 IMAGE="${1:?usage: verify-image.sh <image-ref>}"
 
+# The repository this image was built from, read for the dev dependency names
+# below. Overridable so the tests can point the script at a manifest of their
+# own.
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 workdir="$(mktemp -d)"
 container=""
 
@@ -46,7 +51,7 @@ pass() {
 # Docker version agrees about that, so both spellings are accepted. Writing
 # this as `\./?` instead would demand a literal dot and match neither shape,
 # which reads as "everything is fine" for the absence checks below.
-ROOT='^(\./)?'
+TAR_ROOT_ANCHOR='^(\./)?'
 
 # --- the filesystem ---------------------------------------------------------
 
@@ -65,7 +70,7 @@ tar -tf "$workdir/rootfs.tar" > "$workdir/files.txt"
 #
 # node_modules is excluded instead, because a production dependency is allowed
 # to carry a file of its own called `sh` and that is not a shell on the PATH.
-grep -Ev "${ROOT}app/node_modules/" "$workdir/files.txt" > "$workdir/system-files.txt"
+grep -Ev "${TAR_ROOT_ANCHOR}app/node_modules/" "$workdir/files.txt" > "$workdir/system-files.txt"
 
 assert_absent() {
   local label="$1"
@@ -87,17 +92,31 @@ assert_absent "package manager" 'apt|apt-get|aptitude|dpkg|apk|yum|dnf|rpm|micro
 # A check that can only ever pass is not a check. The runtime image must still
 # contain the interpreter, so finding it proves the export and the patterns
 # above are looking at a real filesystem rather than at an empty list.
-if grep -Eq "${ROOT}nodejs/bin/node\$" "$workdir/files.txt"; then
+if grep -Eq "${TAR_ROOT_ANCHOR}nodejs/bin/node\$" "$workdir/files.txt"; then
   pass "the node binary is present, so these checks are reading a real filesystem"
 else
   fail "no node binary found; the export or the path patterns are wrong, and the absence checks above prove nothing"
 fi
 
 # The other half of "only production dependencies ship". Every dev dependency
-# is named rather than one canary, so a build that starts copying the wrong
+# is checked rather than one canary, so a build that starts copying the wrong
 # node_modules forward is caught whichever package arrives first.
-for dev_dependency in typescript tsx vitest embedded-postgres @vitest/coverage-v8 @types/node @types/pg; do
-  if grep -Eq "${ROOT}app/node_modules/${dev_dependency}/" "$workdir/files.txt"; then
+#
+# The names come from package.json rather than a list kept here. A second copy
+# goes stale the first time someone adds a dev dependency, and it goes stale
+# silently: the control keeps reporting success while checking less than it
+# claims to.
+dev_dependencies="$(node -p 'Object.keys(require(process.argv[1]).devDependencies || {}).join(" ")' "${REPO_ROOT}/package.json")"
+
+# The vacuous case again: an empty list means every check below passes without
+# looking at anything. This repository has dev dependencies, so an empty read
+# is a broken read, not a clean bill of health.
+if [ -z "$dev_dependencies" ]; then
+  fail "no dev dependencies read from ${REPO_ROOT}/package.json; this check is inspecting nothing"
+fi
+
+for dev_dependency in $dev_dependencies; do
+  if grep -Eq "${TAR_ROOT_ANCHOR}app/node_modules/${dev_dependency}/" "$workdir/files.txt"; then
     fail "a dev dependency (${dev_dependency}) is present in the runtime image"
   else
     pass "absent, as it should be: ${dev_dependency}"
@@ -105,7 +124,7 @@ for dev_dependency in typescript tsx vitest embedded-postgres @vitest/coverage-v
 done
 
 for required in app/dist/index.js app/package.json app/migrations/; do
-  if grep -Eq "${ROOT}${required}" "$workdir/files.txt"; then
+  if grep -Eq "${TAR_ROOT_ANCHOR}${required}" "$workdir/files.txt"; then
     pass "present: /${required}"
   else
     fail "missing from the runtime image: /${required}"
