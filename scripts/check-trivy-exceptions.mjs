@@ -13,7 +13,13 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-export const EXCEPTIONS_FILE = ".trivyignore.yaml";
+export const EXCEPTIONS_FILE_NAME = ".trivyignore.yaml";
+
+// Resolved against this module rather than the working directory, so the check
+// reads the repository's exception file wherever it is run from. A
+// CWD-relative default is right only when invoked from the root, and a check
+// that reads the wrong file finds nothing to complain about.
+export const EXCEPTIONS_FILE = new URL(`../${EXCEPTIONS_FILE_NAME}`, import.meta.url);
 
 // Long enough that a genuinely unfixable base-image CVE does not need
 // re-justifying every sprint, short enough that no exception outlives the
@@ -92,7 +98,8 @@ function parseExceptions(text) {
       entry = null;
       if (!SECTIONS.includes(section)) {
         problems.push(
-          `line ${lineNumber}: \`${section}\` is not a section this check understands (expected one of: ${SECTIONS.join(", ")}).`,
+          `line ${lineNumber}: \`${section}\` is not a section this check ` +
+            `understands (expected one of: ${SECTIONS.join(", ")}).`,
         );
       }
       return;
@@ -134,7 +141,8 @@ function parseExceptions(text) {
 function addField(entry, name, rawValue, lineNumber, problems) {
   if (!FIELDS.includes(name)) {
     problems.push(
-      `line ${lineNumber}: \`${name}\` is not a field Trivy reads here (expected one of: ${FIELDS.join(", ")}).`,
+      `line ${lineNumber}: \`${name}\` is not a field Trivy reads here ` +
+        `(expected one of: ${FIELDS.join(", ")}).`,
     );
     return null;
   }
@@ -174,13 +182,15 @@ function inspect(entry, today) {
 
   if (!statement || statement.trim().length < MIN_STATEMENT_LENGTH) {
     problems.push(
-      `${subject}: needs a \`statement\` of at least ${MIN_STATEMENT_LENGTH} characters saying why the finding cannot be fixed.`,
+      `${subject}: needs a \`statement\` of at least ${MIN_STATEMENT_LENGTH} ` +
+        "characters saying why the finding cannot be fixed.",
     );
   }
 
   if (!expiresAt) {
     problems.push(
-      `${subject}: needs an \`expired_at\` date, so the decision is revisited rather than inherited.`,
+      `${subject}: needs an \`expired_at\` date, so the decision is ` +
+        "revisited rather than inherited.",
     );
     return problems;
   }
@@ -194,11 +204,13 @@ function inspect(entry, today) {
   const days = Math.round((expiry - startOfDay(today)) / MILLISECONDS_PER_DAY);
   if (days < 0) {
     problems.push(
-      `${subject}: the exception expired on ${expiresAt}. Remove it if the finding is gone, or renew it with a fresh justification.`,
+      `${subject}: the exception expired on ${expiresAt}. Remove it if the ` +
+        "finding is gone, or renew it with a fresh justification.",
     );
   } else if (days > MAX_EXCEPTION_DAYS) {
     problems.push(
-      `${subject}: \`expired_at: ${expiresAt}\` is ${days} days out; no exception may run longer than ${MAX_EXCEPTION_DAYS} days without review.`,
+      `${subject}: \`expired_at: ${expiresAt}\` is ${days} days out; no ` +
+        `exception may run longer than ${MAX_EXCEPTION_DAYS} days without review.`,
     );
   }
 
@@ -227,7 +239,8 @@ export function formatTrivyExceptionReport(file, { ok, problems, entries }) {
     lines.push(
       count === 0
         ? "No exceptions are recorded. Every finding is going through the gate. Ok."
-        : `${count} exception(s) recorded, each with a justification and an expiry inside ${MAX_EXCEPTION_DAYS} days. Ok.`,
+        : `${count} exception(s) recorded, each with a justification and an ` +
+          `expiry inside ${MAX_EXCEPTION_DAYS} days. Ok.`,
     );
   } else {
     lines.push("Every exception must name a finding, say why it cannot be fixed, and expire.", "");
@@ -239,7 +252,11 @@ export function formatTrivyExceptionReport(file, { ok, problems, entries }) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const file = process.argv[2] ?? EXCEPTIONS_FILE;
+  // A path argument is for the tests and for trying a candidate file by hand;
+  // with none, the repository's own file is what gets checked.
+  const given = process.argv[2];
+  const file = given ?? EXCEPTIONS_FILE;
+
   // A missing file means no exceptions, which is the healthy state rather than
   // an error. Anything else about reading it is an error.
   const text = await readFile(file, "utf8").catch((error) => {
@@ -248,7 +265,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 
   const result = checkTrivyExceptions(text);
-  const report = formatTrivyExceptionReport(file, result);
+  const report = formatTrivyExceptionReport(given ?? EXCEPTIONS_FILE_NAME, result);
   process.stdout.write(report);
 
   // This one gates, unlike the other two report-only scripts here. An

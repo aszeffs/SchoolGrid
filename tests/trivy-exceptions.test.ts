@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error - build tooling, deliberately plain ESM rather than TypeScript
-import { MAX_EXCEPTION_DAYS, checkTrivyExceptions, formatTrivyExceptionReport } from "../scripts/check-trivy-exceptions.mjs";
+import {
+  MAX_EXCEPTION_DAYS,
+  checkTrivyExceptions,
+  formatTrivyExceptionReport,
+  // @ts-expect-error - build tooling, deliberately plain ESM rather than TypeScript
+} from "../scripts/check-trivy-exceptions.mjs";
 
 const TODAY = new Date("2026-09-12T00:00:00Z");
 
@@ -100,7 +104,12 @@ describe("checkTrivyExceptions", () => {
 
   it("rejects an entry with no id, because a problem report needs to name one", () => {
     const result = check(
-      ["vulnerabilities:", "  - statement: a reason", `    expired_at: ${daysFromToday(30)}`, ""].join("\n"),
+      [
+        "vulnerabilities:",
+        "  - statement: a reason long enough to count",
+        `    expired_at: ${daysFromToday(30)}`,
+        "",
+      ].join("\n"),
     );
 
     expect(result.ok).toBe(false);
@@ -212,7 +221,8 @@ describe("checkTrivyExceptions", () => {
 
 describe("formatTrivyExceptionReport", () => {
   it("names the file and every problem when the check fails", () => {
-    const report = formatTrivyExceptionReport(".trivyignore.yaml", check(wellFormed({ statement: null })));
+    const result = check(wellFormed({ statement: null }));
+    const report = formatTrivyExceptionReport(".trivyignore.yaml", result);
 
     expect(report).toContain(".trivyignore.yaml");
     expect(report).toContain("CVE-2025-0001");
