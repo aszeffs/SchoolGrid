@@ -17,6 +17,11 @@ set -euo pipefail
 
 IMAGE="${1:?usage: verify-image.sh <image-ref>}"
 
+# The repository this image was built from, read for the dev dependency names
+# below. Overridable so the tests can point the script at a manifest of their
+# own.
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 workdir="$(mktemp -d)"
 container=""
 
@@ -94,9 +99,23 @@ else
 fi
 
 # The other half of "only production dependencies ship". Every dev dependency
-# is named rather than one canary, so a build that starts copying the wrong
+# is checked rather than one canary, so a build that starts copying the wrong
 # node_modules forward is caught whichever package arrives first.
-for dev_dependency in typescript tsx vitest embedded-postgres @vitest/coverage-v8 @types/node @types/pg; do
+#
+# The names come from package.json rather than a list kept here. A second copy
+# goes stale the first time someone adds a dev dependency, and it goes stale
+# silently: the control keeps reporting success while checking less than it
+# claims to.
+dev_dependencies="$(node -p 'Object.keys(require(process.argv[1]).devDependencies || {}).join(" ")' "${REPO_ROOT}/package.json")"
+
+# The vacuous case again: an empty list means every check below passes without
+# looking at anything. This repository has dev dependencies, so an empty read
+# is a broken read, not a clean bill of health.
+if [ -z "$dev_dependencies" ]; then
+  fail "no dev dependencies read from ${REPO_ROOT}/package.json; this check is inspecting nothing"
+fi
+
+for dev_dependency in $dev_dependencies; do
   if grep -Eq "${ROOT}app/node_modules/${dev_dependency}/" "$workdir/files.txt"; then
     fail "a dev dependency (${dev_dependency}) is present in the runtime image"
   else

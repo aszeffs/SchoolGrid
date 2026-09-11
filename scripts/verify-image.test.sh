@@ -143,6 +143,16 @@ mkdir -p "$devdeps/app/node_modules/typescript" "$devdeps/app/node_modules/vites
 touch "$devdeps/app/node_modules/typescript/index.js" "$devdeps/app/node_modules/vitest/index.js"
 expect "dev dependencies in the runtime stage are caught" "$devdeps" "nonroot" 1 "dev dependency (typescript)"
 
+# The dev dependency names are read from package.json, so a manifest yielding
+# none leaves the check with nothing to look for. That is the vacuous pass in
+# a new place, and it has to be loud rather than green.
+empty_manifest="$workdir/empty-manifest"
+mkdir -p "$empty_manifest"
+echo '{ "name": "no-dev-deps", "devDependencies": {} }' > "$empty_manifest/package.json"
+export REPO_ROOT="$empty_manifest"
+expect "a manifest with no dev dependencies is caught" "$correct" "nonroot" 1 "inspecting nothing"
+unset REPO_ROOT
+
 nomigrations="$(fixture nomigrations)"
 rm -rf "$nomigrations/app/migrations"
 expect "a dropped COPY of migrations is caught" "$nomigrations" "nonroot" 1 "missing from the runtime image: /app/migrations/"
