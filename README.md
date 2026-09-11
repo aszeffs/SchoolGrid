@@ -64,5 +64,6 @@ The check reports its verdict in the workflow job summary and never fails. It gu
 | GitHub secret scanning with push protection | Blocks a credential at `git push`, before it reaches the remote. |
 | Dependency review on pull requests | Vulnerable or copyleft-licensed dependencies entering through a PR. |
 | `allowScripts` in `package.json` | Install-time code execution. Scripts run only for exact allowlisted versions, so a new one needs a visible change here. |
+| Distroless runtime image, built on every pull request | A shell, a package manager, a dev dependency or a root user reaching the runtime image. The properties are asserted against the built artifact, not against the Dockerfile. |
 
-SAST and container scanning arrive with the code and images they inspect.
+Image scanning, publication and attestation arrive with the tickets that add them; the image itself is built and checked on every pull request but never pushed.

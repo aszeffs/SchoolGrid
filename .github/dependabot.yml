@@ -42,3 +42,25 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: [minor, patch]
+
+  # Base images are pinned by digest in the Dockerfile, which has the same
+  # decay problem as pinned actions: without an updater, pinning freezes the
+  # runtime on an image that stops receiving patches. Dependabot rewrites the
+  # `image:tag@sha256:...` reference in place, so the tag and the digest it
+  # resolves to stay in step.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Manila
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      docker-minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
