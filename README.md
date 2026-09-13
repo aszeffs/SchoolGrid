@@ -81,4 +81,4 @@ docker pull ghcr.io/aszeffs/schoolgrid:<full-commit-sha>
 
 Prefer the commit tag. `latest` tells you what is newest, not what you are running.
 
-The package is public so that anyone, not only the maintainer, can verify where an image came from. GHCR creates a new package as private, and the visibility cannot be set from a workflow, so after the first publish it is changed once by hand: the package's settings, under **Danger Zone → Change visibility**. Until then the anonymous pull job fails, which is that check working.
+The package is public so that anyone, not only the maintainer, can verify where an image came from. Nothing sets that by hand: the image carries an `org.opencontainers.image.source` label pointing at this repository and is pushed with the workflow's own token, so GHCR links the package to the repository and gives it the repository's public visibility. A package can still be made private from its settings, independently of the repository, and the anonymous pull job after every publish is what would catch that.
