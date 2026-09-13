@@ -5,9 +5,9 @@
 # Publication is the one step in the pipeline whose mistakes leave the
 # repository and cannot be taken back by a revert: a tag in a public registry
 # has been pulled by whoever pulled it. The failure modes worth guarding are the
-# quiet ones — `latest` moved to an image with no commit tag beside it, a tag
-# built from an empty or abbreviated SHA, a push that reported nothing and was
-# read as a success.
+# quiet ones — `latest` moved to an image with no commit tag beside it, or
+# backwards to an older merge, a tag built from an empty or abbreviated SHA, a
+# push that reported nothing and was read as a success.
 #
 # Docker is not needed here. `docker` is replaced by a test double driven by a
 # SCENARIO that records every call it receives, so each case asserts on what
@@ -72,6 +72,9 @@ run_case() {
   local scenario="$2"
   local repository="$3"
   local sha="$4"
+  # The head of `main` as the workflow read it. Unless a case says otherwise,
+  # the commit being published is still the newest one.
+  local head="${5-$sha}"
 
   current="$description"
   state="$workdir/state/$description"
@@ -85,7 +88,7 @@ run_case() {
     STATE="$state" \
     DOUBLE_DIGEST="$DIGEST" \
     GITHUB_OUTPUT="$state/github-output" \
-    bash "$subject" schoolgrid:test "$repository" "$sha" 2>&1
+    bash "$subject" schoolgrid:test "$repository" "$sha" "$head" 2>&1
   )" || code=$?
 }
 
@@ -186,6 +189,24 @@ run_case "a push that reports no digest fails" no-digest ghcr.io/aszeffs/schoolg
 expect_code 1
 expect_output "reported no digest"
 expect_no_call_matching ':latest$'
+
+# Two merges in quick succession publish in whichever order their checks
+# finish. The older one finishing last must still get its commit tag, but must
+# not move `latest` back to itself.
+NEWER="fedcba9876543210fedcba9876543210fedcba98"
+run_case "a commit that is no longer the head of main leaves latest alone" ok ghcr.io/aszeffs/schoolgrid "$SHA" "$NEWER"
+expect_code 0
+expect_call "push ghcr.io/aszeffs/schoolgrid:${SHA}"
+expect_no_call_matching ':latest$'
+expect_output "no longer the head"
+expect_github_output "digest=${DIGEST}"
+
+# An empty head is a failed lookup, not a verdict. Read as "some other commit"
+# it would silently stop `latest` ever moving again.
+run_case "an unreadable head of main fails rather than skipping latest" ok ghcr.io/aszeffs/schoolgrid "$SHA" ""
+expect_code 1
+expect_output "not a full commit SHA"
+expect_no_push
 
 # --- verdict ----------------------------------------------------------------
 

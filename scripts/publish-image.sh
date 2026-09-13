@@ -11,17 +11,24 @@
 # The commit tag is pushed first and `latest` only after it has landed, so
 # `latest` can never point at an image the registry holds under no commit.
 #
+# `latest` moves only if the commit is still the head of the branch. Runs for
+# two merges in quick succession finish in whichever order their checks do, and
+# the older one finishing last would otherwise move `latest` backwards. It still
+# gets its commit tag: it was merged, scanned and booted like any other.
+#
 # Writes `image` and `digest` to $GITHUB_OUTPUT when it is set. Later jobs pull
 # by that digest rather than by tag, because a tag can be moved by a newer run
 # between this job ending and theirs starting.
 #
-# Usage: scripts/publish-image.sh <local-image> <repository> <commit-sha>
+# Usage: scripts/publish-image.sh <local-image> <repository> <commit-sha> <branch-head-sha>
 
 set -euo pipefail
 
-LOCAL_IMAGE="${1:?usage: publish-image.sh <local-image> <repository> <commit-sha>}"
-REPOSITORY_ARG="${2:?usage: publish-image.sh <local-image> <repository> <commit-sha>}"
+USAGE="usage: publish-image.sh <local-image> <repository> <commit-sha> <branch-head-sha>"
+LOCAL_IMAGE="${1:?$USAGE}"
+REPOSITORY_ARG="${2:?$USAGE}"
 COMMIT_SHA="${3-}"
+BRANCH_HEAD="${4-}"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -38,6 +45,12 @@ REPOSITORY="${REPOSITORY_ARG,,}"
 # tag is for.
 if ! [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   fail "'${COMMIT_SHA}' is not a full commit SHA; nothing was pushed"
+fi
+
+# The same for the head. An empty one is a lookup that failed, and read as
+# "some other commit" it would quietly stop `latest` from ever moving again.
+if ! [[ "$BRANCH_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+  fail "the branch head '${BRANCH_HEAD}' is not a full commit SHA; nothing was pushed"
 fi
 
 # Pushes one tag and stores the digest the registry reported in the variable
@@ -69,15 +82,22 @@ push() {
 push "${REPOSITORY}:${COMMIT_SHA}" digest
 echo "ok: pushed ${REPOSITORY}:${COMMIT_SHA} as ${digest}"
 
-push "${REPOSITORY}:latest" latest_digest
-if [ "$latest_digest" != "$digest" ]; then
-  fail "latest was pushed as ${latest_digest}, not the commit image ${digest}"
-fi
-echo "ok: moved ${REPOSITORY}:latest to ${digest}"
-
+# Written before `latest` is considered, because the commit image is published
+# either way and later jobs pull and attest it either way.
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {
     echo "image=${REPOSITORY}"
     echo "digest=${digest}"
   } >> "$GITHUB_OUTPUT"
 fi
+
+if [ "$BRANCH_HEAD" != "$COMMIT_SHA" ]; then
+  echo "ok: left ${REPOSITORY}:latest alone; ${COMMIT_SHA} is no longer the head (${BRANCH_HEAD} is)"
+  exit 0
+fi
+
+push "${REPOSITORY}:latest" latest_digest
+if [ "$latest_digest" != "$digest" ]; then
+  fail "latest was pushed as ${latest_digest}, not the commit image ${digest}"
+fi
+echo "ok: moved ${REPOSITORY}:latest to ${digest}"
