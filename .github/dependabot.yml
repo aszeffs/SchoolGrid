@@ -55,3 +55,16 @@ updates:
     directory: /
     multi-ecosystem-group: all-dependencies
     patterns: ["*"]
+    ignore:
+      # A Node major cannot move through this file alone. The runtime image is
+      # `distroless/nodejs<major>-<debian>`, a different image name for each
+      # major, so Dependabot bumps the build stage and leaves the runtime
+      # behind. That is how the build and runtime came to disagree in #35.
+      # A Node major is a deliberate change instead: both stages, `setup-node`
+      # in the workflows, and `engines`, together.
+      #
+      # Revisit when Node 26 becomes LTS in late October 2026. Distroless
+      # publishes it only on Debian 13, so that change also moves the image's
+      # operating system.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
