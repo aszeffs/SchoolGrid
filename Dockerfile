@@ -72,7 +72,3 @@ EXPOSE 3000
 # The distroless entrypoint is already `/nodejs/bin/node`, so this is the
 # script it runs, not a command line of its own.
 CMD ["dist/index.js"]
-
-# TEMPORARY, for #17: an entrypoint that passes every static check (it is node,
-# and the command is dist/index.js) but cannot boot. Reverted before merge.
-ENTRYPOINT ["/nodejs/bin/node", "--no-such-node-option"]
