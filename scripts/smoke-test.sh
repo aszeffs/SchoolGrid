@@ -224,7 +224,17 @@ fi
 # The third leg. The database says a schema appeared after the container started;
 # only the container's own log says the container is what applied it. `app.log`
 # is pino, so the line is JSON and the message is matched as a field.
-if ! docker logs "$container" 2>&1 | grep -Eq '"msg"[[:space:]]*:[[:space:]]*"applied migrations"'; then
+#
+# Read to a file first, never piped straight into `grep -q`. That grep exits at
+# its first match and closes the pipe; if `docker logs` is still writing, it dies
+# of SIGPIPE, and under `pipefail` the pipeline fails as though nothing matched.
+# The migration line is one of the first a container logs, so the more it logs
+# afterwards the likelier this check was to call a present line missing.
+if ! docker logs "$container" > "$workdir/container.log" 2>&1; then
+  fail "the container's logs could not be read"
+  exit 1
+fi
+if ! grep -Eq '"msg"[[:space:]]*:[[:space:]]*"applied migrations"' "$workdir/container.log"; then
   fail "the container never reported applying migrations"
   echo "  The schema is present, but nothing in the container's log says it was" >&2
   echo "  the container that applied it." >&2
