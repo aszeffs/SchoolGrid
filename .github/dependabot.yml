@@ -1,26 +1,37 @@
 version: 2
 
-updates:
-  # Application dependencies. Grouping minor and patch into one pull request
-  # keeps staying current from becoming a queue of trivial reviews; majors are
-  # raised individually because those are the ones worth reading.
-  - package-ecosystem: npm
-    directory: /
+# One pull request a week for every ecosystem, majors included. Dependency
+# changes then arrive as a single reviewable unit that CI checks as a whole,
+# rather than as a queue where each bump is tested against dependencies the
+# others are about to change. The cost is that one breaking major holds back
+# the rest of the batch until it is fixed or ignored; that is the trade chosen.
+#
+# This applies to version updates only. Security updates are still raised one
+# per advisory, as soon as the advisory is published, because a fix for a known
+# vulnerability should not wait for Monday or for an unrelated major.
+multi-ecosystem-groups:
+  all-dependencies:
     schedule:
       interval: weekly
       day: monday
       time: "06:00"
       timezone: Asia/Manila
-    open-pull-requests-limit: 5
+    # Into the integration branch like every other change, so a dependency bump
+    # is promoted to `main` with the rest of `dev` rather than landing on the
+    # trunk on its own. Dependabot reads this file from the default branch only,
+    # so a change here takes effect once it has been promoted.
+    target-branch: dev
     commit-message:
       prefix: chore
-      prefix-development: chore
       include: scope
-    groups:
-      npm-minor-and-patch:
-        applies-to: version-updates
-        patterns: ["*"]
-        update-types: [minor, patch]
+
+updates:
+  # Application and development dependencies, from `package.json` and the
+  # lockfile.
+  - package-ecosystem: npm
+    directory: /
+    multi-ecosystem-group: all-dependencies
+    patterns: ["*"]
 
   # Actions are pinned to commit SHAs, which is what stops a moved tag from
   # changing what runs here. Without this, pinning would decay into running
@@ -28,39 +39,19 @@ updates:
   # version comment together.
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Asia/Manila
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: ci
-      include: scope
-    groups:
-      actions-minor-and-patch:
-        applies-to: version-updates
-        patterns: ["*"]
-        update-types: [minor, patch]
+    multi-ecosystem-group: all-dependencies
+    patterns: ["*"]
 
   # Base images are pinned by digest in the Dockerfile, which has the same
   # decay problem as pinned actions: without an updater, pinning freezes the
   # runtime on an image that stops receiving patches. Dependabot rewrites the
   # `image:tag@sha256:...` reference in place, so the tag and the digest it
   # resolves to stay in step.
+  #
+  # The Postgres service image in `.github/workflows/container.yml` is not
+  # covered: Dependabot does not read image references in workflow files, so
+  # that digest is bumped by hand, as the comment beside it says.
   - package-ecosystem: docker
     directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Asia/Manila
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: ci
-      include: scope
-    groups:
-      docker-minor-and-patch:
-        applies-to: version-updates
-        patterns: ["*"]
-        update-types: [minor, patch]
+    multi-ecosystem-group: all-dependencies
+    patterns: ["*"]
