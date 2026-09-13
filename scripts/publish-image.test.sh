@@ -63,6 +63,7 @@ export PATH="$workdir/bin:$PATH"
 # Each case gets its own state directory, so the call log it asserts on holds
 # only the calls that case made.
 
+current=""
 output=""
 code=0
 state=""
@@ -142,6 +143,7 @@ expect_call "push ghcr.io/aszeffs/schoolgrid:latest"
 # Order is the property. `latest` pointing at an image that has no commit tag
 # is exactly the untraceable deployment the commit tag exists to prevent.
 run_case "the commit tag is pushed before latest" ok ghcr.io/aszeffs/schoolgrid "$SHA"
+expect_code 0
 pushes="$(grep '^push' "$state/calls" || true)"
 if [ "$pushes" != "push ghcr.io/aszeffs/schoolgrid:${SHA}"$'\n'"push ghcr.io/aszeffs/schoolgrid:latest" ]; then
   report "pushes were not the commit tag followed by latest"

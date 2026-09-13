@@ -16,9 +16,9 @@
 # the older one finishing last would otherwise move `latest` backwards. It still
 # gets its commit tag: it was merged, scanned and booted like any other.
 #
-# Writes `image` and `digest` to $GITHUB_OUTPUT when it is set. Later jobs pull
-# by that digest rather than by tag, because a tag can be moved by a newer run
-# between this job ending and theirs starting.
+# Writes `image` and `digest` to $GITHUB_OUTPUT when it is set. Later jobs
+# check what they pull against that digest, and attest it, rather than trusting
+# whatever a tag resolves to by the time they run.
 #
 # Usage: scripts/publish-image.sh <local-image> <repository> <commit-sha> <branch-head-sha>
 
