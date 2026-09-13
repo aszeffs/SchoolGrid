@@ -62,6 +62,14 @@ case "$1" in
       echo "exec /nodejs/bin/node: no such file or directory"
     elif [ "$SCENARIO" = "silent-migration" ]; then
       echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
+    elif [ "$SCENARIO" = "chatty-container" ]; then
+      # The migration line first, then far more log than a pipe buffer holds.
+      # A reader that stops at the first match closes the pipe while this is
+      # still writing, and the write fails with SIGPIPE, as `docker logs` does
+      # for a container that has logged a lot since it migrated.
+      echo '{"level":30,"msg":"applied migrations","applied":["0001_initial.sql"]}'
+      line='{"level":30,"msg":"incoming request","req":{"method":"GET","url":"/health"}}'
+      for _ in $(seq 1 20000); do echo "$line"; done
     else
       echo '{"level":30,"msg":"applied migrations","applied":["0001_initial.sql"]}'
       echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
@@ -248,6 +256,12 @@ expect "a container that applied no migrations fails" no-migrations 1 "applied n
 # started; the container's own log line says the container is what put it
 # there, rather than anything else that reached the same database meanwhile.
 expect "a container that never reports applying migrations fails" silent-migration 1 "never reported applying migrations"
+
+# The same check against a container that logged a great deal after migrating.
+# Under `pipefail`, a reader that exits at its first match turns the writer's
+# SIGPIPE into a failed pipeline, and the check would report a migration that
+# the log plainly contains as missing. Seen intermittently in CI on #49.
+expect "a container that logged a lot after migrating still passes" chatty-container 0 "the smoke test passed" "never reported applying migrations"
 
 # If the database cannot be reached at all, that is the harness being broken
 # rather than the image, and it has to say so instead of reporting a clean run.
