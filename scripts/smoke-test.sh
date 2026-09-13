@@ -85,27 +85,33 @@ trap cleanup EXIT
 
 # --- the database -----------------------------------------------------------
 
+# Runs one query and stores its single value in the variable named by $1.
+#
+# Not a function to call inside `$(...)`. A query that cannot run is this harness
+# being broken rather than the image being bad, and it has to end the script as
+# that. From inside a command substitution `exit` leaves only the subshell, and
+# the check around it goes on to read the empty result as a verdict about the
+# image. Assigning through a name keeps the exit in the script itself.
 query() {
-  local sql="$1"
+  local into="$1"
+  local sql="$2"
   local output
 
-  # A query that cannot run is this harness being broken rather than the image
-  # being bad, and it has to say which. Reported as its own failure instead of
-  # being allowed to read as an empty result, which every check below would
-  # take for good news.
+  # stderr is kept out of the value. A notice on it would otherwise turn a `t`
+  # into something no comparison below recognises.
   if ! output="$(
     PGPASSWORD="$POSTGRES_PASSWORD" psql \
       --no-psqlrc --quiet --tuples-only --no-align \
       --host "$POSTGRES_HOST" --port "$POSTGRES_PORT" \
       --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-      --command "$sql" 2>&1
+      --command "$sql" 2>"$workdir/psql.err"
   )"; then
     fail "could not query the database at ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
-    echo "$output" >&2
+    cat "$workdir/psql.err" >&2
     exit 1
   fi
 
-  echo "$output" | tr -d '[:space:]'
+  printf -v "$into" '%s' "$(echo "$output" | tr -d '[:space:]')"
 }
 
 MIGRATIONS_TABLE_EXISTS="SELECT to_regclass('public.schema_migrations') IS NOT NULL"
@@ -118,7 +124,9 @@ APPLIED_MIGRATIONS="SELECT count(*) FROM public.schema_migrations"
 # already-migrated database reports exactly the same thing whether the image
 # applied anything or not.
 
-if [ "$(query "$MIGRATIONS_TABLE_EXISTS")" != "f" ] || [ "$(query "$APP_SCHEMA_EXISTS")" != "f" ]; then
+query migrations_table "$MIGRATIONS_TABLE_EXISTS"
+query app_schema "$APP_SCHEMA_EXISTS"
+if [ "$migrations_table" != "f" ] || [ "$app_schema" != "f" ]; then
   fail "the database already carries the schema before the container has started"
   echo "  Nothing here migrates it, so something else did, and the migration" >&2
   echo "  check below would pass whatever the image does on boot." >&2
@@ -128,13 +136,22 @@ pass "the database is empty, so anything found later was applied by the containe
 
 # --- start the image --------------------------------------------------------
 
+# Created and started as two steps rather than one `docker run`. When the runtime
+# cannot exec the CMD at all, `run` fails without ever handing back the id of the
+# container it created, so the logs could not be read and the container would
+# never be removed. With the id held first, the cleanup trap covers that case too.
 container="$(
-  docker run --detach \
+  docker create \
     --add-host "${CONTAINER_POSTGRES_HOST}:host-gateway" \
     --publish "127.0.0.1:${HOST_PORT}:3000" \
     --env "DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     "$IMAGE"
 )"
+
+if ! docker start "$container" >/dev/null; then
+  fail "the container could not be started"
+  exit 1
+fi
 pass "started ${IMAGE} as ${container}"
 
 # --- poll /health -----------------------------------------------------------
@@ -186,14 +203,20 @@ pass "/health answered 200 with the database reachable"
 
 # --- the container migrated on boot -----------------------------------------
 
-if [ "$(query "$MIGRATIONS_TABLE_EXISTS")" != "t" ] || [ "$(query "$APPLIED_MIGRATIONS")" = "0" ]; then
+query migrations_table "$MIGRATIONS_TABLE_EXISTS"
+applied_count=0
+if [ "$migrations_table" = "t" ]; then
+  query applied_count "$APPLIED_MIGRATIONS"
+fi
+if [ "$migrations_table" != "t" ] || [ "$applied_count" = "0" ]; then
   fail "the container came up healthy but applied no migrations"
   echo "  The database was empty before it started, so the schema it is serving" >&2
   echo "  against is not one it created." >&2
   exit 1
 fi
 
-if [ "$(query "$APP_SCHEMA_EXISTS")" != "t" ]; then
+query app_schema "$APP_SCHEMA_EXISTS"
+if [ "$app_schema" != "t" ]; then
   fail "the app schema is absent, so the migrations that ran are not this repository's"
   exit 1
 fi
@@ -207,7 +230,7 @@ if ! docker logs "$container" 2>&1 | grep -Eq '"msg"[[:space:]]*:[[:space:]]*"ap
   echo "  the container that applied it." >&2
   exit 1
 fi
-pass "the container applied $(query "$APPLIED_MIGRATIONS") migration(s) on startup"
+pass "the container applied ${applied_count} migration(s) on startup"
 
 # --- verdict ----------------------------------------------------------------
 

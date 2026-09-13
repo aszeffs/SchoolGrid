@@ -38,7 +38,16 @@ cat > "$workdir/bin/docker" <<'DOUBLE'
 #!/usr/bin/env bash
 set -euo pipefail
 case "$1" in
-  run)
+  create)
+    echo "double-container-id"
+    ;;
+  start)
+    # What Docker does when the runtime cannot exec the CMD at all: the
+    # container exists, but `start` fails and nothing ever runs in it.
+    if [ "$SCENARIO" = "unstartable" ]; then
+      echo 'Error response from daemon: failed to create task: exec: "dist/index.js": no such file or directory' >&2
+      exit 125
+    fi
     echo started > "$STATE/started"
     if [ "$SCENARIO" = "broken-entrypoint" ]; then
       echo exited > "$STATE/exited"
@@ -58,7 +67,7 @@ case "$1" in
       echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
     fi
     ;;
-  rm) exit 0 ;;
+  rm) echo removed > "$STATE/removed" ;;
   *) echo "double: unexpected docker $*" >&2; exit 64 ;;
 esac
 DOUBLE
@@ -74,7 +83,7 @@ for ((i = 0; i < ${#args[@]}; i++)); do
   if [ "${args[$i]}" = "--command" ]; then command="${args[$((i + 1))]}"; fi
 done
 
-if [ "$SCENARIO" = "database-down" ]; then
+if [ "$SCENARIO" = "database-down" ] || { [ "$SCENARIO" = "database-lost" ] && [ -e "$STATE/started" ]; }; then
   echo "psql: error: connection refused" >&2
   exit 2
 fi
@@ -139,6 +148,9 @@ expect() {
   local scenario="$2"
   local expected_code="$3"
   local expected_output="${4:-}"
+  # A second reason printed alongside the right one is still the wrong reason,
+  # so a case can also name what the output must never say.
+  local forbidden_output="${5:-}"
 
   local state="$workdir/state/$description"
   mkdir -p "$state"
@@ -169,17 +181,45 @@ expect() {
     return
   fi
 
+  if [ -n "$forbidden_output" ] && echo "$output" | grep -q "$forbidden_output"; then
+    echo "FAIL: ${description}" >&2
+    echo "  the output also said: ${forbidden_output}" >&2
+    echo "$output" | sed 's/^/  | /' >&2
+    failures=$((failures + 1))
+    return
+  fi
+
   echo "ok: ${description}"
+}
+
+# Asserts that the container a case created was removed on the way out, so a
+# failed run cannot leave it holding the published port on the runner.
+expect_removed() {
+  local description="$1"
+  if [ -e "$workdir/state/$description/removed" ]; then
+    echo "ok: ${description} (container removed)"
+  else
+    echo "FAIL: ${description}" >&2
+    echo "  the container was never removed" >&2
+    failures=$((failures + 1))
+  fi
 }
 
 # --- cases ------------------------------------------------------------------
 
 expect "an image that boots and reaches the database passes" healthy 0 "the smoke test passed"
 
-# The demonstration the ticket asks for, as a test rather than a one-off: an
-# image whose entrypoint cannot execute.
+# An image whose entrypoint starts and dies. This pins the behaviour down; it
+# does not replace the ticket's demonstration against a real broken image, which
+# is recorded on #17 from an actual run.
 expect "a broken entrypoint fails" broken-entrypoint 1 "the container is no longer running"
 expect "a broken entrypoint surfaces the container logs" broken-entrypoint 1 "no such file or directory"
+
+# The other way an entrypoint breaks: the runtime cannot exec the CMD, so the
+# container is created but never starts. Docker's error is the whole diagnosis,
+# and the created container must still be cleaned up.
+expect "an entrypoint that cannot be executed fails" unstartable 1 'exec: "dist/index.js"'
+expect_removed "an entrypoint that cannot be executed fails"
 
 # A container that stays up but never serves a healthy response must end at the
 # deadline. If this case hangs, the timeout is not wired up at all and this
@@ -211,7 +251,11 @@ expect "a container that never reports applying migrations fails" silent-migrati
 
 # If the database cannot be reached at all, that is the harness being broken
 # rather than the image, and it has to say so instead of reporting a clean run.
-expect "an unreachable database fails before anything is started" database-down 1 "could not query the database"
+expect "an unreachable database fails before anything is started" database-down 1 "could not query the database" "already carries the schema"
+
+# The same after boot: a database lost mid-run is the harness failing, and must
+# not be reported as an image that applied nothing.
+expect "a database lost after boot is reported as itself" database-lost 1 "could not query the database" "applied no migrations"
 
 # --- verdict ----------------------------------------------------------------
 
