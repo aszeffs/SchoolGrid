@@ -197,6 +197,16 @@ if [ "$(query "$APP_SCHEMA_EXISTS")" != "t" ]; then
   fail "the app schema is absent, so the migrations that ran are not this repository's"
   exit 1
 fi
+
+# The third leg. The database says a schema appeared after the container started;
+# only the container's own log says the container is what applied it. `app.log`
+# is pino, so the line is JSON and the message is matched as a field.
+if ! docker logs "$container" 2>&1 | grep -Eq '"msg"[[:space:]]*:[[:space:]]*"applied migrations"'; then
+  fail "the container never reported applying migrations"
+  echo "  The schema is present, but nothing in the container's log says it was" >&2
+  echo "  the container that applied it." >&2
+  exit 1
+fi
 pass "the container applied $(query "$APPLIED_MIGRATIONS") migration(s) on startup"
 
 # --- verdict ----------------------------------------------------------------

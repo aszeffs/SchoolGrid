@@ -51,6 +51,8 @@ case "$1" in
   logs)
     if [ "$SCENARIO" = "broken-entrypoint" ]; then
       echo "exec /nodejs/bin/node: no such file or directory"
+    elif [ "$SCENARIO" = "silent-migration" ]; then
+      echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
     else
       echo '{"level":30,"msg":"applied migrations","applied":["0001_initial.sql"]}'
       echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
@@ -201,6 +203,11 @@ expect "an already-migrated database is caught before the container starts" dirt
 # The other half: the container came up healthy but left no migration behind,
 # so whatever applied the schema, it was not this image on boot.
 expect "a container that applied no migrations fails" no-migrations 1 "applied no migrations"
+
+# The third leg. The database checks say a schema appeared after the container
+# started; the container's own log line says the container is what put it
+# there, rather than anything else that reached the same database meanwhile.
+expect "a container that never reports applying migrations fails" silent-migration 1 "never reported applying migrations"
 
 # If the database cannot be reached at all, that is the harness being broken
 # rather than the image, and it has to say so instead of reporting a clean run.
