@@ -20,7 +20,7 @@ jobs:
     name: Container build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Test the hardening checks
         # Before the build, because it needs no Docker and because a broken
@@ -94,7 +94,7 @@ jobs:
       # image here. Dependabot does not update service images in workflows, so
       # this digest is bumped by hand alongside the embedded-postgres major.
       postgres:
-        image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -115,7 +115,7 @@ jobs:
     # six-hour limit.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Test the smoke test
         # Before the image is loaded, for the same reason the hardening checks
@@ -150,9 +150,9 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
 
@@ -289,7 +289,7 @@ jobs:
       image: ${{ steps.push.outputs.image }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Otherwise the job token, which in this job can write packages, sits
           # in `.git/config` for every later step. The repository is public, so
@@ -350,7 +350,7 @@ jobs:
     services:
       # The same Postgres as the smoke job, for the same reasons.
       postgres:
-        image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -367,7 +367,7 @@ jobs:
       IMAGE: ${{ needs.publish.outputs.image }}
       DIGEST: ${{ needs.publish.outputs.digest }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Pull the commit tag without credentials
         # By tag, then checked against the digest the push reported. The tag is
