@@ -16,3 +16,7 @@ This ticket builds the machinery and proves its guarantees. Populating the trail
 - [ ] A School Administrator can read their own School's Audit records.
 - [ ] A School Administrator reading another School's Audit records receives the standard refusal, indistinguishable from any other.
 - [ ] The audit module's interface exposes append and School-scoped read only; no update or delete operation exists on it.
+
+---
+
+**Migrated to GitHub issue #6** (https://github.com/aszeffs/SchoolGrid/issues/6). That issue is the source of truth; this file is kept as a record.

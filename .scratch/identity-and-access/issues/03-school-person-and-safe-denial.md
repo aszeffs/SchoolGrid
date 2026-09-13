@@ -22,3 +22,7 @@ This is the first School-scoped resource in the system, which makes it the first
 ---
 
 **Note for the implementer:** ADR-0001 and ADR-0002 both land here. The uniform refusal will read as unhelpful error handling — it is deliberate. Comment it at the chokepoint so it is not "improved" later.
+
+---
+
+**Migrated to GitHub issue #5** (https://github.com/aszeffs/SchoolGrid/issues/5). That issue is the source of truth; this file is kept as a record.

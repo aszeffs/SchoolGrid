@@ -15,3 +15,7 @@ A User account holds credentials and authentication state and nothing else: no r
 - [ ] An expired or unrecognised session is treated exactly as no session at all.
 - [ ] Credentials are stored such that reading the database does not yield them.
 - [ ] The account module exposes no operation that returns a role, permission, or School.
+
+---
+
+**Migrated to GitHub issue #4** (https://github.com/aszeffs/SchoolGrid/issues/4). That issue is the source of truth; this file is kept as a record.

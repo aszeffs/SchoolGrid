@@ -1,0 +1,21 @@
+# Deny everything, then allow back exactly what the build needs.
+#
+# A denylist has to be right about every future file; this has to be right
+# about the few that matter. A `.env` written next to this file, a key dropped
+# in the working tree, a new test directory — none of them reach the build
+# context unless someone adds them below, deliberately and visibly in review.
+*
+
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.build.json
+!src
+!migrations
+
+# `src` and `migrations` are allowed wholesale above, so re-exclude anything
+# that could be dropped inside them and does not belong in an image.
+**/*.env
+**/.env.*
+**/*.pem
+**/*.key

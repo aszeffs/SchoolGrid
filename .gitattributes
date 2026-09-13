@@ -1,0 +1,7 @@
+# Normalise to LF in the repository, and check out shell scripts as LF on
+# every platform. A `.sh` file checked out with CRLF fails on a Linux runner
+# with `$'\r': command not found`, which reads as a broken script rather than
+# as a line-ending problem.
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf

@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live as markdown files under `.scratch/<feature-slug>/` in this repo. See `docs/agents/issue-tracker.md`.
+GitHub Issues on `aszeffs/SchoolGrid`, via the `gh` CLI. Feature specs stay as `.scratch/<feature-slug>/spec.md`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

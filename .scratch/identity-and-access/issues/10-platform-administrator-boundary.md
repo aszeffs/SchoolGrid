@@ -18,3 +18,7 @@ This lands last because the guarantee is only meaningful when there is a full su
 ---
 
 **Note for the implementer:** the enumeration test is the point of this ticket. A guarantee asserted for the endpoints that existed when it was written is worth much less than one that fails loudly when someone adds an endpoint that forgot about it.
+
+---
+
+**Migrated to GitHub issue #12** (https://github.com/aszeffs/SchoolGrid/issues/12). That issue is the source of truth; this file is kept as a record.
