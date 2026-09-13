@@ -8,7 +8,7 @@
 # ---- the build toolchain ---------------------------------------------------
 # Named once so the two stages that use it share a digest. Written twice, a
 # Dependabot bump would have to change both and could change one.
-FROM node:24-bookworm@sha256:6dac556d980b7f0e5498d08f08cee0ca67798b4ad6c23964a9214920e67758d0 AS node-base
+FROM node:26-bookworm@sha256:e7bc1a4cd2419953c91f9a6f7bb6efb3737773093fb4ded0b1c77a0a5831fac4 AS node-base
 
 # ---- build -----------------------------------------------------------------
 # A full Node image, because compiling needs the toolchain. Nothing from this
