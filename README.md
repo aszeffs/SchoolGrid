@@ -65,5 +65,20 @@ The check reports its verdict in the workflow job summary and never fails. It gu
 | Dependency review on pull requests | Vulnerable or copyleft-licensed dependencies entering through a PR. |
 | `allowScripts` in `package.json` | Install-time code execution. Scripts run only for exact allowlisted versions, so a new one needs a visible change here. |
 | Distroless runtime image, built on every pull request | A shell, a package manager, a dev dependency or a root user reaching the runtime image. The properties are asserted against the built artifact, not against the Dockerfile. |
+| Publication to GHCR from `main` only, after the scan and smoke test | An unreviewed, vulnerable or unstartable image reaching the registry. Pull requests build and check the image but never push it, and only the publishing job holds a token that can. |
+| Images tagged by full commit SHA | A running image that cannot be traced back to its source. `latest` moves only to the current head of `main`, never backwards to an older merge. |
+| Anonymous pull and boot after every publish | A package that is private, or a push that did not produce a runnable image. The check runs on a fresh runner with no registry credentials. |
 
-Image scanning, publication and attestation arrive with the tickets that add them; the image itself is built and checked on every pull request but never pushed.
+Attestation arrives with the ticket that adds it.
+
+## Published images
+
+Every merge to `main` publishes `ghcr.io/aszeffs/schoolgrid`, tagged with the full commit SHA and `latest`. The package is public and needs no login:
+
+```bash
+docker pull ghcr.io/aszeffs/schoolgrid:<full-commit-sha>
+```
+
+Prefer the commit tag. `latest` tells you what is newest, not what you are running.
+
+The package is public so that anyone, not only the maintainer, can verify where an image came from. GHCR creates a new package as private, and the visibility cannot be set from a workflow, so after the first publish it is changed once by hand: the package's settings, under **Danger Zone → Change visibility**. Until then the anonymous pull job fails, which is that check working.
