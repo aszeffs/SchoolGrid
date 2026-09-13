@@ -32,6 +32,13 @@ updates:
     directory: /
     multi-ecosystem-group: all-dependencies
     patterns: ["*"]
+    ignore:
+      # The type definitions describe the Node API the code is checked against,
+      # so their major follows the runtime's rather than the newest release.
+      # Types for a newer Node would typecheck calls that fail on the one the
+      # image actually runs. Moved together with the Node major.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # Actions are pinned to commit SHAs, which is what stops a moved tag from
   # changing what runs here. Without this, pinning would decay into running
