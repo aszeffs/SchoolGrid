@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Database } from "../db/pool.ts";
+import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { isRateLimited } from "../http/rate-limit.ts";
 import { refuse } from "../http/refusal.ts";
 import { hashPassword, spendVerificationEffort, verifyPassword } from "./passwords.ts";
@@ -22,6 +23,19 @@ export interface Credentials {
   username: string;
   password: string;
 }
+
+/** A sign-in attempt, and the account it named, if it named one. */
+export interface AuthenticationAttempt {
+  userAccountId: string | null;
+  succeeded: boolean;
+}
+
+/**
+ * Writes an attempt down somewhere this module need not know about. It is
+ * given the transaction a successful attempt's session is started in, so a
+ * session whose attempt cannot be recorded is never started.
+ */
+export type RecordAttempt = (database: Queryable, attempt: AuthenticationAttempt) => Promise<void>;
 
 const SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
 const TOKEN_BYTES = 32;
@@ -48,10 +62,18 @@ export async function createUserAccount(
   return rows[0]!;
 }
 
+/**
+ * The account the credentials verify as or, when they do not, the account they
+ * named: null if they named none.
+ */
+type Verification =
+  | { verified: true; account: UserAccount }
+  | { verified: false; userAccountId: string | null };
+
 async function verifyCredentials(
   database: Database,
   { username, password }: Credentials,
-): Promise<UserAccount | null> {
+): Promise<Verification> {
   const { rows } = await database.query<UserAccount & { password_hash: string }>(
     `SELECT id, username, password_hash FROM app.user_account WHERE lower(username) = lower($1)`,
     [username],
@@ -60,16 +82,16 @@ async function verifyCredentials(
 
   if (account === undefined) {
     await spendVerificationEffort(password);
-    return null;
+    return { verified: false, userAccountId: null };
   }
   if (!(await verifyPassword(password, account.password_hash))) {
-    return null;
+    return { verified: false, userAccountId: account.id };
   }
-  return { id: account.id, username: account.username };
+  return { verified: true, account: { id: account.id, username: account.username } };
 }
 
 async function startSession(
-  database: Database,
+  database: Queryable,
   account: UserAccount,
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(TOKEN_BYTES).toString("base64url");
@@ -145,18 +167,25 @@ function parseJsonOrNothing(body: string): unknown {
   }
 }
 
-async function refuseMalformedAttempt(request: FastifyRequest, reply: FastifyReply) {
-  request.log.info("refused: malformed authentication attempt");
-  // A malformed attempt costs what a wrong password costs, so it cannot be
-  // told apart by timing either.
-  await spendVerificationEffort("");
-  return refuse(reply);
+interface AuthenticationOptions {
+  database: Database;
+  recordAttempt: RecordAttempt;
 }
 
 async function authenticationRoutes(
   app: FastifyInstance,
-  { database }: { database: Database },
+  { database, recordAttempt }: AuthenticationOptions,
 ): Promise<void> {
+  async function refuseMalformedAttempt(request: FastifyRequest, reply: FastifyReply) {
+    request.log.info("refused: malformed authentication attempt");
+    // A malformed attempt costs what a wrong password costs, so it cannot be
+    // told apart by timing either. That includes recording it: it names no
+    // account, so nothing is written, but the write is still made.
+    await spendVerificationEffort("");
+    await recordAttempt(database, { userAccountId: null, succeeded: false });
+    return refuse(reply);
+  }
+
   // Every failed attempt, whatever its cause, must get the one refusal. Left to
   // Fastify, an unparseable body or an unexpected content type fails before the
   // handler runs, is answered `invalid_request`, and carries `connection: close`
@@ -191,13 +220,20 @@ async function authenticationRoutes(
       return refuseMalformedAttempt(request, reply);
     }
 
-    const account = await verifyCredentials(database, credentials);
-    if (account === null) {
+    const verification = await verifyCredentials(database, credentials);
+    if (!verification.verified) {
       request.log.info("refused: authentication failed");
+      // Made whether or not an account was named, so the two cost the same.
+      await recordAttempt(database, { userAccountId: verification.userAccountId, succeeded: false });
       return refuse(reply);
     }
 
-    const session = await startSession(database, account);
+    const { account } = verification;
+    const session = await withTransaction(database, async (transaction) => {
+      const started = await startSession(transaction, account);
+      await recordAttempt(transaction, { userAccountId: account.id, succeeded: true });
+      return started;
+    });
     return reply
       .status(201)
       .header("cache-control", "no-store")
@@ -222,6 +258,10 @@ async function authenticationRoutes(
   });
 }
 
-export function registerAuthenticationRoutes(app: FastifyInstance, database: Database): void {
-  app.register(authenticationRoutes, { database });
+export function registerAuthenticationRoutes(
+  app: FastifyInstance,
+  database: Database,
+  recordAttempt: RecordAttempt,
+): void {
+  app.register(authenticationRoutes, { database, recordAttempt });
 }

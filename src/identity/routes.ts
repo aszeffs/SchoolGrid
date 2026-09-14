@@ -30,7 +30,7 @@ export function registerIdentityRoutes(app: FastifyInstance, database: Database)
     });
 
     scope.get("/persons/:personId", async (actor, { personId }) => {
-      const person = authorizeReadPerson(actor, await findPerson(database, personId!));
+      const person = authorizeReadPerson(actor, personId!, await findPerson(database, personId!));
       return { person: present(person) };
     });
   });

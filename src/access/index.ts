@@ -11,18 +11,34 @@ import { personFor, type Person } from "../identity/index.ts";
 export type Role = "school_administrator";
 
 /**
- * Why a request was refused. It exists for the log (and, from ticket 05, the
- * Audit record). It never reaches the caller: see `refuse` in http/refusal.ts.
+ * Why a request was refused. It is written to the Audit record, where a School
+ * Administrator can investigate it, and never reaches the caller: see `refuse`
+ * in http/refusal.ts.
  */
 export type RefusalReason =
   | "unauthenticated"
   | "no-person-in-school"
+  | "no-such-route"
+  | "malformed-url"
   | "absent"
   | "outside-school"
   | "forbidden";
 
+/** What a refused request asked for, as the caller named it. */
+export interface RefusedTarget {
+  type: string;
+  id: string;
+}
+
 export class Refused extends Error {
-  constructor(readonly reason: RefusalReason) {
+  /**
+   * The target is omitted when the refusal came before any target was looked
+   * at, and the request itself is then what was refused.
+   */
+  constructor(
+    readonly reason: RefusalReason,
+    readonly target?: RefusedTarget,
+  ) {
     super(`refused: ${reason}`);
   }
 }
@@ -92,11 +108,15 @@ function decideReadPerson(actor: Actor, target: Person | null): RefusalReason | 
   return "forbidden";
 }
 
-/** Returns the target if the actor may read it, and refuses otherwise. */
-export function authorizeReadPerson(actor: Actor, target: Person | null): Person {
+/**
+ * Returns the target if the actor may read it, and refuses otherwise. The
+ * requested identifier is what the refusal names, since an absent target has
+ * no identifier of its own.
+ */
+export function authorizeReadPerson(actor: Actor, personId: string, target: Person | null): Person {
   const reason = decideReadPerson(actor, target);
   if (reason !== null) {
-    throw new Refused(reason);
+    throw new Refused(reason, { type: "person", id: personId });
   }
   return target!;
 }
@@ -109,7 +129,7 @@ export function authorizeReadPerson(actor: Actor, target: Person | null): Person
  */
 export function authorizeReadAuditRecords(actor: Actor): string {
   if (!holds(actor, "school_administrator")) {
-    throw new Refused("forbidden");
+    throw new Refused("forbidden", { type: "school", id: actor.schoolId });
   }
   return actor.schoolId;
 }

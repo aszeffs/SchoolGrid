@@ -1,10 +1,11 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
+import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
-import { refuse } from "./http/refusal.ts";
+import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 
 export interface ServerOptions {
@@ -20,15 +21,20 @@ export function buildServer({
 }: ServerOptions): FastifyInstance {
   const app = Fastify({
     logger: logLevel === "silent" ? false : { level: logLevel },
+    // A URL the router cannot take apart — an identifier over its length
+    // limit, or one that does not decode — is otherwise answered by Fastify
+    // itself, with a status and a body echoing the path. Fastify only says so
+    // for a path that matches a route with a parameter, so that answer would
+    // confirm the route exists. It is a refusal like an unmatched route.
+    frameworkErrors: (_error, request, reply) =>
+      refuseUnrouted(database, request, reply, "malformed-url"),
   });
 
   registerRateLimit(app, rateLimit);
 
-  app.setNotFoundHandler((request, reply) => {
-    // The reason lives in the log. Ticket 05 moves it to the Audit record.
-    request.log.info({ method: request.method, url: request.url }, "refused: no such route");
-    refuse(reply);
-  });
+  app.setNotFoundHandler((request, reply) =>
+    refuseUnrouted(database, request, reply, "no-such-route"),
+  );
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
     // The limiter stops a request by throwing, so a throttled request arrives
@@ -61,7 +67,7 @@ export function buildServer({
     }
   });
 
-  registerAuthenticationRoutes(app, database);
+  registerAuthenticationRoutes(app, database, recordAuthenticationAttempt);
   registerIdentityRoutes(app, database);
   registerAuditRoutes(app, database);
 

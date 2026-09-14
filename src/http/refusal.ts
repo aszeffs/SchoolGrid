@@ -13,7 +13,7 @@ const REFUSED = { status: "refused" } as const;
 /**
  * Sends the refusal. Every refusal in the system is this one call, with this one
  * shape. It takes no reason, deliberately, so no caller can phrase its own. The
- * reason goes to the log (and, from ticket 05, the Audit record), never to the
+ * reason goes to the log and the Audit record, never to the
  * caller. School-scoped routes reach this only through the chokepoint in
  * http/school-scope.ts, and never call it themselves.
  *
