@@ -237,5 +237,28 @@ describe("User account authentication", () => {
 
       expect(observable(malformed)).toEqual(observable(wrongPassword));
     });
+
+    // ADR-0002 addendum: the connection is closed because the unread body cannot
+    // stay on the socket. That header reflects only the caller's own request.
+    it("answers a body over the server's size limit identically apart from closing the connection", async () => {
+      await server().createAccount(ALICE);
+
+      const wrongPassword = await server().client.post("/session", {
+        username: "alice",
+        password: "not the password",
+      });
+      const oversized = await server().client.postRaw(
+        "/session",
+        JSON.stringify({ username: "alice", password: "x".repeat(2 * 1024 * 1024) }),
+        "application/json",
+      );
+
+      const apartFromConnection = (response: TestResponse) => {
+        const { connection: _connection, ...headers } = observable(response).headers;
+        return { ...observable(response), headers };
+      };
+      expect(oversized.headers.connection).toBe("close");
+      expect(apartFromConnection(oversized)).toEqual(apartFromConnection(wrongPassword));
+    });
   });
 });

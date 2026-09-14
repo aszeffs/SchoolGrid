@@ -110,6 +110,8 @@ The slice delivers enough surface to prove all of this: authenticating, resolvin
 - **Access** — owns School memberships, Guardian links, Access profiles, and Enrollment's effect on access. It is the sole authority on whether an actor may perform an action on a target, and it is the only module that answers that question.
 - **Audit** — owns Audit records. It exposes an append operation and a School-scoped read, and no update or delete operation exists on its interface at all.
 
+**Authentication limits.** A username is unique regardless of letter case, enforced by a unique index on its lower-cased form, and sign-in matches it the same way. A session lasts eight hours from sign-in and is not extended by use. A sign-in attempt with a username over 254 characters or a password over 1,024 is refused as a malformed attempt without hashing, so an oversized password cannot be used to burn server time. A request stopped by the rate limit is logged but produces no Audit record: it is stopped before routing, so there is no School or actor to attach one to.
+
 **Request context.** Every authorized request resolves to an actor context of School, Person, and that Person's active memberships, assembled once at the boundary and passed down. No module below the boundary re-derives it, and no module reads the raw session.
 
 **Authorization is a single chokepoint.** Every School-scoped read and write passes through the Access module's decision. A handler may not consult a membership or role directly. This is what makes uniform Safe denial enforceable rather than aspirational: there is one place where a refusal is produced.
