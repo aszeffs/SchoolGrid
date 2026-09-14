@@ -19,6 +19,7 @@ describe("Schools and Persons", () => {
       schoolId: westbrook.school.id,
       displayName: "Alice Guardian",
       account: alice,
+      role: "guardian",
     });
 
     const caller = await server().signIn(ALICE);
@@ -64,6 +65,7 @@ describe("Schools and Persons", () => {
       schoolId: school.id,
       displayName: "Sam Student",
       account: sam,
+      role: "student",
     });
     await server().createPerson({ schoolId: school.id, displayName: "Other Student" });
 
@@ -85,6 +87,7 @@ describe("Schools and Persons", () => {
       schoolId: westbrook.school.id,
       displayName: "alice",
       account: alice,
+      role: "guardian",
     });
 
     const caller = await server().signIn(ALICE);
@@ -102,7 +105,7 @@ describe("Schools and Persons", () => {
 
   describe("every refusal is the same refusal", () => {
     interface World {
-      /** Sam: a Person in Northside with no membership, so no reach beyond themself. */
+      /** Sam: a Student in Northside, with no reach beyond themself. */
       sam: TestClient;
       /** Alice: Northside's School Administrator, who may read every Person there. */
       alice: TestClient;
@@ -118,7 +121,7 @@ describe("Schools and Persons", () => {
       const sam = await server().createAccount(SAM);
       const northside = await server().provisionSchool({ name: "Northside", administrator: alice });
       const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
-      await server().createPerson({ schoolId: northside.school.id, displayName: "Sam", account: sam });
+      await server().createPerson({ schoolId: northside.school.id, displayName: "Sam", account: sam, role: "student" });
       const classmate = await server().createPerson({
         schoolId: northside.school.id,
         displayName: "Classmate",

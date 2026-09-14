@@ -10,6 +10,7 @@ import {
   type Credentials,
   type UserAccount,
 } from "../../src/authentication/index.ts";
+import { grantMembership, type Role } from "../../src/access/index.ts";
 import { createPerson, type Person } from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
 import type { RateLimit } from "../../src/config.ts";
@@ -34,7 +35,8 @@ export function observable({ status, headers, raw }: TestResponse) {
 export interface TestClient {
   get(path: string): Promise<TestResponse>;
   post(path: string, body?: unknown): Promise<TestResponse>;
-  delete(path: string): Promise<TestResponse>;
+  patch(path: string, body?: unknown): Promise<TestResponse>;
+  delete(path: string, body?: unknown): Promise<TestResponse>;
   /** Sends a body exactly as given, for requests JSON serialization cannot express. */
   postRaw(path: string, payload: string, contentType: string): Promise<TestResponse>;
   /** A client presenting this session token on every request. */
@@ -62,12 +64,27 @@ export interface TestServer {
   createAccount(credentials: Credentials): Promise<UserAccount>;
   /** Arranges a School together with its first School Administrator. */
   provisionSchool(school: { name: string; administrator: UserAccount }): Promise<ProvisionedSchool>;
-  /** Arranges a Person in a School, optionally one a User account resolves to. */
+  /**
+   * Arranges a Person in a School, optionally one a User account resolves to,
+   * holding a membership with this role from now on. A Person with no
+   * membership has no access to the School at all.
+   */
   createPerson(person: {
     schoolId: string;
     displayName: string;
     account?: UserAccount;
+    role?: Role;
   }): Promise<Person>;
+  /**
+   * Arranges a membership with any bounds, past ones included, and no Audit
+   * record. A test of granting grants through the client instead.
+   */
+  grantMembership(membership: {
+    person: Person;
+    role: Role;
+    startsAt?: Date;
+    endsAt?: Date | null;
+  }): Promise<void>;
   /** Arranges an Audit record, appended exactly as the application appends one. */
   appendAuditRecord(entry: AuditEntry): Promise<void>;
   /** Authenticates through the API and returns a client carrying the session. */
@@ -108,7 +125,7 @@ interface ClientIdentity {
 function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers: {} }): TestClient {
   const { headers, remoteAddress, prefix = "" } = identity;
   const request = async (
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
     payload?: Payload,
   ): Promise<TestResponse> => {
@@ -143,7 +160,9 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
   return {
     get: (path) => request("GET", path),
     post: (path, body) => request("POST", path, body === undefined ? undefined : { json: body }),
-    delete: (path) => request("DELETE", path),
+    patch: (path, body) => request("PATCH", path, body === undefined ? undefined : { json: body }),
+    delete: (path, body) =>
+      request("DELETE", path, body === undefined ? undefined : { json: body }),
     postRaw: (path, raw, contentType) => request("POST", path, { raw, contentType }),
     withSession: (token) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: `Bearer ${token}` } }),
@@ -212,12 +231,20 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
             displayName: administrator.username,
           },
         }),
-      createPerson: ({ schoolId, displayName, account }) =>
-        createPerson(pool, {
+      createPerson: async ({ schoolId, displayName, account, role }) => {
+        const person = await createPerson(pool, {
           schoolId,
           displayName,
           ...(account === undefined ? {} : { userAccountId: account.id }),
-        }),
+        });
+        if (role !== undefined) {
+          await grantMembership(pool, { person, role });
+        }
+        return person;
+      },
+      grantMembership: async (membership) => {
+        await grantMembership(pool, membership);
+      },
       appendAuditRecord: (entry) => appendAuditRecord(pool, entry),
       signIn: async (credentials) => {
         const response = await client.post("/session", credentials);

@@ -1,9 +1,11 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
+import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
+import { acceptEveryBody } from "./http/body-parsing.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
@@ -31,6 +33,8 @@ export function buildServer({
   });
 
   registerRateLimit(app, rateLimit);
+
+  acceptEveryBody(app);
 
   app.setNotFoundHandler((request, reply) =>
     refuseUnrouted(database, request, reply, "no-such-route"),
@@ -69,6 +73,7 @@ export function buildServer({
 
   registerAuthenticationRoutes(app, database, recordAuthenticationAttempt);
   registerIdentityRoutes(app, database);
+  registerAccessRoutes(app, database);
   registerAuditRoutes(app, database);
 
   return app;
