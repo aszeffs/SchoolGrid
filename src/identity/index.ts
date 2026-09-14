@@ -86,7 +86,7 @@ export async function findPerson(database: Queryable, personId: string): Promise
 
 export async function personsInSchool(database: Queryable, schoolId: string): Promise<Person[]> {
   const { rows } = await database.query<Person>(
-    `SELECT ${PERSON_COLUMNS} FROM app.person WHERE school_id = $1 ORDER BY display_name, id`,
+    `SELECT ${PERSON_COLUMNS} FROM app.person WHERE school_id = $1 ORDER BY lower(display_name), display_name, id`,
     [schoolId],
   );
   return rows;
@@ -102,7 +102,7 @@ export async function schoolsReachedBy(
      FROM app.person person
      JOIN app.school school ON school.id = person.school_id
      WHERE person.user_account_id = $1
-     ORDER BY school.name, school.id`,
+     ORDER BY lower(school.name), school.name, school.id`,
     [userAccountId],
   );
   return rows;
