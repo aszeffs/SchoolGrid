@@ -30,6 +30,12 @@ POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
 POSTGRES_DB="${POSTGRES_DB:-schoolgrid}"
 
+# The login the application serves requests as. POSTGRES_USER above owns the
+# schema and is handed to the container for migrating only; see
+# docs/database-roles.md.
+APP_DB_USER="${APP_DB_USER:-schoolgrid_runtime}"
+APP_DB_PASSWORD="${APP_DB_PASSWORD:-schoolgrid_runtime}"
+
 # Where the *container* reaches the same Postgres, which is not the same
 # address: inside the container, loopback is the container. The name is mapped
 # to `host-gateway` below.
@@ -134,6 +140,27 @@ if [ "$migrations_table" != "f" ] || [ "$app_schema" != "f" ]; then
 fi
 pass "the database is empty, so anything found later was applied by the container"
 
+# --- the application's role -------------------------------------------------
+#
+# Arranged the way a deployment arranges it, before the image starts. Roles
+# belong to the cluster rather than to the database, so this leaves the schema
+# as empty as the check above found it. The image refuses to start if the role
+# it serves as could alter Audit records, so a pass also proves the two
+# connections really are separate.
+
+PROVISION_APP_ROLE="DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'schoolgrid_app') THEN
+    CREATE ROLE schoolgrid_app NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_DB_USER}') THEN
+    CREATE ROLE ${APP_DB_USER} LOGIN PASSWORD '${APP_DB_PASSWORD}' IN ROLE schoolgrid_app;
+  END IF;
+END
+\$\$"
+query _provisioned "$PROVISION_APP_ROLE"
+pass "the application's login ${APP_DB_USER} exists, holding only schoolgrid_app"
+
 # --- start the image --------------------------------------------------------
 
 # Created and started as two steps rather than one `docker run`. When the runtime
@@ -144,7 +171,8 @@ container="$(
   docker create \
     --add-host "${CONTAINER_POSTGRES_HOST}:host-gateway" \
     --publish "127.0.0.1:${HOST_PORT}:3000" \
-    --env "DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
+    --env "DATABASE_URL=postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
+    --env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     "$IMAGE"
 )"
 

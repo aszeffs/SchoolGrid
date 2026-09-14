@@ -1,9 +1,42 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadConfig } from "../src/config.ts";
+import { loadConfig, loadMigrationConfig } from "../src/config.ts";
+
+describe("loadConfig database connections", () => {
+  beforeEach(() => {
+    vi.stubEnv("DATABASE_URL", "postgres://runtime:password@localhost:5432/schoolgrid");
+    vi.stubEnv("MIGRATION_DATABASE_URL", "postgres://owner:password@localhost:5432/schoolgrid");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads the application's connection and the migration connection separately", () => {
+    expect(loadConfig()).toMatchObject({
+      databaseUrl: "postgres://runtime:password@localhost:5432/schoolgrid",
+      migrationDatabaseUrl: "postgres://owner:password@localhost:5432/schoolgrid",
+    });
+  });
+
+  it.each(["DATABASE_URL", "MIGRATION_DATABASE_URL"])("refuses to start without %s", (name) => {
+    vi.stubEnv(name, undefined);
+
+    expect(() => loadConfig()).toThrow(`Missing required environment variable: ${name}`);
+  });
+
+  it("migrates with the migration connection alone", () => {
+    vi.stubEnv("DATABASE_URL", undefined);
+
+    expect(loadMigrationConfig()).toEqual({
+      migrationDatabaseUrl: "postgres://owner:password@localhost:5432/schoolgrid",
+    });
+  });
+});
 
 describe("loadConfig rate limit", () => {
   beforeEach(() => {
     vi.stubEnv("DATABASE_URL", "postgres://user:password@localhost:5432/schoolgrid");
+    vi.stubEnv("MIGRATION_DATABASE_URL", "postgres://owner:password@localhost:5432/schoolgrid");
     vi.stubEnv("RATE_LIMIT_MAX", undefined);
     vi.stubEnv("RATE_LIMIT_WINDOW_MS", undefined);
   });

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { OutgoingHttpHeaders } from "node:http";
 import { afterEach, beforeEach, inject } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { appendAuditRecord, type AuditEntry } from "../../src/audit/index.ts";
 import { toConnectionString } from "../../src/db/connection-string.ts";
 import { createPool, type Database } from "../../src/db/pool.ts";
 import {
@@ -49,8 +50,14 @@ export interface TestClient {
 export interface TestServer {
   /** The only supported way to exercise the system in a test. */
   client: TestClient;
-  /** For arranging fixtures and asserting on database-level guarantees. */
+  /**
+   * The application's own connection, logged in as its least-privilege role.
+   * For arranging fixtures and asserting on database-level guarantees: what
+   * this connection is refused, the running application is refused.
+   */
   database: Database;
+  /** A connection as the schema owner, for what only a migration may do. */
+  ownerDatabase: Database;
   /** Arranges a User account. Accounts are provisioned, never self-registered. */
   createAccount(credentials: Credentials): Promise<UserAccount>;
   /** Arranges a School together with its first School Administrator. */
@@ -61,6 +68,8 @@ export interface TestServer {
     displayName: string;
     account?: UserAccount;
   }): Promise<Person>;
+  /** Arranges an Audit record, appended exactly as the application appends one. */
+  appendAuditRecord(entry: AuditEntry): Promise<void>;
   /** Authenticates through the API and returns a client carrying the session. */
   signIn(credentials: Credentials): Promise<TestClient>;
 }
@@ -68,6 +77,11 @@ export interface TestServer {
 function connectionString(database: string): string {
   const { host, port, user, password } = inject("postgres");
   return toConnectionString({ host, port, user, password, database });
+}
+
+function applicationConnectionString(database: string): string {
+  const { host, port, appUser, appPassword } = inject("postgres");
+  return toConnectionString({ host, port, user: appUser, password: appPassword, database });
 }
 
 /**
@@ -164,6 +178,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
   let context: TestServer;
   let app: FastifyInstance;
   let pool: Database;
+  let ownerPool: Database;
   let databaseName: string;
 
   beforeEach(async () => {
@@ -174,7 +189,8 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       await admin.query(`CREATE DATABASE "${databaseName}" TEMPLATE "${templateDatabase}"`);
     });
 
-    pool = createPool(connectionString(databaseName));
+    pool = createPool(applicationConnectionString(databaseName));
+    ownerPool = createPool(connectionString(databaseName));
     app = buildServer({
       database: pool,
       logLevel: "silent",
@@ -186,6 +202,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
     context = {
       client,
       database: pool,
+      ownerDatabase: ownerPool,
       createAccount: (credentials) => createUserAccount(pool, credentials),
       provisionSchool: ({ name, administrator }) =>
         provisionSchool(pool, {
@@ -201,6 +218,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
           displayName,
           ...(account === undefined ? {} : { userAccountId: account.id }),
         }),
+      appendAuditRecord: (entry) => appendAuditRecord(pool, entry),
       signIn: async (credentials) => {
         const response = await client.post("/session", credentials);
         const token = (response.body as { token?: unknown } | undefined)?.token;
@@ -219,6 +237,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
     if (!pool.ended && !pool.ending) {
       await pool.end();
     }
+    await ownerPool.end();
 
     await withAdminConnection(async (admin) => {
       await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);

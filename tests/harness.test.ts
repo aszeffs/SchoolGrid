@@ -11,7 +11,7 @@ describe("test harness", () => {
   });
 
   it("starts each test from the migrated template", async () => {
-    const { rows } = await server().database.query<{ name: string }>(
+    const { rows } = await server().ownerDatabase.query<{ name: string }>(
       "SELECT name FROM public.schema_migrations ORDER BY name",
     );
 
@@ -21,10 +21,12 @@ describe("test harness", () => {
   // The two tests below are a pair: the first writes, the second proves it
   // cannot see the write. If isolation ever breaks, the second fails.
   it("isolation, part one: writes data into its own database", async () => {
-    await server().database.query("CREATE TABLE app.isolation_probe (marker text PRIMARY KEY)");
-    await server().database.query("INSERT INTO app.isolation_probe VALUES ('written-by-part-one')");
+    // Creating a table is a migration's privilege, not the application's.
+    const { ownerDatabase } = server();
+    await ownerDatabase.query("CREATE TABLE app.isolation_probe (marker text PRIMARY KEY)");
+    await ownerDatabase.query("INSERT INTO app.isolation_probe VALUES ('written-by-part-one')");
 
-    const { rowCount } = await server().database.query("SELECT * FROM app.isolation_probe");
+    const { rowCount } = await ownerDatabase.query("SELECT * FROM app.isolation_probe");
     expect(rowCount).toBe(1);
   });
 

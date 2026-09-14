@@ -18,7 +18,8 @@ export interface RateLimit {
 
 export const DEFAULT_RATE_LIMIT: RateLimit = { max: 100, windowMs: 60_000 };
 
-export interface Config {
+export interface Config extends MigrationConfig {
+  /** The application's own least-privilege role. See docs/database-roles.md. */
   databaseUrl: string;
   port: number;
   logLevel: LogLevel;
@@ -46,6 +47,15 @@ function isLogLevel(value: string): value is LogLevel {
   return (LOG_LEVELS as readonly string[]).includes(value);
 }
 
+export interface MigrationConfig {
+  /** The schema owner, used only to migrate and never to serve requests. */
+  migrationDatabaseUrl: string;
+}
+
+export function loadMigrationConfig(): MigrationConfig {
+  return { migrationDatabaseUrl: requireEnv("MIGRATION_DATABASE_URL") };
+}
+
 export function loadConfig(): Config {
   const port = Number(process.env["PORT"] ?? 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -59,6 +69,7 @@ export function loadConfig(): Config {
 
   return {
     databaseUrl: requireEnv("DATABASE_URL"),
+    ...loadMigrationConfig(),
     port,
     logLevel,
     rateLimit: {

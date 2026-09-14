@@ -74,6 +74,10 @@ export async function resolveActor(
   return actor;
 }
 
+function holds(actor: Actor, role: Role): boolean {
+  return rolesOf.get(actor)?.has(role) ?? false;
+}
+
 /** The one decision: null when permitted, otherwise why not. */
 function decideReadPerson(actor: Actor, target: Person | null): RefusalReason | null {
   if (target === null) {
@@ -82,7 +86,7 @@ function decideReadPerson(actor: Actor, target: Person | null): RefusalReason | 
   if (target.schoolId !== actor.schoolId) {
     return "outside-school";
   }
-  if (target.id === actor.person.id || rolesOf.get(actor)?.has("school_administrator")) {
+  if (target.id === actor.person.id || holds(actor, "school_administrator")) {
     return null;
   }
   return "forbidden";
@@ -95,6 +99,19 @@ export function authorizeReadPerson(actor: Actor, target: Person | null): Person
     throw new Refused(reason);
   }
   return target!;
+}
+
+/**
+ * Returns the School whose Audit records the actor may read, and refuses
+ * otherwise. Only a School Administrator reads Audit records, and only those of
+ * the School they are acting in: an Actor exists in exactly one School, so
+ * there is no other School this could return.
+ */
+export function authorizeReadAuditRecords(actor: Actor): string {
+  if (!holds(actor, "school_administrator")) {
+    throw new Refused("forbidden");
+  }
+  return actor.schoolId;
 }
 
 /**
