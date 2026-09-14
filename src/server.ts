@@ -1,5 +1,6 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
+import { registerAuditRoutes } from "./audit/routes.ts";
 import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
@@ -62,6 +63,7 @@ export function buildServer({
 
   registerAuthenticationRoutes(app, database);
   registerIdentityRoutes(app, database);
+  registerAuditRoutes(app, database);
 
   return app;
 }

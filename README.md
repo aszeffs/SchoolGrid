@@ -18,7 +18,7 @@ npm run typecheck
 
 `npm test` needs no database of your own. The suite downloads and runs a genuine PostgreSQL binary, migrates a template database once, and hands every test its own copy of it. Tests are therefore isolated, and the guarantees under test are real database guarantees rather than a fake's approximation of them.
 
-To run the service itself, copy `.env.example` to `.env`, point `DATABASE_URL` at a Postgres you control, then `npm run dev`. Migrations are applied on startup.
+To run the service itself, copy `.env.example` to `.env`, create the application's database role as described in [docs/database-roles.md](docs/database-roles.md), point `MIGRATION_DATABASE_URL` at the schema owner and `DATABASE_URL` at that role, then `npm run dev`. Migrations are applied on startup, as the owner. The service refuses to start if `DATABASE_URL` could alter an Audit record.
 
 ## Branches
 

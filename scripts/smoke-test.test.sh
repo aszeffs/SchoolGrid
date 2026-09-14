@@ -101,6 +101,8 @@ if [ -e "$STATE/started" ] && [ "$SCENARIO" != "no-migrations" ]; then migrated=
 if [ "$SCENARIO" = "dirty-database" ]; then migrated=true; fi
 
 case "$command" in
+  *"CREATE ROLE"*)
+    ;;
   *count*)
     if [ "$migrated" = true ]; then echo 1; else echo 0; fi
     ;;

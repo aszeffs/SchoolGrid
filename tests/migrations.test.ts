@@ -13,18 +13,19 @@ describe("migrations", () => {
     expect(rows[0]?.exists).toBe(true);
   });
 
+  // Migrations run as the schema owner, never as the application's role.
   it("is repeatable: re-running applies nothing", async () => {
-    const result = await migrate(server().database);
+    const result = await migrate(server().ownerDatabase);
 
     expect(result.applied).toEqual([]);
     expect(result.alreadyApplied).toContain("0001_initial.sql");
   });
 
   it("refuses to run when an applied migration's contents have changed", async () => {
-    await server().database.query(
+    await server().ownerDatabase.query(
       "UPDATE public.schema_migrations SET checksum = 'tampered' WHERE name = '0001_initial.sql'",
     );
 
-    await expect(migrate(server().database)).rejects.toThrow(/contents have changed/);
+    await expect(migrate(server().ownerDatabase)).rejects.toThrow(/contents have changed/);
   });
 });

@@ -11,6 +11,9 @@ export interface PostgresHandle {
   port: number;
   user: string;
   password: string;
+  /** The login the application runs as: a member of `schoolgrid_app`, and nothing more. */
+  appUser: string;
+  appPassword: string;
   templateDatabase: string;
 }
 
@@ -23,6 +26,8 @@ declare module "vitest" {
 const HOST = "localhost";
 const USER = "postgres";
 const PASSWORD = "postgres";
+const APP_USER = "schoolgrid_runtime";
+const APP_PASSWORD = "schoolgrid_runtime";
 const TEMPLATE_DATABASE = "schoolgrid_template";
 
 async function findFreePort(): Promise<number> {
@@ -111,6 +116,13 @@ export default async function setup({ provide }: GlobalSetup): Promise<() => Pro
   );
   try {
     await migrate(templatePool);
+    // Roles belong to the cluster, not to a database, so the application's
+    // login is created once here and reaches every copy of the template. It is
+    // arranged the way a deployment arranges it (docs/database-roles.md): a
+    // plain login whose only privileges come from `schoolgrid_app`.
+    await templatePool.query(
+      `CREATE ROLE ${APP_USER} LOGIN PASSWORD '${APP_PASSWORD}' IN ROLE schoolgrid_app`,
+    );
   } finally {
     // The pool must be closed before any test can use this database as a
     // template: Postgres refuses to copy a database that has open sessions.
@@ -122,6 +134,8 @@ export default async function setup({ provide }: GlobalSetup): Promise<() => Pro
     port,
     user: USER,
     password: PASSWORD,
+    appUser: APP_USER,
+    appPassword: APP_PASSWORD,
     templateDatabase: TEMPLATE_DATABASE,
   });
 
