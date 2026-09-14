@@ -39,6 +39,16 @@ describe("Audit records", () => {
           id: expect.any(String),
           occurredAt: expect.stringMatching(ISO_TIMESTAMP),
           actorPersonId: northside.schoolAdministrator.id,
+          action: "authentication.succeeded",
+          target: { type: "person", id: northside.schoolAdministrator.id },
+          reason: null,
+          before: null,
+          after: null,
+        },
+        {
+          id: expect.any(String),
+          occurredAt: expect.stringMatching(ISO_TIMESTAMP),
+          actorPersonId: northside.schoolAdministrator.id,
           action: "membership.granted",
           target: { type: "person", id: sam.id },
           reason: "Joined the faculty",
@@ -166,7 +176,9 @@ describe("Audit records", () => {
       const caller = (await server().signIn(ALICE)).inSchool(school.id);
       const response = await caller.get("/audit-records");
 
-      expect(response.body).toMatchObject({ auditRecords: [{ action: "school.provisioned" }] });
+      expect(response.body).toMatchObject({
+        auditRecords: [{ action: "authentication.succeeded" }, { action: "school.provisioned" }],
+      });
       expect(response.raw).not.toContain("alice");
       expect(response.raw).not.toContain(ALICE.password);
     });
@@ -216,7 +228,13 @@ describe("Audit records", () => {
   it("offers append and School-scoped read, and no way to update or delete", async () => {
     const audit = await import("../src/audit/index.ts");
 
-    expect(Object.keys(audit).sort()).toEqual(["appendAuditRecord", "readAuditRecords"]);
+    // Recording an attempt or a refusal is an append by another name.
+    expect(Object.keys(audit).sort()).toEqual([
+      "appendAuditRecord",
+      "readAuditRecords",
+      "recordAuthenticationAttempt",
+      "recordRefusal",
+    ]);
   });
 
   describe("are append-only, enforced by the database", () => {

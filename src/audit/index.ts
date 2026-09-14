@@ -1,3 +1,4 @@
+import type { AuthenticationAttempt } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 
 /**
@@ -55,6 +56,81 @@ export async function appendAuditRecord(transaction: Queryable, entry: AuditEntr
       entry.reason,
       entry.before,
       entry.after,
+    ],
+  );
+}
+
+/**
+ * Records a sign-in attempt in the trail of every School where the account has
+ * a Person, against that Person. A sign-in names no School, so this is how
+ * each School Administrator sees attempts against their own people: the entry
+ * names a Person the School already holds, and nothing about the account's
+ * other Schools or what the caller typed. A failed attempt is attributed to no
+ * one, since it proved nothing about who made it.
+ *
+ * An attempt naming no account belongs to no School and is recorded nowhere.
+ * The statement still runs for it, matching nothing, so that a failure against
+ * an account costs the same round trip as one against no account.
+ */
+export async function recordAuthenticationAttempt(
+  database: Queryable,
+  { userAccountId, succeeded }: AuthenticationAttempt,
+): Promise<void> {
+  await database.query(
+    `INSERT INTO app.audit_record (school_id, actor_person_id, action, target_type, target_id)
+     SELECT school_id, CASE WHEN $2::boolean THEN id END, $3, 'person', id::text
+     FROM app.person
+     WHERE user_account_id = $1`,
+    [userAccountId, succeeded, succeeded ? "authentication.succeeded" : "authentication.failed"],
+  );
+}
+
+const TARGET_ID_LIMIT = 256;
+
+/** A refused request, as the boundary that refused it knows it. */
+export interface Refusal {
+  /** The School the request addressed, which may not exist or be well formed. */
+  schoolId: string;
+  /** The caller's Person in that School, when they had one. */
+  actorPersonId: string | null;
+  /** The caller's account, when they had one but no Person in that School. */
+  userAccountId: string | null;
+  reason: string;
+  target: { type: string; id: string };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Records a refusal, with its true reason, in the trail of the School the
+ * request addressed — never of the School a named record belongs to, which the
+ * caller has no standing in. A School that does not exist has no trail, and
+ * nothing is recorded.
+ *
+ * Whether the School exists is decided inside the one statement, so a refusal
+ * costs the same round trip whether or not it did. The target identifier is
+ * the caller's own input, and is cut to fit rather than allowed to fail the
+ * write: a refusal must not turn into a different response.
+ *
+ * Not a transaction's companion: nothing changed, so there is nothing to
+ * commit alongside it.
+ */
+export async function recordRefusal(database: Queryable, refusal: Refusal): Promise<void> {
+  await database.query(
+    `INSERT INTO app.audit_record
+       (school_id, actor_person_id, action, target_type, target_id, reason, after_value)
+     SELECT id, $2, 'access.refused', $3, $4, $5, $6
+     FROM app.school
+     WHERE id = $1`,
+    [
+      // An identifier that could not name a School must not reach Postgres, which
+      // would answer it with an error rather than with nothing.
+      UUID.test(refusal.schoolId) ? refusal.schoolId : null,
+      refusal.actorPersonId,
+      refusal.target.type,
+      refusal.target.id.slice(0, TARGET_ID_LIMIT),
+      refusal.reason,
+      refusal.userAccountId === null ? null : { userAccountId: refusal.userAccountId },
     ],
   );
 }
