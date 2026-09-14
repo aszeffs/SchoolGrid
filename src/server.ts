@@ -1,18 +1,26 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
-import type { LogLevel } from "./config.ts";
+import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
 import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
+import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuse } from "./http/refusal.ts";
 
 export interface ServerOptions {
   database: Database;
   logLevel?: LogLevel;
+  rateLimit?: RateLimit;
 }
 
-export function buildServer({ database, logLevel = "info" }: ServerOptions): FastifyInstance {
+export function buildServer({
+  database,
+  logLevel = "info",
+  rateLimit = DEFAULT_RATE_LIMIT,
+}: ServerOptions): FastifyInstance {
   const app = Fastify({
     logger: logLevel === "silent" ? false : { level: logLevel },
   });
+
+  registerRateLimit(app, rateLimit);
 
   app.setNotFoundHandler((request, reply) => {
     // The reason lives in the log. Ticket 05 moves it to the Audit record.
@@ -21,6 +29,12 @@ export function buildServer({ database, logLevel = "info" }: ServerOptions): Fas
   });
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
+    // The limiter stops a request by throwing, so a throttled request arrives
+    // here. It is neither malformed nor a refusal, and keeps its own response.
+    if (isRateLimited(error)) {
+      return sendRateLimited(reply);
+    }
+
     // A malformed request is the caller's fault and is not a refusal, so it
     // keeps its own status rather than being collapsed into a server error.
     const status = error.statusCode ?? 500;

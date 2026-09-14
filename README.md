@@ -60,6 +60,7 @@ The check reports its verdict in the workflow job summary and never fails. It gu
 
 | Control | What it catches |
 | --- | --- |
+| In-process rate limit on every route, per client address | A flood of requests turning into database round trips and exhausting the connection pool. Unknown routes count too, so probing for paths is not free. Over the limit a client gets `429 {"status":"rate_limited"}` with `Retry-After`. Set with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` (default 100 per minute). Counts are held per instance, and behind a reverse proxy every client shares the proxy's address, so a deployment should limit at the proxy as well. |
 | Gitleaks, full history, on push and weekly | Credentials committed at any point, not just at the tip. |
 | GitHub secret scanning with push protection | Blocks a credential at `git push`, before it reaches the remote. |
 | Dependency review on pull requests | Vulnerable or copyleft-licensed dependencies entering through a PR. |

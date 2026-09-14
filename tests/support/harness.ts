@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { toConnectionString } from "../../src/db/connection-string.ts";
 import { createPool, type Database } from "../../src/db/pool.ts";
 import { createUserAccount, type Credentials } from "../../src/authentication/index.ts";
+import type { RateLimit } from "../../src/config.ts";
 import { buildServer } from "../../src/server.ts";
 
 export interface TestResponse {
@@ -24,6 +25,8 @@ export interface TestClient {
   withSession(token: string): TestClient;
   /** A client sending this exact `Authorization` header on every request. */
   withAuthorization(value: string): TestClient;
+  /** A client whose requests arrive from this remote address. */
+  fromAddress(address: string): TestClient;
 }
 
 export interface TestServer {
@@ -57,7 +60,13 @@ async function withAdminConnection(work: (admin: Database) => Promise<void>): Pr
 
 type Payload = { json: unknown } | { raw: string; contentType: string };
 
-function buildClient(app: FastifyInstance, headers: Record<string, string> = {}): TestClient {
+interface ClientIdentity {
+  headers: Record<string, string>;
+  remoteAddress?: string;
+}
+
+function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers: {} }): TestClient {
+  const { headers, remoteAddress } = identity;
   const request = async (
     method: "GET" | "POST" | "DELETE",
     path: string,
@@ -66,6 +75,7 @@ function buildClient(app: FastifyInstance, headers: Record<string, string> = {})
     const response = await app.inject({
       method,
       url: path,
+      ...(remoteAddress === undefined ? {} : { remoteAddress }),
       headers:
         payload !== undefined && "raw" in payload
           ? { ...headers, "content-type": payload.contentType }
@@ -95,9 +105,17 @@ function buildClient(app: FastifyInstance, headers: Record<string, string> = {})
     post: (path, body) => request("POST", path, body === undefined ? undefined : { json: body }),
     delete: (path) => request("DELETE", path),
     postRaw: (path, raw, contentType) => request("POST", path, { raw, contentType }),
-    withSession: (token) => buildClient(app, { ...headers, authorization: `Bearer ${token}` }),
-    withAuthorization: (value) => buildClient(app, { ...headers, authorization: value }),
+    withSession: (token) =>
+      buildClient(app, { ...identity, headers: { ...headers, authorization: `Bearer ${token}` } }),
+    withAuthorization: (value) =>
+      buildClient(app, { ...identity, headers: { ...headers, authorization: value } }),
+    fromAddress: (address) => buildClient(app, { ...identity, remoteAddress: address }),
   };
+}
+
+export interface TestServerOptions {
+  /** Replaces the default limit so a test can exceed it in a few requests. */
+  rateLimit?: RateLimit;
 }
 
 /**
@@ -115,7 +133,7 @@ function buildClient(app: FastifyInstance, headers: Record<string, string> = {})
  * framing); if those ever need asserting, they need a listening server, not a
  * second seam through the application.
  */
-export function useTestServer(): () => TestServer {
+export function useTestServer({ rateLimit }: TestServerOptions = {}): () => TestServer {
   let context: TestServer;
   let app: FastifyInstance;
   let pool: Database;
@@ -130,7 +148,11 @@ export function useTestServer(): () => TestServer {
     });
 
     pool = createPool(connectionString(databaseName));
-    app = buildServer({ database: pool, logLevel: "silent" });
+    app = buildServer({
+      database: pool,
+      logLevel: "silent",
+      ...(rateLimit === undefined ? {} : { rateLimit }),
+    });
     await app.ready();
 
     const client = buildClient(app);
