@@ -4,6 +4,7 @@ import { afterEach, beforeEach, inject } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { toConnectionString } from "../../src/db/connection-string.ts";
 import { createPool, type Database } from "../../src/db/pool.ts";
+import { createUserAccount, type Credentials } from "../../src/authentication/index.ts";
 import { buildServer } from "../../src/server.ts";
 
 export interface TestResponse {
@@ -16,6 +17,13 @@ export interface TestResponse {
 export interface TestClient {
   get(path: string): Promise<TestResponse>;
   post(path: string, body?: unknown): Promise<TestResponse>;
+  delete(path: string): Promise<TestResponse>;
+  /** Sends a body exactly as given, for requests JSON serialization cannot express. */
+  postRaw(path: string, payload: string, contentType: string): Promise<TestResponse>;
+  /** A client presenting this session token on every request. */
+  withSession(token: string): TestClient;
+  /** A client sending this exact `Authorization` header on every request. */
+  withAuthorization(value: string): TestClient;
 }
 
 export interface TestServer {
@@ -23,6 +31,10 @@ export interface TestServer {
   client: TestClient;
   /** For arranging fixtures and asserting on database-level guarantees. */
   database: Database;
+  /** Arranges a User account. Accounts are provisioned, never self-registered. */
+  createAccount(credentials: Credentials): Promise<void>;
+  /** Authenticates through the API and returns a client carrying the session. */
+  signIn(credentials: Credentials): Promise<TestClient>;
 }
 
 function connectionString(database: string): string {
@@ -43,16 +55,24 @@ async function withAdminConnection(work: (admin: Database) => Promise<void>): Pr
   }
 }
 
-function buildClient(app: FastifyInstance): TestClient {
+type Payload = { json: unknown } | { raw: string; contentType: string };
+
+function buildClient(app: FastifyInstance, headers: Record<string, string> = {}): TestClient {
   const request = async (
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "DELETE",
     path: string,
-    body?: unknown,
+    payload?: Payload,
   ): Promise<TestResponse> => {
     const response = await app.inject({
       method,
       url: path,
-      ...(body === undefined ? {} : { payload: body as object }),
+      headers:
+        payload !== undefined && "raw" in payload
+          ? { ...headers, "content-type": payload.contentType }
+          : headers,
+      ...(payload === undefined
+        ? {}
+        : { payload: "raw" in payload ? payload.raw : (payload.json as object) }),
     });
 
     let parsed: unknown;
@@ -72,7 +92,11 @@ function buildClient(app: FastifyInstance): TestClient {
 
   return {
     get: (path) => request("GET", path),
-    post: (path, body) => request("POST", path, body),
+    post: (path, body) => request("POST", path, body === undefined ? undefined : { json: body }),
+    delete: (path) => request("DELETE", path),
+    postRaw: (path, raw, contentType) => request("POST", path, { raw, contentType }),
+    withSession: (token) => buildClient(app, { ...headers, authorization: `Bearer ${token}` }),
+    withAuthorization: (value) => buildClient(app, { ...headers, authorization: value }),
   };
 }
 
@@ -109,7 +133,22 @@ export function useTestServer(): () => TestServer {
     app = buildServer({ database: pool, logLevel: "silent" });
     await app.ready();
 
-    context = { client: buildClient(app), database: pool };
+    const client = buildClient(app);
+    context = {
+      client,
+      database: pool,
+      createAccount: async (credentials) => {
+        await createUserAccount(pool, credentials);
+      },
+      signIn: async (credentials) => {
+        const response = await client.post("/session", credentials);
+        const token = (response.body as { token?: unknown } | undefined)?.token;
+        if (response.status !== 201 || typeof token !== "string") {
+          throw new Error(`signIn expected a session but received status ${response.status}`);
+        }
+        return client.withSession(token);
+      },
+    };
   });
 
   afterEach(async () => {

@@ -1,0 +1,241 @@
+import { describe, expect, it } from "vitest";
+import { useTestServer, type TestClient, type TestResponse } from "./support/harness.ts";
+
+/** Everything a caller can observe about a response, minus the clock. */
+function observable({ status, headers, raw }: TestResponse) {
+  const { date: _date, ...rest } = headers;
+  return { status, headers: rest, raw };
+}
+
+const ALICE = { username: "alice", password: "correct horse battery staple" };
+
+describe("User account authentication", () => {
+  const server = useTestServer();
+
+  it("gives a caller with valid credentials a session that identifies their account", async () => {
+    await server().createAccount(ALICE);
+
+    const caller = await server().signIn(ALICE);
+    const response = await caller.get("/session");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ account: { id: expect.any(String), username: "alice" } });
+  });
+
+  it("keeps identifying the caller across requests without re-authenticating", async () => {
+    await server().createAccount(ALICE);
+    const caller = await server().signIn(ALICE);
+
+    const first = await caller.get("/session");
+    const second = await caller.get("/session");
+
+    expect(second.status).toBe(200);
+    expect(second.body).toEqual(first.body);
+  });
+
+  it("lets a caller end their session, after which it grants nothing", async () => {
+    await server().createAccount(ALICE);
+    const caller = await server().signIn(ALICE);
+
+    const ended = await caller.delete("/session");
+    const afterwards = await caller.get("/session");
+    const anonymous = await server().client.get("/session");
+
+    expect(ended.status).toBe(204);
+    expect(afterwards.status).toBe(anonymous.status);
+    expect(afterwards.raw).toBe(anonymous.raw);
+  });
+
+  it("treats usernames that differ only by case as the same account", async () => {
+    await server().createAccount(ALICE);
+
+    const caller = await server().signIn({ ...ALICE, username: "ALICE" });
+    const response = await caller.get("/session");
+
+    expect(response.body).toMatchObject({ account: { username: "alice" } });
+    await expect(server().createAccount({ ...ALICE, username: "Alice" })).rejects.toThrow();
+  });
+
+  it("holds credentials and authentication state only: no School, Person, role, or permission", async () => {
+    const { rows: columns } = await server().database.query<{ table: string; column: string }>(
+      `SELECT table_name AS table, column_name AS column
+       FROM information_schema.columns
+       WHERE table_schema = 'app' AND table_name IN ('user_account', 'user_session')
+       ORDER BY table_name, ordinal_position`,
+    );
+    const { rows: references } = await server().database.query<{ referenced: string }>(
+      `SELECT DISTINCT confrelid::regclass::text AS referenced
+       FROM pg_constraint
+       WHERE contype = 'f' AND conrelid IN ('app.user_account'::regclass, 'app.user_session'::regclass)`,
+    );
+
+    expect(columns).toEqual([
+      { table: "user_account", column: "id" },
+      { table: "user_account", column: "username" },
+      { table: "user_account", column: "password_hash" },
+      { table: "user_account", column: "created_at" },
+      { table: "user_session", column: "token_hash" },
+      { table: "user_session", column: "user_account_id" },
+      { table: "user_session", column: "created_at" },
+      { table: "user_session", column: "expires_at" },
+    ]);
+    expect(references).toEqual([{ referenced: "app.user_account" }]);
+  });
+
+  describe("reading the database yields no credentials", () => {
+    /** Every row of every table in the app schema, as text. */
+    async function dumpAppSchema(): Promise<string> {
+      const { database } = server();
+      const { rows: tables } = await database.query<{ name: string }>(
+        "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'app'",
+      );
+      const dumps = await Promise.all(
+        tables.map(async ({ name }) => {
+          const { rows } = await database.query(
+            `SELECT row_to_json(t)::text AS row FROM app."${name}" t`,
+          );
+          return rows.map((row) => row.row as string).join("\n");
+        }),
+      );
+      return dumps.join("\n");
+    }
+
+    /** The ways a secret could be written down without being hashed. */
+    function encodings(secret: string): string[] {
+      const bytes = Buffer.from(secret);
+      return [secret, bytes.toString("hex"), bytes.toString("base64"), bytes.toString("base64url")];
+    }
+
+    it("stores neither the password nor the session token", async () => {
+      await server().createAccount(ALICE);
+      const response = await server().client.post("/session", ALICE);
+      const token = (response.body as { token: string }).token;
+
+      const dump = await dumpAppSchema();
+
+      expect(dump).toContain("alice");
+      for (const encoded of [...encodings(ALICE.password), ...encodings(token)]) {
+        expect(dump).not.toContain(encoded);
+      }
+    });
+
+    it("stores the same password differently for two accounts", async () => {
+      await server().createAccount(ALICE);
+      await server().createAccount({ username: "bob", password: ALICE.password });
+
+      const { rows } = await server().database.query<{ password_hash: string }>(
+        "SELECT password_hash FROM app.user_account",
+      );
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!.password_hash).not.toBe(rows[1]!.password_hash);
+    });
+  });
+
+  describe("a session that is not live is treated exactly as no session", () => {
+    async function expiredSessionClient(): Promise<TestClient> {
+      await server().createAccount(ALICE);
+      const caller = await server().signIn(ALICE);
+      // Arranging the passage of time: the session's lifetime has run out.
+      await server().database.query(
+        "UPDATE app.user_session SET expires_at = now() - interval '1 second'",
+      );
+      return caller;
+    }
+
+    it.each([
+      ["an expired session", () => expiredSessionClient()],
+      ["an unrecognised token", async () => server().client.withSession("dGhpcyBpcyBpbnZlbnRlZA")],
+      ["a malformed token", async () => server().client.withSession("not a token!")],
+      ["a non-bearer scheme", async () => server().client.withAuthorization("Basic YWxpY2U6cHc=")],
+    ])("for %s", async (_case, arrange) => {
+      const caller = await arrange();
+
+      const anonymous = await server().client.get("/session");
+      const identify = await caller.get("/session");
+      const end = await caller.delete("/session");
+      const anonymousEnd = await server().client.delete("/session");
+
+      expect(anonymous.status).not.toBe(200);
+      expect(observable(identify)).toEqual(observable(anonymous));
+      expect(observable(end)).toEqual(observable(anonymousEnd));
+      expect(observable(end)).toEqual(observable(anonymous));
+    });
+
+    it("does not revive when its own token is presented again after ending", async () => {
+      await server().createAccount(ALICE);
+      const caller = await server().signIn(ALICE);
+      await caller.delete("/session");
+
+      const endedAgain = await caller.delete("/session");
+      const anonymousEnd = await server().client.delete("/session");
+
+      expect(observable(endedAgain)).toEqual(observable(anonymousEnd));
+    });
+  });
+
+  describe("a failed attempt reveals nothing about why it failed", () => {
+    it("answers a wrong password and an unknown account identically", async () => {
+      await server().createAccount(ALICE);
+
+      const wrongPassword = await server().client.post("/session", {
+        username: "alice",
+        password: "not the password",
+      });
+      const unknownAccount = await server().client.post("/session", {
+        username: "mallory",
+        password: "not the password",
+      });
+
+      expect(wrongPassword.status).not.toBe(201);
+      expect(observable(unknownAccount)).toEqual(observable(wrongPassword));
+      expect(wrongPassword.raw).not.toMatch(/token|password|username|account/i);
+    });
+
+    it.each([
+      ["no body", (c: TestClient) => c.post("/session")],
+      ["an empty object", (c: TestClient) => c.post("/session", {})],
+      ["a missing password", (c: TestClient) => c.post("/session", { username: "alice" })],
+      [
+        "a non-string password",
+        (c: TestClient) => c.post("/session", { username: "alice", password: 1 }),
+      ],
+      [
+        "an empty password",
+        (c: TestClient) => c.post("/session", { username: "alice", password: "" }),
+      ],
+      ["an array body", (c: TestClient) => c.post("/session", ["alice", "password"])],
+      [
+        "an oversized password",
+        (c: TestClient) => c.post("/session", { username: "alice", password: "x".repeat(5000) }),
+      ],
+      [
+        "invalid JSON",
+        (c: TestClient) => c.postRaw("/session", '{"username": "alice",', "application/json"),
+      ],
+      [
+        "valid credentials under a non-JSON content type",
+        (c: TestClient) => c.postRaw("/session", JSON.stringify(ALICE), "text/plain"),
+      ],
+      [
+        "form-encoded credentials",
+        (c: TestClient) =>
+          c.postRaw(
+            "/session",
+            `username=alice&password=${encodeURIComponent(ALICE.password)}`,
+            "application/x-www-form-urlencoded",
+          ),
+      ],
+    ])("answers %s identically to a wrong password", async (_case, attempt) => {
+      await server().createAccount(ALICE);
+
+      const wrongPassword = await server().client.post("/session", {
+        username: "alice",
+        password: "not the password",
+      });
+      const malformed = await attempt(server().client);
+
+      expect(observable(malformed)).toEqual(observable(wrongPassword));
+    });
+  });
+});
