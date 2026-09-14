@@ -13,7 +13,7 @@ An individual as known to one School. A Person exists within exactly one School 
 _Avoid_: User, account
 
 **User account**:
-Credentials and authentication state used to access SchoolGrid. A User account holds no authorization and no academic data; it resolves to at most one Person per School and may reach more than one School.
+Credentials and authentication state used to access SchoolGrid, identified by a username unique regardless of letter case. A User account holds no authorization and no academic data; it resolves to at most one Person per School and may reach more than one School.
 _Avoid_: Person, role
 
 **School membership**:
