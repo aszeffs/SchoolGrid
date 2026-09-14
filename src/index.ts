@@ -5,7 +5,11 @@ import { buildServer } from "./server.ts";
 
 const config = loadConfig();
 const database = createPool(config.databaseUrl);
-const app = buildServer({ database, logLevel: config.logLevel });
+const app = buildServer({
+  database,
+  logLevel: config.logLevel,
+  rateLimit: config.rateLimit,
+});
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "shutting down");

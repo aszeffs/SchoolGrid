@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Database } from "../db/pool.ts";
+import { isRateLimited } from "../http/rate-limit.ts";
 import { refuse } from "../http/refusal.ts";
 import { hashPassword, spendVerificationEffort, verifyPassword } from "./passwords.ts";
 
@@ -173,10 +174,12 @@ async function authenticationRoutes(
   // The remaining way to fail before the handler is a body over Fastify's size
   // limit. That still refuses identically here, but keeps the `connection:
   // close` Fastify adds, because the unread body must not be left on the socket.
-  // Server errors are rethrown to the server-wide handler.
+  // Server errors, and a request stopped by the rate limit, are rethrown to the
+  // server-wide handler: throttling is decided before any credential is looked
+  // at, so it is not a failed attempt.
   app.setErrorHandler(async (error, request, reply) => {
     const status = (error as { statusCode?: number }).statusCode ?? 500;
-    if (status >= 400 && status < 500) {
+    if (status >= 400 && status < 500 && !isRateLimited(error)) {
       return refuseMalformedAttempt(request, reply);
     }
     throw error;
