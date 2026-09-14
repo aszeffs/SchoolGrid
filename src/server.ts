@@ -1,22 +1,13 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import type { LogLevel } from "./config.ts";
+import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
+import { refuse } from "./http/refusal.ts";
 
 export interface ServerOptions {
   database: Database;
   logLevel?: LogLevel;
 }
-
-/**
- * The one body served for every refusal.
- *
- * ADR-0002 requires that an absent record, a record in another School, and a
- * record the caller may not read be indistinguishable. Naming this after any
- * one of those cases — `not_found`, `forbidden` — would bake the rejected
- * two-tier scheme into the shape before ticket 03 builds the real chokepoint
- * on top of it.
- */
-const REFUSED = { status: "refused" } as const;
 
 export function buildServer({ database, logLevel = "info" }: ServerOptions): FastifyInstance {
   const app = Fastify({
@@ -26,7 +17,7 @@ export function buildServer({ database, logLevel = "info" }: ServerOptions): Fas
   app.setNotFoundHandler((request, reply) => {
     // The reason lives in the log. Ticket 05 moves it to the Audit record.
     request.log.info({ method: request.method, url: request.url }, "refused: no such route");
-    reply.status(404).send(REFUSED);
+    refuse(reply);
   });
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -53,6 +44,8 @@ export function buildServer({ database, logLevel = "info" }: ServerOptions): Fas
       return reply.status(503).send({ status: "unavailable", database: "unreachable" });
     }
   });
+
+  registerAuthenticationRoutes(app, database);
 
   return app;
 }
