@@ -144,6 +144,23 @@ export async function holdsRoleDuring(
   return rows[0]!.held;
 }
 
+/** Whether the Person holds this role now, or through a membership not yet begun. */
+export async function holdsRoleNowOrLater(
+  database: Queryable,
+  person: Person,
+  role: Role,
+): Promise<boolean> {
+  const { rows } = await database.query<{ held: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM app.school_membership
+       WHERE school_id = $1 AND person_id = $2 AND role = $3
+         AND (ends_at IS NULL OR (ends_at > starts_at AND ends_at > now()))
+     ) AS held`,
+    [person.schoolId, person.id, role],
+  );
+  return rows[0]!.held;
+}
+
 /** Moves a membership's end. Its start, role, and Person never change. */
 export async function setMembershipEnd(
   transaction: Queryable,
