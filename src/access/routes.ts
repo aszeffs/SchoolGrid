@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
 import type { Database } from "../db/pool.ts";
-import { withTransaction, type Queryable } from "../db/transaction.ts";
+import { transactionTime, withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
+import { fieldsOf, reasonFrom, reasonOnly } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
 import { findPerson } from "../identity/index.ts";
+import { registerGuardianLinkRoutes } from "./guardian-link-routes.ts";
 import {
   authorizeGrantMembershipTo,
   authorizeManageMembership,
@@ -47,41 +49,13 @@ function valuesOf({
 // Validation below runs only once the Access decision has permitted the
 // caller: see InvalidRequest.
 
-const MAX_REASON_LENGTH = 1000;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/;
-
-function fieldsOf(body: unknown, allowed: readonly string[]): Record<string, unknown> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new InvalidRequest("the body must be a JSON object");
-  }
-  const unexpected = Object.keys(body).filter((key) => !allowed.includes(key));
-  if (unexpected.length > 0) {
-    throw new InvalidRequest(`unexpected fields: ${unexpected.join(", ")}`);
-  }
-  return body as Record<string, unknown>;
-}
 
 function timestamp(value: unknown, field: string): Date {
   if (typeof value !== "string" || !ISO_TIMESTAMP.test(value) || Number.isNaN(Date.parse(value))) {
     throw new InvalidRequest(`${field} must be an ISO 8601 timestamp`);
   }
   return new Date(value);
-}
-
-function reasonFrom(value: unknown): string | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  if (typeof value !== "string" || value.length === 0 || value.length > MAX_REASON_LENGTH) {
-    throw new InvalidRequest(`reason must be text of at most ${MAX_REASON_LENGTH} characters`);
-  }
-  return value;
-}
-
-/** When this transaction is taking place, by the database's clock, which also judges bounds. */
-async function transactionTime(transaction: Queryable): Promise<Date> {
-  const { rows } = await transaction.query<{ now: Date }>("SELECT now()");
-  return rows[0]!.now;
 }
 
 /**
@@ -124,10 +98,6 @@ function parseChange(body: unknown, membership: Membership, now: Date) {
     throw new InvalidRequest("endsAt must be in the future, and after the membership starts");
   }
   return { endsAt, reason: reasonFrom(fields["reason"]) };
-}
-
-function parseRevocation(body: unknown) {
-  return { reason: reasonFrom(body === undefined ? undefined : fieldsOf(body, ["reason"])["reason"]) };
 }
 
 /**
@@ -220,7 +190,7 @@ export function registerAccessRoutes(app: FastifyInstance, database: Database): 
     scope.delete("/memberships/:membershipId", async (actor, { params, body }) => {
       return withTransaction(database, async (transaction) => {
         const membership = await lockPermitted(transaction, actor, params["membershipId"]!);
-        const { reason } = parseRevocation(body);
+        const reason = reasonOnly(body);
         // Already ended: nothing is revoked, so nothing is recorded.
         if (hasEnded(membership, await transactionTime(transaction))) {
           return { membership: present(membership) };
@@ -234,5 +204,7 @@ export function registerAccessRoutes(app: FastifyInstance, database: Database): 
         return { membership: present(revoked) };
       });
     });
+
+    registerGuardianLinkRoutes(scope, database);
   });
 }
