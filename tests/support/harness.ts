@@ -4,7 +4,13 @@ import { afterEach, beforeEach, inject } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { toConnectionString } from "../../src/db/connection-string.ts";
 import { createPool, type Database } from "../../src/db/pool.ts";
-import { createUserAccount, type Credentials } from "../../src/authentication/index.ts";
+import {
+  createUserAccount,
+  type Credentials,
+  type UserAccount,
+} from "../../src/authentication/index.ts";
+import { createPerson, type Person } from "../../src/identity/index.ts";
+import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
 import type { RateLimit } from "../../src/config.ts";
 import { buildServer } from "../../src/server.ts";
 
@@ -27,6 +33,8 @@ export interface TestClient {
   withAuthorization(value: string): TestClient;
   /** A client whose requests arrive from this remote address. */
   fromAddress(address: string): TestClient;
+  /** A client acting within this School: `/persons` addresses `/schools/<id>/persons`. */
+  inSchool(schoolId: string): TestClient;
 }
 
 export interface TestServer {
@@ -35,7 +43,15 @@ export interface TestServer {
   /** For arranging fixtures and asserting on database-level guarantees. */
   database: Database;
   /** Arranges a User account. Accounts are provisioned, never self-registered. */
-  createAccount(credentials: Credentials): Promise<void>;
+  createAccount(credentials: Credentials): Promise<UserAccount>;
+  /** Arranges a School together with its first School Administrator. */
+  provisionSchool(school: { name: string; administrator: UserAccount }): Promise<ProvisionedSchool>;
+  /** Arranges a Person in a School, optionally one a User account resolves to. */
+  createPerson(person: {
+    schoolId: string;
+    displayName: string;
+    account?: UserAccount;
+  }): Promise<Person>;
   /** Authenticates through the API and returns a client carrying the session. */
   signIn(credentials: Credentials): Promise<TestClient>;
 }
@@ -63,10 +79,11 @@ type Payload = { json: unknown } | { raw: string; contentType: string };
 interface ClientIdentity {
   headers: Record<string, string>;
   remoteAddress?: string;
+  prefix?: string;
 }
 
 function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers: {} }): TestClient {
-  const { headers, remoteAddress } = identity;
+  const { headers, remoteAddress, prefix = "" } = identity;
   const request = async (
     method: "GET" | "POST" | "DELETE",
     path: string,
@@ -74,7 +91,7 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
   ): Promise<TestResponse> => {
     const response = await app.inject({
       method,
-      url: path,
+      url: `${prefix}${path}`,
       ...(remoteAddress === undefined ? {} : { remoteAddress }),
       headers:
         payload !== undefined && "raw" in payload
@@ -110,6 +127,7 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
     withAuthorization: (value) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: value } }),
     fromAddress: (address) => buildClient(app, { ...identity, remoteAddress: address }),
+    inSchool: (schoolId) => buildClient(app, { ...identity, prefix: `/schools/${schoolId}` }),
   };
 }
 
@@ -159,9 +177,18 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
     context = {
       client,
       database: pool,
-      createAccount: async (credentials) => {
-        await createUserAccount(pool, credentials);
-      },
+      createAccount: (credentials) => createUserAccount(pool, credentials),
+      provisionSchool: ({ name, administrator }) =>
+        provisionSchool(pool, {
+          name,
+          administrator: { userAccountId: administrator.id, displayName: administrator.username },
+        }),
+      createPerson: ({ schoolId, displayName, account }) =>
+        createPerson(pool, {
+          schoolId,
+          displayName,
+          ...(account === undefined ? {} : { userAccountId: account.id }),
+        }),
       signIn: async (credentials) => {
         const response = await client.post("/session", credentials);
         const token = (response.body as { token?: unknown } | undefined)?.token;

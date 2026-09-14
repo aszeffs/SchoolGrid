@@ -4,6 +4,7 @@ import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuse } from "./http/refusal.ts";
+import { registerIdentityRoutes } from "./identity/routes.ts";
 
 export interface ServerOptions {
   database: Database;
@@ -60,6 +61,7 @@ export function buildServer({
   });
 
   registerAuthenticationRoutes(app, database);
+  registerIdentityRoutes(app, database);
 
   return app;
 }
