@@ -87,6 +87,10 @@ export default async function setup({ provide }: GlobalSetup): Promise<() => Pro
     password: PASSWORD,
     port,
     persistent: false,
+    // Left to initdb, the cluster takes the host's locale and encoding, so text
+    // ordering differs between a developer's machine and CI. Pin both so a
+    // result that depends on collation fails everywhere or nowhere.
+    initdbFlags: ["--encoding=UTF8", "--locale=C"],
   });
 
   await postgres.initialise();

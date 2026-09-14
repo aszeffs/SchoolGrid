@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { useTestServer, type TestClient, type TestResponse } from "./support/harness.ts";
-
-/** Everything a caller can observe about a response, minus the clock. */
-function observable({ status, headers, raw }: TestResponse) {
-  const { date: _date, ...rest } = headers;
-  return { status, headers: rest, raw };
-}
+import {
+  observable,
+  useTestServer,
+  type TestClient,
+  type TestResponse,
+} from "./support/harness.ts";
 
 const ALICE = { username: "alice", password: "correct horse battery staple" };
 
