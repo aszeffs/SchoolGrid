@@ -10,7 +10,7 @@ import { createPerson, createSchool, type Person, type School } from "../identit
  */
 export interface ProvisionedSchool {
   school: School;
-  administrator: Person;
+  schoolAdministrator: Person;
 }
 
 /**
@@ -22,13 +22,13 @@ export function provisionSchool(
   database: Database,
   {
     name,
-    administrator,
-  }: { name: string; administrator: { userAccountId: string; displayName: string } },
+    schoolAdministrator,
+  }: { name: string; schoolAdministrator: { userAccountId: string; displayName: string } },
 ): Promise<ProvisionedSchool> {
   return withTransaction(database, async (client) => {
     const school = await createSchool(client, { name });
-    const person = await createPerson(client, { schoolId: school.id, ...administrator });
+    const person = await createPerson(client, { schoolId: school.id, ...schoolAdministrator });
     await grantMembership(client, { person, role: "school_administrator" });
-    return { school, administrator: person };
+    return { school, schoolAdministrator: person };
   });
 }

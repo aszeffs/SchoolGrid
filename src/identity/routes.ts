@@ -17,7 +17,7 @@ export function registerIdentityRoutes(app: FastifyInstance, database: Database)
   app.get("/schools", async (request, reply) => {
     const account = await accountForRequest(database, request);
     if (account === null) {
-      request.log.info("refused: no authenticated account");
+      request.log.info({ reason: "unauthenticated", url: request.url }, "refused");
       return refuse(reply);
     }
     return reply.status(200).send({ schools: await schoolsReachedBy(database, account.id) });

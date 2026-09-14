@@ -21,6 +21,15 @@ export interface TestResponse {
   raw: string;
 }
 
+/**
+ * Everything a caller can observe about a response, minus the clock. Two
+ * refusals ADR-0002 calls identical must compare equal through this.
+ */
+export function observable({ status, headers, raw }: TestResponse) {
+  const { date: _date, ...rest } = headers;
+  return { status, headers: rest, raw };
+}
+
 export interface TestClient {
   get(path: string): Promise<TestResponse>;
   post(path: string, body?: unknown): Promise<TestResponse>;
@@ -181,7 +190,10 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       provisionSchool: ({ name, administrator }) =>
         provisionSchool(pool, {
           name,
-          administrator: { userAccountId: administrator.id, displayName: administrator.username },
+          schoolAdministrator: {
+            userAccountId: administrator.id,
+            displayName: administrator.username,
+          },
         }),
       createPerson: ({ schoolId, displayName, account }) =>
         createPerson(pool, {

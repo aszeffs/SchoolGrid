@@ -11,8 +11,8 @@ import type { FastifyReply } from "fastify";
 const REFUSED = { status: "refused" } as const;
 
 /**
- * Sends the refusal: the only place in the system one is produced. It takes no
- * reason, deliberately, so no caller of it can phrase a refusal of its own. The
+ * Sends the refusal. Every refusal in the system is this one call, with this one
+ * shape. It takes no reason, deliberately, so no caller can phrase its own. The
  * reason goes to the log (and, from ticket 05, the Audit record), never to the
  * caller. School-scoped routes reach this only through the chokepoint in
  * http/school-scope.ts, and never call it themselves.

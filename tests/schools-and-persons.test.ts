@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { useTestServer, type TestClient, type TestResponse } from "./support/harness.ts";
-
-/** Everything a caller can observe about a response, minus the clock. */
-function observable({ status, headers, raw }: TestResponse) {
-  const { date: _date, ...rest } = headers;
-  return { status, headers: rest, raw };
-}
+import { observable, useTestServer, type TestClient } from "./support/harness.ts";
 
 const ALICE = { username: "alice", password: "correct horse battery staple" };
 const SAM = { username: "sam", password: "a different staple entirely" };
@@ -17,7 +11,7 @@ describe("Schools and Persons", () => {
 
   it("lists the Schools a caller's account reaches, and no others", async () => {
     const alice = await server().createAccount(ALICE);
-    const bob = await server().createAccount({ username: "bob", password: ALICE.password });
+    const bob = await server().createAccount(BOB);
     const northside = await server().provisionSchool({ name: "Northside", administrator: alice });
     await server().provisionSchool({ name: "Eastfield", administrator: bob });
     const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
@@ -41,7 +35,7 @@ describe("Schools and Persons", () => {
 
   it("lets a School Administrator read and list the Persons in their School", async () => {
     const alice = await server().createAccount(ALICE);
-    const { school, administrator } = await server().provisionSchool({
+    const { school, schoolAdministrator } = await server().provisionSchool({
       name: "Northside",
       administrator: alice,
     });
@@ -56,7 +50,7 @@ describe("Schools and Persons", () => {
     expect(listed.status).toBe(200);
     expect(listed.body).toEqual({
       persons: [
-        { id: administrator.id, displayName: "alice" },
+        { id: schoolAdministrator.id, displayName: "alice" },
         { id: student.id, displayName: "Sam Student" },
       ],
     });
@@ -98,12 +92,12 @@ describe("Schools and Persons", () => {
     const atWestbrook = await caller.inSchool(westbrook.school.id).get("/persons");
 
     expect(atNorthside.body).toEqual({
-      persons: [{ id: northside.administrator.id, displayName: "alice" }],
+      persons: [{ id: northside.schoolAdministrator.id, displayName: "alice" }],
     });
     expect(atWestbrook.body).toEqual({
       persons: [{ id: aliceAtWestbrook.id, displayName: "alice" }],
     });
-    expect(aliceAtWestbrook.id).not.toBe(northside.administrator.id);
+    expect(aliceAtWestbrook.id).not.toBe(northside.schoolAdministrator.id);
   });
 
   describe("every refusal is the same refusal", () => {
@@ -135,7 +129,7 @@ describe("Schools and Persons", () => {
         northsideId: northside.school.id,
         westbrookId: westbrook.school.id,
         classmateId: classmate.id,
-        westbrookPersonId: westbrook.administrator.id,
+        westbrookPersonId: westbrook.schoolAdministrator.id,
       };
     }
 
@@ -194,7 +188,7 @@ describe("Schools and Persons", () => {
         server().database.query(
           `INSERT INTO app.school_membership (school_id, person_id, role)
            VALUES ($1, $2, 'school_administrator')`,
-          [northside.school.id, westbrook.administrator.id],
+          [northside.school.id, westbrook.schoolAdministrator.id],
         ),
       ).rejects.toThrow(/foreign key/);
     });
