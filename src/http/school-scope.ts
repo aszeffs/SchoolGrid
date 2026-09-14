@@ -5,15 +5,29 @@ import { accountForRequest, type UserAccount } from "../authentication/index.ts"
 import type { Database } from "../db/pool.ts";
 import { refuse } from "./refusal.ts";
 
-export type SchoolScopedHandler = (
-  actor: Actor,
-  params: Readonly<Record<string, string>>,
-) => Promise<unknown>;
+export interface SchoolScopedRequest {
+  params: Readonly<Record<string, string>>;
+  /**
+   * The body as sent, or undefined when there was none or it was not JSON. Not
+   * yet validated: validate it after the Access decision, never before.
+   */
+  body: unknown;
+}
 
-/** Registers routes addressed within a School, under `/schools/:schoolId`. */
+export type SchoolScopedHandler = (actor: Actor, request: SchoolScopedRequest) => Promise<unknown>;
+
+/**
+ * Registers routes addressed within a School, under `/schools/:schoolId`. A
+ * `post` answers 201, since it creates; every other method answers 200.
+ */
 export interface SchoolScope {
   get(path: string, handler: SchoolScopedHandler): void;
+  post(path: string, handler: SchoolScopedHandler): void;
+  patch(path: string, handler: SchoolScopedHandler): void;
+  delete(path: string, handler: SchoolScopedHandler): void;
 }
+
+type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
 /**
  * The boundary every School-scoped request passes through.
@@ -34,24 +48,34 @@ export function registerSchoolScope(
   database: Database,
   routes: (scope: SchoolScope) => void,
 ): void {
-  routes({
-    get(path, handler) {
-      app.get(`/schools/:schoolId${path}`, async (request, reply) => {
+  const route = (method: Method, path: string, handler: SchoolScopedHandler) => {
+    app.route({
+      method,
+      url: `/schools/:schoolId${path}`,
+      handler: async (request, reply) => {
         const params = request.params as Record<string, string>;
         const schoolId = params["schoolId"]!;
         const account = await accountForRequest(database, request);
         let actor: Actor | null = null;
         try {
           actor = await resolveActor(database, account, schoolId);
-          return reply.status(200).send(await handler(actor, params));
+          const answer = await handler(actor, { params, body: request.body });
+          return reply.status(method === "POST" ? 201 : 200).send(answer);
         } catch (error) {
           if (!(error instanceof Refused)) {
             throw error;
           }
           return refuseInSchool(database, request, reply, { schoolId, account, actor, refused: error });
         }
-      });
-    },
+      },
+    });
+  };
+
+  routes({
+    get: (path, handler) => route("GET", path, handler),
+    post: (path, handler) => route("POST", path, handler),
+    patch: (path, handler) => route("PATCH", path, handler),
+    delete: (path, handler) => route("DELETE", path, handler),
   });
 }
 
@@ -106,13 +130,16 @@ async function refuseInSchool(
   }: { schoolId: string; account: UserAccount | null; actor: Actor | null; refused: Refused },
 ): Promise<FastifyReply> {
   request.log.info({ reason: refused.reason, url: request.url }, "refused");
+  // A Person who could not become an Actor, because no membership of theirs
+  // is in force, is still a Person this School knows, and is named as one.
+  const person = actor?.person ?? refused.callerPerson ?? null;
   await recordRefusal(database, {
     schoolId,
-    actorPersonId: actor?.person.id ?? null,
+    actorPersonId: person?.id ?? null,
     // An account that reached no Person here is named only by its opaque
     // identifier, so repeated probes can be linked without the School learning
     // who holds it.
-    userAccountId: actor === null ? (account?.id ?? null) : null,
+    userAccountId: person === null ? (account?.id ?? null) : null,
     reason: refused.reason,
     // Without a target of its own, the request is what was refused: named by
     // path alone, since a query string is the caller's to fill with anything.

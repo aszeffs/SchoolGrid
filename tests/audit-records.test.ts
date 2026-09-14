@@ -82,8 +82,8 @@ describe("Audit records", () => {
     }
 
     /**
-     * Alice administers Northside, is an ordinary Person at Eastfield, and has
-     * nothing at Westbrook. Sam is an ordinary Person at Northside.
+     * Alice administers Northside, is Faculty at Eastfield, and has
+     * nothing at Westbrook. Sam is a Student at Northside.
      */
     async function arrange(): Promise<World> {
       const alice = await server().createAccount(ALICE);
@@ -92,8 +92,8 @@ describe("Audit records", () => {
       const northside = await server().provisionSchool({ name: "Northside", administrator: alice });
       const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
       const eastfield = await server().provisionSchool({ name: "Eastfield", administrator: bob });
-      await server().createPerson({ schoolId: eastfield.school.id, displayName: "Alice", account: alice });
-      await server().createPerson({ schoolId: northside.school.id, displayName: "Sam", account: sam });
+      await server().createPerson({ schoolId: eastfield.school.id, displayName: "Alice", account: alice, role: "faculty" });
+      await server().createPerson({ schoolId: northside.school.id, displayName: "Sam", account: sam, role: "student" });
       return {
         alice: await server().signIn(ALICE),
         sam: await server().signIn(SAM),

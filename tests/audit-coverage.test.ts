@@ -41,8 +41,8 @@ describe("Audit coverage for authentication and refusals", () => {
   }
 
   /**
-   * Alice administers Northside and is an ordinary Person at Eastfield. Bob
-   * administers Eastfield and Westbrook. Sam is an ordinary Person at Northside,
+   * Alice administers Northside and is Faculty at Eastfield. Bob
+   * administers Eastfield and Westbrook. Sam is a Student at Northside,
    * beside a classmate Sam may not read.
    */
   async function arrange(): Promise<World> {
@@ -56,11 +56,13 @@ describe("Audit coverage for authentication and refusals", () => {
       schoolId: eastfield.school.id,
       displayName: "Alice",
       account: alice,
+      role: "faculty",
     });
     const samPerson = await server().createPerson({
       schoolId: northside.school.id,
       displayName: "Sam",
       account: sam,
+      role: "student",
     });
     const classmate = await server().createPerson({
       schoolId: northside.school.id,
