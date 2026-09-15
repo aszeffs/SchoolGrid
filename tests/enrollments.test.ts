@@ -19,6 +19,11 @@ interface Enrollment {
   endReason: string | null;
 }
 
+interface AccessProfile {
+  attendanceRead: boolean;
+  resultsRead: boolean;
+}
+
 interface GuardianLink {
   id: string;
   guardianPersonId: string;
@@ -96,8 +101,8 @@ describe("Enrollment", () => {
     };
   }
 
-  async function enroll(admin: TestClient, student: Person): Promise<Enrollment> {
-    const response = await admin.post("/enrollments", { studentPersonId: student.id });
+  async function enroll(admin: TestClient, student: Person, reason?: string): Promise<Enrollment> {
+    const response = await admin.post("/enrollments", { studentPersonId: student.id, reason });
     expect(response.status).toBe(201);
     return (response.body as { enrollment: Enrollment }).enrollment;
   }
@@ -114,11 +119,16 @@ describe("Enrollment", () => {
     return (response.body as { enrollments: Enrollment[] }).enrollments;
   }
 
-  async function link(admin: TestClient, guardian: Person, student: Person): Promise<GuardianLink> {
+  async function link(
+    admin: TestClient,
+    guardian: Person,
+    student: Person,
+    accessProfile: AccessProfile = { attendanceRead: true, resultsRead: true },
+  ): Promise<GuardianLink> {
     const response = await admin.post("/guardian-links", {
       guardianPersonId: guardian.id,
       studentPersonId: student.id,
-      accessProfile: { attendanceRead: true, resultsRead: true },
+      accessProfile,
     });
     expect(response.status).toBe(201);
     return (response.body as { guardianLink: GuardianLink }).guardianLink;
@@ -130,12 +140,15 @@ describe("Enrollment", () => {
     return (response.body as { guardianLinks: GuardianLink[] }).guardianLinks;
   }
 
-  async function trailOf(admin: TestClient, action: string): Promise<Recorded[]> {
+  /** The School's whole trail, newest first. */
+  async function auditRecordsOf(admin: TestClient): Promise<Recorded[]> {
     const response = await admin.get("/audit-records");
     expect(response.status).toBe(200);
-    return (response.body as { auditRecords: Recorded[] }).auditRecords.filter(
-      (record) => record.action === action,
-    );
+    return (response.body as { auditRecords: Recorded[] }).auditRecords;
+  }
+
+  async function trailOf(admin: TestClient, action: string): Promise<Recorded[]> {
+    return (await auditRecordsOf(admin)).filter((record) => record.action === action);
   }
 
   describe("recording", () => {
@@ -469,6 +482,162 @@ describe("Enrollment", () => {
 
       expect(response.status).toBe(400);
       expect(await linksOf(world.aliceAdmin)).toEqual([]);
+    });
+  });
+
+  describe("a returning Student", () => {
+    /** The records appended to a trail since it read as `earlier`, oldest first. */
+    function appendedSince(earlier: Recorded[], now: Recorded[]): Recorded[] {
+      const appended = now.length - earlier.length;
+      expect(now.slice(appended)).toEqual(earlier);
+      return now.slice(0, appended).reverse();
+    }
+
+    /** Whether a record describes an Enrollment or Guardian link of this Student. */
+    function concerns(record: Recorded, student: Person): boolean {
+      return (record.after as { studentPersonId?: string } | null)?.studentPersonId === student.id;
+    }
+
+    // Beyond what is asserted here, a returning Student regains their own
+    // records that are not published, such as Attendance, and a departed one
+    // reads only published ones. No route serves either yet: the Attendance and
+    // Term result slices assert it when they add one.
+    it("walks Enrollment, departure, and return, widening again with no step but the new Enrollment", async () => {
+      const world = await arrange();
+      await enroll(world.aliceAdmin, world.skyPerson);
+      const sam = (await server().signIn(SAM)).inSchool(world.northsideId);
+      const gina = (await server().signIn(GINA)).inSchool(world.northsideId);
+      const absentResponse = await sam.get(`/persons/${ABSENT_ID}`);
+      expect(absentResponse.status).not.toBe(200);
+      const absent = observable(absentResponse);
+      const onlySam = { persons: [{ id: world.samPerson.id, displayName: "Sam" }] };
+
+      // Enrolled: Sam reaches their own record and no other Student, and a
+      // Guardian linked to Sam reaches them.
+      const first = await enroll(world.aliceAdmin, world.samPerson);
+      const firstLink = await link(world.aliceAdmin, world.ginaPerson, world.samPerson);
+      expect((await sam.get(`/persons/${world.samPerson.id}`)).status).toBe(200);
+      expect((await sam.get("/persons")).body).toEqual(onlySam);
+      expect(observable(await sam.get(`/persons/${world.skyPerson.id}`))).toEqual(absent);
+      expect((await gina.get(`/persons/${world.samPerson.id}`)).status).toBe(200);
+
+      // Departed: Sam keeps their own record and still no other Student. Gina's
+      // link has ended with the Enrollment, and no Guardian can be linked anew.
+      const ended = await end(world.aliceAdmin, first, "Moved away");
+      expect((await sam.get(`/persons/${world.samPerson.id}`)).status).toBe(200);
+      expect((await sam.get("/persons")).body).toEqual(onlySam);
+      expect(observable(await sam.get(`/persons/${world.skyPerson.id}`))).toEqual(absent);
+      expect(observable(await gina.get(`/persons/${world.samPerson.id}`))).toEqual(absent);
+      const refusedLink = await world.aliceAdmin.post("/guardian-links", {
+        guardianPersonId: world.ginaPerson.id,
+        studentPersonId: world.samPerson.id,
+        accessProfile: { attendanceRead: true, resultsRead: true },
+      });
+      expect(refusedLink.status).toBe(400);
+      const trailAtDeparture = await auditRecordsOf(world.aliceAdmin);
+
+      // Returned: the same Person is given a new Enrollment, and that is the
+      // only change written. The prior Enrollment and its ended link stay as
+      // they were.
+      const second = await enroll(world.aliceAdmin, world.samPerson, "Returning for Grade 8");
+      expect(second.id).not.toBe(first.id);
+      expect(second).toEqual({
+        id: second.id,
+        studentPersonId: world.samPerson.id,
+        startedAt: expect.stringMatching(ISO_TIMESTAMP),
+        endedAt: null,
+        endReason: null,
+      });
+      expect(appendedSince(trailAtDeparture, await auditRecordsOf(world.aliceAdmin))).toEqual([
+        expect.objectContaining({ action: "enrollment.recorded", target: { type: "enrollment", id: second.id } }),
+      ]);
+      expect(
+        (await enrollmentsOf(world.aliceAdmin)).filter((each) => each.studentPersonId === world.samPerson.id),
+      ).toEqual([ended, second]);
+      expect(await linksOf(world.aliceAdmin)).toEqual([{ ...firstLink, endedAt: ended.endedAt }]);
+
+      // Sam's access is whole again, and still reaches no other Student. Gina's
+      // is not: the return restores no link.
+      expect((await sam.get(`/persons/${world.samPerson.id}`)).status).toBe(200);
+      expect((await sam.get("/persons")).body).toEqual(onlySam);
+      expect(observable(await sam.get(`/persons/${world.skyPerson.id}`))).toEqual(absent);
+      expect(observable(await gina.get(`/persons/${world.samPerson.id}`))).toEqual(absent);
+
+      // A School Administrator links Gina afresh, with an Access profile of its own.
+      const secondLink = await link(world.aliceAdmin, world.ginaPerson, world.samPerson, {
+        attendanceRead: true,
+        resultsRead: false,
+      });
+      expect(secondLink.id).not.toBe(firstLink.id);
+      expect((await gina.get(`/persons/${world.samPerson.id}`)).status).toBe(200);
+
+      // The trail tells the whole story of Sam's stays, in order.
+      const trail = (await auditRecordsOf(world.aliceAdmin)).reverse().filter((record) =>
+        concerns(record, world.samPerson),
+      );
+      expect(trail).toEqual([
+        expect.objectContaining({
+          action: "enrollment.recorded",
+          target: { type: "enrollment", id: first.id },
+          before: null,
+        }),
+        expect.objectContaining({
+          action: "guardian_link.created",
+          target: { type: "guardian_link", id: firstLink.id },
+        }),
+        expect.objectContaining({
+          action: "enrollment.ended",
+          target: { type: "enrollment", id: first.id },
+          reason: "Moved away",
+          after: expect.objectContaining({ endedAt: ended.endedAt }),
+        }),
+        expect.objectContaining({
+          action: "guardian_link.ended",
+          target: { type: "guardian_link", id: firstLink.id },
+          reason: "Moved away",
+          after: expect.objectContaining({ endedAt: ended.endedAt }),
+        }),
+        expect.objectContaining({
+          actorPersonId: world.aliceId,
+          action: "enrollment.recorded",
+          target: { type: "enrollment", id: second.id },
+          reason: "Returning for Grade 8",
+          before: null,
+          after: { studentPersonId: world.samPerson.id, startedAt: second.startedAt, endedAt: null },
+        }),
+        expect.objectContaining({
+          action: "guardian_link.created",
+          target: { type: "guardian_link", id: secondLink.id },
+          after: expect.objectContaining({ attendanceRead: true, resultsRead: false }),
+        }),
+      ]);
+    });
+
+    // Enrolling confers no role, on return as at first: a Student whose Student
+    // membership ended while they were away is granted one afresh.
+    it("returns after their Student membership ended, once granted a new one", async () => {
+      const world = await arrange();
+      const sam = (await server().signIn(SAM)).inSchool(world.northsideId);
+      const absentResponse = await world.aliceAdmin.get(`/persons/${ABSENT_ID}`);
+      expect(absentResponse.status).not.toBe(200);
+      await end(world.aliceAdmin, await enroll(world.aliceAdmin, world.samPerson), "Moved away");
+      const memberships = (await world.aliceAdmin.get("/memberships")).body as {
+        memberships: { id: string; personId: string }[];
+      };
+      const samMembership = memberships.memberships.find((each) => each.personId === world.samPerson.id)!;
+      expect((await world.aliceAdmin.delete(`/memberships/${samMembership.id}`)).status).toBe(200);
+      expect(observable(await sam.get(`/persons/${world.samPerson.id}`))).toEqual(observable(absentResponse));
+
+      const withoutMembership = await world.aliceAdmin.post("/enrollments", { studentPersonId: world.samPerson.id });
+      const granted = await world.aliceAdmin.post("/memberships", { personId: world.samPerson.id, role: "student" });
+      const returned = await world.aliceAdmin.post("/enrollments", { studentPersonId: world.samPerson.id });
+
+      expect(withoutMembership.status).toBe(400);
+      expect(granted.status).toBe(201);
+      expect(returned.status).toBe(201);
+      expect((await sam.get(`/persons/${world.samPerson.id}`)).body).toEqual({
+        person: { id: world.samPerson.id, displayName: "Sam" },
+      });
     });
   });
 
