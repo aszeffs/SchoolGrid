@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { OutgoingHttpHeaders } from "node:http";
 import { afterEach, beforeEach, inject } from "vitest";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 import { appendAuditRecord, type AuditEntry } from "../../src/audit/index.ts";
 import { toConnectionString } from "../../src/db/connection-string.ts";
 import { createPool, type Database } from "../../src/db/pool.ts";
@@ -11,10 +11,17 @@ import {
   type UserAccount,
 } from "../../src/authentication/index.ts";
 import { grantMembership, recordEnrollment, type Role } from "../../src/access/index.ts";
-import { createPerson, type Person } from "../../src/identity/index.ts";
+import {
+  createPerson,
+  createPlatformAdministrator,
+  type Person,
+  type PlatformAdministrator,
+} from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
 import type { RateLimit } from "../../src/config.ts";
-import { buildServer } from "../../src/server.ts";
+import { buildServer, type RegisteredRoute } from "../../src/server.ts";
+
+export type Method = NonNullable<InjectOptions["method"]>;
 
 export interface TestResponse {
   status: number;
@@ -33,6 +40,8 @@ export function observable({ status, headers, raw }: TestResponse) {
 }
 
 export interface TestClient {
+  /** Sends any method, with a JSON body if one is given. */
+  request(method: Method, path: string, body?: unknown): Promise<TestResponse>;
   get(path: string): Promise<TestResponse>;
   post(path: string, body?: unknown): Promise<TestResponse>;
   patch(path: string, body?: unknown): Promise<TestResponse>;
@@ -53,6 +62,11 @@ export interface TestServer {
   /** The only supported way to exercise the system in a test. */
   client: TestClient;
   /**
+   * Every route the server registered, as Fastify registered it, with its
+   * parameters unfilled: `/schools/:schoolId/persons`.
+   */
+  routes: readonly RegisteredRoute[];
+  /**
    * The application's own connection, logged in as its least-privilege role.
    * For arranging fixtures and asserting on database-level guarantees: what
    * this connection is refused, the running application is refused.
@@ -62,6 +76,15 @@ export interface TestServer {
   ownerDatabase: Database;
   /** Arranges a User account. Accounts are provisioned, never self-registered. */
   createAccount(credentials: Credentials): Promise<UserAccount>;
+  /**
+   * Arranges a Platform Administrator, made as a deployment makes one: by the
+   * schema owner, from outside the running service. Named after the account
+   * unless a display name is given.
+   */
+  createPlatformAdministrator(platformAdministrator: {
+    account: UserAccount;
+    displayName?: string;
+  }): Promise<PlatformAdministrator>;
   /** Arranges a School together with its first School Administrator. */
   provisionSchool(school: { name: string; administrator: UserAccount }): Promise<ProvisionedSchool>;
   /**
@@ -130,7 +153,7 @@ interface ClientIdentity {
 function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers: {} }): TestClient {
   const { headers, remoteAddress, prefix = "" } = identity;
   const request = async (
-    method: "GET" | "POST" | "PATCH" | "DELETE",
+    method: Method,
     path: string,
     payload?: Payload,
   ): Promise<TestResponse> => {
@@ -163,6 +186,8 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
   };
 
   return {
+    request: (method, path, body) =>
+      request(method, path, body === undefined ? undefined : { json: body }),
     get: (path) => request("GET", path),
     post: (path, body) => request("POST", path, body === undefined ? undefined : { json: body }),
     patch: (path, body) => request("PATCH", path, body === undefined ? undefined : { json: body }),
@@ -215,27 +240,38 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
 
     pool = createPool(applicationConnectionString(databaseName));
     ownerPool = createPool(connectionString(databaseName));
+    const routes: RegisteredRoute[] = [];
     app = buildServer({
       database: pool,
       logLevel: "silent",
       ...(rateLimit === undefined ? {} : { rateLimit }),
+      onRoute: (route) => routes.push(route),
     });
     await app.ready();
 
     const client = buildClient(app);
     context = {
       client,
+      routes,
       database: pool,
       ownerDatabase: ownerPool,
       createAccount: (credentials) => createUserAccount(pool, credentials),
-      provisionSchool: ({ name, administrator }) =>
-        provisionSchool(pool, {
-          name,
-          schoolAdministrator: {
-            userAccountId: administrator.id,
-            displayName: administrator.username,
-          },
+      createPlatformAdministrator: ({ account, displayName }) =>
+        createPlatformAdministrator(ownerPool, {
+          userAccountId: account.id,
+          displayName: displayName ?? account.username,
         }),
+      provisionSchool: async ({ name, administrator }) => {
+        const provisioned = await provisionSchool(pool, {
+          name,
+          schoolAdministrator: { account: administrator, displayName: administrator.username },
+          platformAdministrator: null,
+        });
+        if (provisioned === null) {
+          throw new Error("provisionSchool was given a Platform Administrator's account");
+        }
+        return provisioned;
+      },
       createPerson: async ({ schoolId, displayName, account, role }) => {
         const person = await createPerson(pool, {
           schoolId,

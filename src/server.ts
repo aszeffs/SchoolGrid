@@ -9,17 +9,29 @@ import { acceptEveryBody } from "./http/body-parsing.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
+import { registerPlatformRoutes } from "./platform/routes.ts";
 
 export interface ServerOptions {
   database: Database;
   logLevel?: LogLevel;
   rateLimit?: RateLimit;
+  /**
+   * Told of every route as it is registered, however it is registered. For a
+   * test that must cover every route there is, not only those it knew of.
+   */
+  onRoute?: (route: RegisteredRoute) => void;
+}
+
+export interface RegisteredRoute {
+  method: string;
+  url: string;
 }
 
 export function buildServer({
   database,
   logLevel = "info",
   rateLimit = DEFAULT_RATE_LIMIT,
+  onRoute,
 }: ServerOptions): FastifyInstance {
   const app = Fastify({
     logger: logLevel === "silent" ? false : { level: logLevel },
@@ -31,6 +43,15 @@ export function buildServer({
     frameworkErrors: (_error, request, reply) =>
       refuseUnrouted(database, request, reply, "malformed-url"),
   });
+
+  // First, so no route is registered before it is listening.
+  if (onRoute !== undefined) {
+    app.addHook("onRoute", ({ method, url }) => {
+      for (const each of [method].flat()) {
+        onRoute({ method: each, url });
+      }
+    });
+  }
 
   registerRateLimit(app, rateLimit);
 
@@ -75,6 +96,7 @@ export function buildServer({
   registerIdentityRoutes(app, database);
   registerAccessRoutes(app, database);
   registerAuditRoutes(app, database);
+  registerPlatformRoutes(app, database);
 
   return app;
 }
