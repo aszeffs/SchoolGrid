@@ -10,10 +10,20 @@ export const LOG_LEVELS = [
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-export interface Config {
+/** How many requests one client address may make within one window. */
+export interface RateLimit {
+  max: number;
+  windowMs: number;
+}
+
+export const DEFAULT_RATE_LIMIT: RateLimit = { max: 100, windowMs: 60_000 };
+
+export interface Config extends MigrationConfig {
+  /** The application's own least-privilege role. See docs/database-roles.md. */
   databaseUrl: string;
   port: number;
   logLevel: LogLevel;
+  rateLimit: RateLimit;
 }
 
 function requireEnv(name: string): string {
@@ -24,8 +34,26 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const value = Number(raw ?? fallback);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${name} must be a positive integer, received: ${raw}`);
+  }
+  return value;
+}
+
 function isLogLevel(value: string): value is LogLevel {
   return (LOG_LEVELS as readonly string[]).includes(value);
+}
+
+export interface MigrationConfig {
+  /** The schema owner, used only to migrate and never to serve requests. */
+  migrationDatabaseUrl: string;
+}
+
+export function loadMigrationConfig(): MigrationConfig {
+  return { migrationDatabaseUrl: requireEnv("MIGRATION_DATABASE_URL") };
 }
 
 export function loadConfig(): Config {
@@ -41,7 +69,12 @@ export function loadConfig(): Config {
 
   return {
     databaseUrl: requireEnv("DATABASE_URL"),
+    ...loadMigrationConfig(),
     port,
     logLevel,
+    rateLimit: {
+      max: positiveIntegerEnv("RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT.max),
+      windowMs: positiveIntegerEnv("RATE_LIMIT_WINDOW_MS", DEFAULT_RATE_LIMIT.windowMs),
+    },
   };
 }

@@ -6,7 +6,7 @@ Built as a practice ground for DevSecOps. The domain is deliberately security-he
 
 ## Status
 
-Walking skeleton. The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. No domain behaviour yet.
+The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a bearer session across requests, and end it (`POST`, `GET` and `DELETE /session`). No School-scoped behaviour yet.
 
 ## Running it
 
@@ -18,7 +18,7 @@ npm run typecheck
 
 `npm test` needs no database of your own. The suite downloads and runs a genuine PostgreSQL binary, migrates a template database once, and hands every test its own copy of it. Tests are therefore isolated, and the guarantees under test are real database guarantees rather than a fake's approximation of them.
 
-To run the service itself, copy `.env.example` to `.env`, point `DATABASE_URL` at a Postgres you control, then `npm run dev`. Migrations are applied on startup.
+To run the service itself, copy `.env.example` to `.env`, create the application's database role as described in [docs/database-roles.md](docs/database-roles.md), point `MIGRATION_DATABASE_URL` at the schema owner and `DATABASE_URL` at that role, then `npm run dev`. Migrations are applied on startup, as the owner. The service refuses to start if `DATABASE_URL` could alter an Audit record.
 
 ## Branches
 
@@ -39,14 +39,20 @@ To run the service itself, copy `.env.example` to `.env`, point `DATABASE_URL` a
 Three choices are load-bearing and will look wrong without their context:
 
 - **[ADR-0001](docs/adr/0001-school-scoped-person-identity.md)** — no domain object spans Schools. There is no shared identity, no district rollup, and a departing Student's records travel nowhere.
-- **[ADR-0002](docs/adr/0002-uniform-safe-denial.md)** — every refusal returns an identical response. Absent, cross-School, and forbidden are indistinguishable to the caller by design; the real reason goes only to the audit trail.
+- **[ADR-0002](docs/adr/0002-uniform-safe-denial.md)** — every refusal returns an identical response. Absent, cross-School, and forbidden are indistinguishable to the caller by design; the real reason goes only to the audit trail. Its addendum scopes this: a response may vary with the caller's own request but never with what exists, so throttling keeps its own `429`.
 - **[ADR-0003](docs/adr/0003-per-student-publication-semantics.md)** — publication is an irreversible per-Student fact reached through a per-offering act.
 
 ## Testing approach
 
-There is exactly one seam: the HTTP request boundary. Every test issues a request through the client returned by the test harness and asserts on the response a caller would receive.
+Behaviour a caller can observe has exactly one seam: the HTTP request boundary. Every such test issues a request through the client returned by the test harness and asserts on the response a caller would receive.
 
 This is deliberate. ADR-0002 guarantees that two refusals are indistinguishable *to the caller*, and that is only assertable where a caller actually stands. A test below HTTP can confirm a denial happened; it cannot confirm that a cross-School denial and an absent-record denial look the same. Please do not add a second seam for convenience.
+
+The rule governs what a caller can observe, so three kinds of test sit outside it, and nothing else should:
+
+- **Startup configuration.** `loadConfig` runs before any caller exists, and a bad value must stop the process rather than surface in a response (`tests/config.test.ts`).
+- **Database guarantees no caller can see.** Migration integrity, schema shape, and what is stored in place of a credential are asserted against the database directly (`tests/migrations.test.ts`, parts of `tests/authentication.test.ts`).
+- **Repository tooling.** Scripts under `scripts/` are not the service and are tested as the programs they are.
 
 ## Contributing
 
@@ -60,6 +66,7 @@ The check reports its verdict in the workflow job summary and never fails. It gu
 
 | Control | What it catches |
 | --- | --- |
+| In-process rate limit on every route, per client address | A flood of requests turning into database round trips and exhausting the connection pool. Unknown routes count too, so probing for paths is not free. Over the limit a client gets `429 {"status":"rate_limited"}` with `Retry-After`. Set with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` (default 100 per minute). Counts are held per instance, and behind a reverse proxy every client shares the proxy's address, so a deployment should limit at the proxy as well. |
 | Gitleaks, full history, on push and weekly | Credentials committed at any point, not just at the tip. |
 | GitHub secret scanning with push protection | Blocks a credential at `git push`, before it reaches the remote. |
 | Dependency review on pull requests | Vulnerable or copyleft-licensed dependencies entering through a PR. |

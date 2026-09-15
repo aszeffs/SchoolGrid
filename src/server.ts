@@ -1,35 +1,73 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
-import type { LogLevel } from "./config.ts";
+import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
+import { recordAuthenticationAttempt } from "./audit/index.ts";
+import { registerAccessRoutes } from "./access/routes.ts";
+import { registerAuditRoutes } from "./audit/routes.ts";
+import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
+import { acceptEveryBody } from "./http/body-parsing.ts";
+import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
+import { refuseUnrouted } from "./http/school-scope.ts";
+import { registerIdentityRoutes } from "./identity/routes.ts";
+import { registerPlatformRoutes } from "./platform/routes.ts";
 
 export interface ServerOptions {
   database: Database;
   logLevel?: LogLevel;
+  rateLimit?: RateLimit;
+  /**
+   * Told of every route as it is registered, however it is registered. For a
+   * test that must cover every route there is, not only those it knew of.
+   */
+  onRoute?: (route: RegisteredRoute) => void;
 }
 
-/**
- * The one body served for every refusal.
- *
- * ADR-0002 requires that an absent record, a record in another School, and a
- * record the caller may not read be indistinguishable. Naming this after any
- * one of those cases — `not_found`, `forbidden` — would bake the rejected
- * two-tier scheme into the shape before ticket 03 builds the real chokepoint
- * on top of it.
- */
-const REFUSED = { status: "refused" } as const;
+export interface RegisteredRoute {
+  method: string;
+  url: string;
+}
 
-export function buildServer({ database, logLevel = "info" }: ServerOptions): FastifyInstance {
+export function buildServer({
+  database,
+  logLevel = "info",
+  rateLimit = DEFAULT_RATE_LIMIT,
+  onRoute,
+}: ServerOptions): FastifyInstance {
   const app = Fastify({
     logger: logLevel === "silent" ? false : { level: logLevel },
+    // A URL the router cannot take apart — an identifier over its length
+    // limit, or one that does not decode — is otherwise answered by Fastify
+    // itself, with a status and a body echoing the path. Fastify only says so
+    // for a path that matches a route with a parameter, so that answer would
+    // confirm the route exists. It is a refusal like an unmatched route.
+    frameworkErrors: (_error, request, reply) =>
+      refuseUnrouted(database, request, reply, "malformed-url"),
   });
 
-  app.setNotFoundHandler((request, reply) => {
-    // The reason lives in the log. Ticket 05 moves it to the Audit record.
-    request.log.info({ method: request.method, url: request.url }, "refused: no such route");
-    reply.status(404).send(REFUSED);
-  });
+  // First, so no route is registered before it is listening.
+  if (onRoute !== undefined) {
+    app.addHook("onRoute", ({ method, url }) => {
+      for (const each of [method].flat()) {
+        onRoute({ method: each, url });
+      }
+    });
+  }
+
+  registerRateLimit(app, rateLimit);
+
+  acceptEveryBody(app);
+
+  app.setNotFoundHandler((request, reply) =>
+    refuseUnrouted(database, request, reply, "no-such-route"),
+  );
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
+    // The limiter stops a request by throwing, so a throttled request arrives
+    // here. It is neither malformed nor a refusal, and keeps its own response.
+    if (isRateLimited(error)) {
+      return sendRateLimited(reply);
+    }
+
     // A malformed request is the caller's fault and is not a refusal, so it
     // keeps its own status rather than being collapsed into a server error.
     const status = error.statusCode ?? 500;
@@ -53,6 +91,12 @@ export function buildServer({ database, logLevel = "info" }: ServerOptions): Fas
       return reply.status(503).send({ status: "unavailable", database: "unreachable" });
     }
   });
+
+  registerAuthenticationRoutes(app, database, recordAuthenticationAttempt);
+  registerIdentityRoutes(app, database);
+  registerAccessRoutes(app, database);
+  registerAuditRoutes(app, database);
+  registerPlatformRoutes(app, database);
 
   return app;
 }

@@ -1,0 +1,188 @@
+import type { AuthenticationAttempt } from "../authentication/index.ts";
+import type { Queryable } from "../db/transaction.ts";
+
+/**
+ * The Audit module owns Audit records. It can append one and read a School's
+ * trail, and nothing else: there is no update or delete here, and none is
+ * possible below it either, because the application's database role holds no
+ * such grant (migrations/0004_audit_records.sql). Do not add one.
+ */
+
+/**
+ * A before or after value: a flat set of scalars. Name what changed by
+ * identifier. A credential, or a Student's data beyond what the entry needs,
+ * does not belong in a trail that can never be erased; the database refuses a
+ * key naming a credential, and refuses nesting, as a backstop.
+ */
+export type AuditValues = Readonly<Record<string, string | number | boolean | null>>;
+
+export interface AuditEntry {
+  /** The School whose trail this belongs to. */
+  schoolId: string;
+  /** The Person who acted, or null when none did. */
+  actorPersonId: string | null;
+  /**
+   * The Platform Administrator who acted on the School from outside it, when
+   * one did. Never given with a Person: an actor is one or the other.
+   */
+  actorPlatformAdministratorId?: string | null;
+  /** What happened, as `<subject>.<verb>`, such as `school.provisioned`. */
+  action: string;
+  target: { type: string; id: string | null };
+  reason: string | null;
+  before: AuditValues | null;
+  after: AuditValues | null;
+}
+
+/** An entry as it was recorded. The database, not the caller, sets when. */
+export interface AuditRecord extends Omit<AuditEntry, "schoolId" | "actorPlatformAdministratorId"> {
+  id: string;
+  occurredAt: string;
+  actorPlatformAdministratorId: string | null;
+}
+
+/**
+ * Appends an entry to its School's trail.
+ *
+ * Pass the transaction the audited change is written in, never the pool: the
+ * change and its record must commit together or not at all, so a change whose
+ * record cannot be written does not happen.
+ */
+export async function appendAuditRecord(transaction: Queryable, entry: AuditEntry): Promise<void> {
+  await transaction.query(
+    `INSERT INTO app.audit_record
+       (school_id, actor_person_id, actor_platform_administrator_id, action, target_type, target_id,
+        reason, before_value, after_value)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      entry.schoolId,
+      entry.actorPersonId,
+      entry.actorPlatformAdministratorId ?? null,
+      entry.action,
+      entry.target.type,
+      entry.target.id,
+      entry.reason,
+      entry.before,
+      entry.after,
+    ],
+  );
+}
+
+/**
+ * Records a sign-in attempt in the trail of every School where the account has
+ * a Person, against that Person. A sign-in names no School, so this is how
+ * each School Administrator sees attempts against their own people: the entry
+ * names a Person the School already holds, and nothing about the account's
+ * other Schools or what the caller typed. A failed attempt is attributed to no
+ * one, since it proved nothing about who made it.
+ *
+ * An attempt naming no account belongs to no School and is recorded nowhere.
+ * The statement still runs for it, matching nothing, so that a failure against
+ * an account costs the same round trip as one against no account.
+ */
+export async function recordAuthenticationAttempt(
+  database: Queryable,
+  { userAccountId, succeeded }: AuthenticationAttempt,
+): Promise<void> {
+  await database.query(
+    `INSERT INTO app.audit_record (school_id, actor_person_id, action, target_type, target_id)
+     SELECT school_id, CASE WHEN $2::boolean THEN id END, $3, 'person', id::text
+     FROM app.person
+     WHERE user_account_id = $1`,
+    [userAccountId, succeeded, succeeded ? "authentication.succeeded" : "authentication.failed"],
+  );
+}
+
+const TARGET_ID_LIMIT = 256;
+
+/** A refused request, as the boundary that refused it knows it. */
+export interface Refusal {
+  /** The School the request addressed, which may not exist or be well formed. */
+  schoolId: string;
+  /** The caller's Person in that School, when they had one. */
+  actorPersonId: string | null;
+  /** The caller as a Platform Administrator, when they were one. */
+  actorPlatformAdministratorId: string | null;
+  /** The caller's account, when they had one but were neither of the above. */
+  userAccountId: string | null;
+  reason: string;
+  target: { type: string; id: string };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Records a refusal, with its true reason, in the trail of the School the
+ * request addressed — never of the School a named record belongs to, which the
+ * caller has no standing in. A School that does not exist has no trail, and
+ * nothing is recorded.
+ *
+ * Whether the School exists is decided inside the one statement, so a refusal
+ * costs the same round trip whether or not it did. The target identifier is
+ * the caller's own input, and is cut to fit rather than allowed to fail the
+ * write: a refusal must not turn into a different response.
+ *
+ * Not a transaction's companion: nothing changed, so there is nothing to
+ * commit alongside it.
+ */
+export async function recordRefusal(database: Queryable, refusal: Refusal): Promise<void> {
+  await database.query(
+    `INSERT INTO app.audit_record
+       (school_id, actor_person_id, actor_platform_administrator_id, action, target_type, target_id,
+        reason, after_value)
+     SELECT id, $2, $3, 'access.refused', $4, $5, $6, $7
+     FROM app.school
+     WHERE id = $1`,
+    [
+      // An identifier that could not name a School must not reach Postgres, which
+      // would answer it with an error rather than with nothing.
+      UUID.test(refusal.schoolId) ? refusal.schoolId : null,
+      refusal.actorPersonId,
+      refusal.actorPlatformAdministratorId,
+      refusal.target.type,
+      refusal.target.id.slice(0, TARGET_ID_LIMIT),
+      refusal.reason,
+      refusal.userAccountId === null ? null : { userAccountId: refusal.userAccountId },
+    ],
+  );
+}
+
+/**
+ * One School's trail, newest first. Whether the caller may read it is the
+ * Access module's decision, made before this is reached.
+ */
+export async function readAuditRecords(
+  database: Queryable,
+  schoolId: string,
+): Promise<AuditRecord[]> {
+  const { rows } = await database.query<{
+    id: string;
+    occurred_at: Date;
+    actor_person_id: string | null;
+    actor_platform_administrator_id: string | null;
+    action: string;
+    target_type: string;
+    target_id: string | null;
+    reason: string | null;
+    before_value: AuditValues | null;
+    after_value: AuditValues | null;
+  }>(
+    `SELECT id, occurred_at, actor_person_id, actor_platform_administrator_id, action, target_type, target_id, reason,
+            before_value, after_value
+     FROM app.audit_record
+     WHERE school_id = $1
+     ORDER BY position DESC`,
+    [schoolId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    occurredAt: row.occurred_at.toISOString(),
+    actorPersonId: row.actor_person_id,
+    actorPlatformAdministratorId: row.actor_platform_administrator_id,
+    action: row.action,
+    target: { type: row.target_type, id: row.target_id },
+    reason: row.reason,
+    before: row.before_value,
+    after: row.after_value,
+  }));
+}
