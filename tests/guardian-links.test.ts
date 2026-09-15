@@ -59,8 +59,11 @@ describe("Guardian links", () => {
       account: gina,
       role: "guardian",
     });
-    const student = (schoolId: string, displayName: string) =>
-      server().createPerson({ schoolId, displayName, role: "student" });
+    const student = async (schoolId: string, displayName: string) => {
+      const person = await server().createPerson({ schoolId, displayName, role: "student" });
+      await server().enroll(person);
+      return person;
+    };
     return {
       northsideId: northside.school.id,
       westbrookId: westbrook.school.id,
@@ -207,6 +210,7 @@ describe("Guardian links", () => {
       const student = await server().createPerson({ schoolId: world.northsideId, displayName: "Scout" });
       await server().grantMembership({ person: guardian, role: "guardian", startsAt: later });
       await server().grantMembership({ person: student, role: "student", startsAt: later });
+      await server().enroll(student);
 
       const response = await world.aliceAdmin.post("/guardian-links", {
         ...linkBody(world),
@@ -215,6 +219,24 @@ describe("Guardian links", () => {
       });
 
       expect(response.status).toBe(201);
+    });
+
+    // A link ends with its Student's Enrollment, so it cannot begin without one.
+    it("rejects a Student who holds no open Enrollment", async () => {
+      const world = await arrange();
+      const unenrolled = await server().createPerson({
+        schoolId: world.northsideId,
+        displayName: "Uma",
+        role: "student",
+      });
+
+      const response = await world.aliceAdmin.post("/guardian-links", {
+        ...linkBody(world),
+        studentPersonId: unenrolled.id,
+      });
+
+      expect(response.status).toBe(400);
+      expect(await linksOf(world.aliceAdmin)).toEqual([]);
     });
 
     it("rejects a Guardian whose Guardian membership has ended", async () => {

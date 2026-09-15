@@ -21,6 +21,7 @@ import {
   type AccessProfile,
   type GuardianLink,
 } from "./guardian-links.ts";
+import { lockOpenEnrollment } from "./enrollments.ts";
 import { holdsRoleNowOrLater } from "./memberships.ts";
 
 /** A Guardian link as served. The School is the one addressed. */
@@ -116,10 +117,15 @@ function parseLink(body: unknown) {
   };
 }
 
-async function recordChange(
+/**
+ * Records a change to a link in the transaction making it. A link revoked by
+ * itself is `revoked`; one ended because its Student's Enrollment ended is
+ * `ended`, recorded beside that Enrollment's own record.
+ */
+export async function recordGuardianLinkChange(
   transaction: Queryable,
   actor: Actor,
-  action: "guardian_link.created" | "guardian_link.changed" | "guardian_link.revoked",
+  action: "guardian_link.created" | "guardian_link.changed" | "guardian_link.revoked" | "guardian_link.ended",
   { before, after, reason }: { before: GuardianLink | null; after: GuardianLink; reason: string | null },
 ): Promise<void> {
   await appendAuditRecord(transaction, {
@@ -165,11 +171,17 @@ export function registerGuardianLinkRoutes(scope: SchoolScope, database: Databas
       if (!(await holdsRoleNowOrLater(transaction, student, "student"))) {
         throw new InvalidRequest("studentPersonId must name a Person holding a Student membership");
       }
+      // A link ends with its Student's Enrollment, so one is made only while an
+      // Enrollment is open, and holds it open until the link is written: an
+      // ending made meanwhile waits, and then ends this link too.
+      if (!(await lockOpenEnrollment(transaction, student))) {
+        throw new InvalidRequest("studentPersonId must name a Student with an open Enrollment");
+      }
       const link = await linkGuardian(transaction, { guardian, student, ...request });
       if (link === null) {
         throw new InvalidRequest("the Guardian is already linked to this Student");
       }
-      await recordChange(transaction, actor, "guardian_link.created", {
+      await recordGuardianLinkChange(transaction, actor, "guardian_link.created", {
         before: null,
         after: link,
         reason: request.reason,
@@ -187,7 +199,7 @@ export function registerGuardianLinkRoutes(scope: SchoolScope, database: Databas
         return { guardianLink: present(link) };
       }
       const changed = await setAccessProfile(transaction, link.id, change.accessProfile);
-      await recordChange(transaction, actor, "guardian_link.changed", {
+      await recordGuardianLinkChange(transaction, actor, "guardian_link.changed", {
         before: link,
         after: changed,
         reason: change.reason,
@@ -207,7 +219,7 @@ export function registerGuardianLinkRoutes(scope: SchoolScope, database: Databas
         return { guardianLink: present(link) };
       }
       const revoked = await endGuardianLinkNow(transaction, link.id);
-      await recordChange(transaction, actor, "guardian_link.revoked", {
+      await recordGuardianLinkChange(transaction, actor, "guardian_link.revoked", {
         before: link,
         after: revoked,
         reason,
