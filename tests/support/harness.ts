@@ -10,7 +10,7 @@ import {
   type Credentials,
   type UserAccount,
 } from "../../src/authentication/index.ts";
-import { grantMembership, type Role } from "../../src/access/index.ts";
+import { grantMembership, recordEnrollment, type Role } from "../../src/access/index.ts";
 import { createPerson, type Person } from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
 import type { RateLimit } from "../../src/config.ts";
@@ -85,6 +85,11 @@ export interface TestServer {
     startsAt?: Date;
     endsAt?: Date | null;
   }): Promise<void>;
+  /**
+   * Arranges an open Enrollment for a Student, with no Audit record. A test of
+   * enrolling enrolls through the client instead.
+   */
+  enroll(student: Person): Promise<void>;
   /** Arranges an Audit record, appended exactly as the application appends one. */
   appendAuditRecord(entry: AuditEntry): Promise<void>;
   /** Authenticates through the API and returns a client carrying the session. */
@@ -244,6 +249,9 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       },
       grantMembership: async (membership) => {
         await grantMembership(pool, membership);
+      },
+      enroll: async (student) => {
+        await recordEnrollment(pool, student);
       },
       appendAuditRecord: (entry) => appendAuditRecord(pool, entry),
       signIn: async (credentials) => {

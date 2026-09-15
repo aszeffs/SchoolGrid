@@ -135,6 +135,23 @@ export async function endGuardianLinkNow(
   return rows[0]!;
 }
 
+/**
+ * Ends every link in force to this Student now, and returns each as it ended.
+ * The rows stay, as the record of when the access was held.
+ */
+export async function endGuardianLinksTo(
+  transaction: Queryable,
+  student: Pick<Person, "id" | "schoolId">,
+): Promise<GuardianLink[]> {
+  const { rows } = await transaction.query<GuardianLink>(
+    `UPDATE app.guardian_link SET ended_at = now()
+     WHERE school_id = $1 AND student_person_id = $2 AND ended_at IS NULL
+     RETURNING ${LINK_COLUMNS}`,
+    [student.schoolId, student.id],
+  );
+  return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+}
+
 /** The Students this Person holds a link in force to, as a Guardian. */
 export async function linkedStudentIds(database: Queryable, guardian: Person): Promise<Set<string>> {
   const { rows } = await database.query<{ studentPersonId: string }>(

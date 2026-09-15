@@ -6,6 +6,7 @@ import { InvalidRequest } from "../http/invalid-request.ts";
 import { fieldsOf, reasonFrom, reasonOnly } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
 import { findPerson } from "../identity/index.ts";
+import { registerEnrollmentRoutes } from "./enrollment-routes.ts";
 import { registerGuardianLinkRoutes } from "./guardian-link-routes.ts";
 import {
   authorizeGrantMembershipTo,
@@ -206,5 +207,6 @@ export function registerAccessRoutes(app: FastifyInstance, database: Database): 
     });
 
     registerGuardianLinkRoutes(scope, database);
+    registerEnrollmentRoutes(scope, database);
   });
 }
