@@ -54,9 +54,10 @@ longer the source of truth: read and write GitHub issues.
 ## Specs
 
 A feature spec is a GitHub issue labelled `spec` plus the feature's own label
-(e.g. `invitations`). A spec is a long document, not a unit of work, so it is
-never claimed or triaged as ready; it stays open while any of its slices is
-open and closes with the last one.
+(e.g. `invitations`). A spec is a long document, not a unit of work: it carries
+`ready-for-agent` once fully specified, but is never claimed itself. Work is
+claimed on its slices. It stays open while any slice is open and closes with the
+last one.
 
 - **Create a spec**: `gh issue create --label spec --label <feature> --title "Spec: <feature>"`.
 - **Slices**: each slice issue is a GitHub sub-issue of its spec (`gh api --method POST repos/<owner>/<repo>/issues/<spec>/sub_issues -F sub_issue_id=<slice-db-id>`, where the id is the slice's **database id**). Its body ends with `Spec: #<spec>`.
