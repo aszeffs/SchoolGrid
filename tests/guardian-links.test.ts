@@ -688,6 +688,7 @@ describe("Guardian links", () => {
           id: expect.any(String),
           occurredAt: expect.stringMatching(ISO_TIMESTAMP),
           actorPersonId: world.aliceId,
+          actorPlatformAdministratorId: null,
           action: "guardian_link.created",
           target: { type: "guardian_link", id: link.id },
           reason: "Mother of Sam",

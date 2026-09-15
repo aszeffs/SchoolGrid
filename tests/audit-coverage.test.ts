@@ -97,6 +97,7 @@ describe("Audit coverage for authentication and refusals", () => {
       expect(withAction(await trailOf(alice, world.northside.id), "authentication.succeeded")).toEqual([
         {
           actorPersonId: world.northside.aliceId,
+          actorPlatformAdministratorId: null,
           action: "authentication.succeeded",
           target: { type: "person", id: world.northside.aliceId },
           reason: null,

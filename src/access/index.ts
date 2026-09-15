@@ -1,6 +1,13 @@
 import type { UserAccount } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
-import { personFor, schoolsReachedBy, type Person, type School } from "../identity/index.ts";
+import {
+  personFor,
+  platformAdministratorFor,
+  schoolsReachedBy,
+  type Person,
+  type PlatformAdministrator,
+  type School,
+} from "../identity/index.ts";
 import { hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
 import { linkedStudentIds, type GuardianLink } from "./guardian-links.ts";
 import {
@@ -34,7 +41,9 @@ export type RefusalReason =
   | "malformed-url"
   | "absent"
   | "outside-school"
-  | "forbidden";
+  | "forbidden"
+  | "not-platform-administrator"
+  | "platform-administrator";
 
 /** What a refused request asked for, as the caller named it. */
 export interface RefusedTarget {
@@ -42,17 +51,23 @@ export interface RefusedTarget {
   id: string;
 }
 
+/**
+ * Who a caller refused before becoming an Actor is, when that is already
+ * known: a Person the School holds, or a Platform Administrator.
+ */
+export type RefusedCaller = { person: Person } | { platformAdministrator: PlatformAdministrator };
+
 export class Refused extends Error {
   /**
    * The target is omitted when the refusal came before any target was looked
-   * at, and the request itself is then what was refused. The caller's Person
-   * is given when the refusal came before they could become an Actor, but the
-   * School already knows who they are.
+   * at, and the request itself is then what was refused. The caller is given
+   * when the refusal came before they could become an Actor, but who they are
+   * is already known.
    */
   constructor(
     readonly reason: RefusalReason,
     readonly target?: RefusedTarget,
-    readonly callerPerson?: Person,
+    readonly caller?: RefusedCaller,
   ) {
     super(`refused: ${reason}`);
   }
@@ -88,6 +103,11 @@ const standingOf = new WeakMap<Actor, Standing>();
  * with no account at all, so an account reveals nothing about Schools it does
  * not reach — including whether they exist.
  *
+ * A Platform Administrator is refused in every School before their account is
+ * even resolved to a Person. They hold no School membership, and a Person
+ * their account resolves to, however it came about, grants them nothing:
+ * operating the platform never means reading a School's records.
+ *
  * All access flows from memberships held at this moment. A Person whose every
  * membership has ended, or not yet begun, is refused here, before any handler
  * runs: departure leaves no access to the School at all, not even to their own
@@ -101,13 +121,17 @@ export async function resolveActor(
   if (account === null) {
     throw new Refused("unauthenticated");
   }
+  const platformAdministrator = await platformAdministratorFor(database, account.id);
+  if (platformAdministrator !== null) {
+    throw new Refused("platform-administrator", undefined, { platformAdministrator });
+  }
   const person = await personFor(database, { userAccountId: account.id, schoolId });
   if (person === null) {
     throw new Refused("no-person-in-school");
   }
   const roles = await activeRoles(database, person);
   if (roles.size === 0) {
-    throw new Refused("no-active-membership", undefined, person);
+    throw new Refused("no-active-membership", undefined, { person });
   }
   // A link reaches its Student only through a Guardian membership in force, so
   // a Guardian whose membership has ended keeps nothing through their links,
@@ -119,11 +143,53 @@ export async function resolveActor(
   return actor;
 }
 
-/** The Schools this account can act in: those where its Person holds a membership now. */
+/** A caller resolved to the Platform Administrator they are, acting on the platform. */
+export interface PlatformActor {
+  readonly platformAdministrator: PlatformAdministrator;
+}
+
+/**
+ * Resolves a caller to a PlatformActor, or refuses. Platform routes answer to
+ * nothing else: no School role, however broad, reaches them.
+ */
+export async function resolvePlatformActor(
+  database: Queryable,
+  account: UserAccount | null,
+): Promise<PlatformActor> {
+  if (account === null) {
+    throw new Refused("unauthenticated");
+  }
+  const platformAdministrator = await platformAdministratorFor(database, account.id);
+  if (platformAdministrator === null) {
+    throw new Refused("not-platform-administrator");
+  }
+  return Object.freeze({ platformAdministrator });
+}
+
+/**
+ * Whether this account's Person may be given a School membership. A Platform
+ * Administrator holds none, and cannot be given one by anyone: their account
+ * would be refused in the School whatever it held (see resolveActor), so the
+ * membership could only leave a School relying on someone who cannot act.
+ */
+export async function mayHoldSchoolMembership(
+  database: Queryable,
+  account: UserAccount,
+): Promise<boolean> {
+  return (await platformAdministratorFor(database, account.id)) === null;
+}
+
+/**
+ * The Schools this account can act in: those where its Person holds a
+ * membership now. A Platform Administrator can act in none.
+ */
 export async function reachableSchools(
   database: Queryable,
   account: UserAccount,
 ): Promise<School[]> {
+  if (!(await mayHoldSchoolMembership(database, account))) {
+    return [];
+  }
   const schools = await schoolsReachedBy(database, account.id);
   const active = await schoolIdsWithActiveMembership(database, account.id);
   return schools.filter((school) => active.has(school.id));

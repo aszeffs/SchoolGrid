@@ -444,6 +444,7 @@ describe("School memberships", () => {
           id: expect.any(String),
           occurredAt: expect.stringMatching(ISO_TIMESTAMP),
           actorPersonId: world.aliceId,
+          actorPlatformAdministratorId: null,
           action: "membership.granted",
           target: { type: "membership", id: membership.id },
           reason: "Joined the faculty",

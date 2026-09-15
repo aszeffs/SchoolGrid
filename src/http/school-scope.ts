@@ -130,16 +130,22 @@ async function refuseInSchool(
   }: { schoolId: string; account: UserAccount | null; actor: Actor | null; refused: Refused },
 ): Promise<FastifyReply> {
   request.log.info({ reason: refused.reason, url: request.url }, "refused");
+  const caller = refused.caller;
   // A Person who could not become an Actor, because no membership of theirs
   // is in force, is still a Person this School knows, and is named as one.
-  const person = actor?.person ?? refused.callerPerson ?? null;
+  const person = actor?.person ?? (caller !== undefined && "person" in caller ? caller.person : null);
+  // A Platform Administrator is named as one, so the School sees what was
+  // attempted against it from outside.
+  const platformAdministrator =
+    caller !== undefined && "platformAdministrator" in caller ? caller.platformAdministrator : null;
   await recordRefusal(database, {
     schoolId,
     actorPersonId: person?.id ?? null,
+    actorPlatformAdministratorId: platformAdministrator?.id ?? null,
     // An account that reached no Person here is named only by its opaque
     // identifier, so repeated probes can be linked without the School learning
     // who holds it.
-    userAccountId: person === null ? (account?.id ?? null) : null,
+    userAccountId: person === null && platformAdministrator === null ? (account?.id ?? null) : null,
     reason: refused.reason,
     // Without a target of its own, the request is what was refused: named by
     // path alone, since a query string is the caller's to fill with anything.

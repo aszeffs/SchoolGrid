@@ -33,6 +33,17 @@ MIGRATION_DATABASE_URL=postgres://<owner>:<password>@<host>:5432/schoolgrid
 DATABASE_URL=postgres://schoolgrid_runtime:<password>@<host>:5432/schoolgrid
 ```
 
+## Making a Platform Administrator
+
+A Platform Administrator creates Schools and provisions each School's first School Administrator, through `POST /platform/schools`. No request can make one, because `schoolgrid_app` can only read `app.platform_administrator`. Make one as the schema owner, for an existing User account:
+
+```sql
+INSERT INTO app.platform_administrator (user_account_id, display_name)
+SELECT id, 'Platform Operations' FROM app.user_account WHERE lower(username) = lower('<username>');
+```
+
+Use an account that holds no Person in any School. A Platform Administrator is refused by every School-scoped endpoint, even through a Person their account resolves to.
+
 ## Adding a table
 
 Nothing grants privileges by default. A migration that creates a table must grant `schoolgrid_app` exactly what the service needs on it. If it forgets, the service gets `permission denied`: the tests fail, because they run as this role too, and the service is never quietly given more access than it should have. Only an append-only table should be granted `SELECT, INSERT` alone.

@@ -21,6 +21,11 @@ export interface AuditEntry {
   schoolId: string;
   /** The Person who acted, or null when none did. */
   actorPersonId: string | null;
+  /**
+   * The Platform Administrator who acted on the School from outside it, when
+   * one did. Never given with a Person: an actor is one or the other.
+   */
+  actorPlatformAdministratorId?: string | null;
   /** What happened, as `<subject>.<verb>`, such as `school.provisioned`. */
   action: string;
   target: { type: string; id: string | null };
@@ -30,9 +35,10 @@ export interface AuditEntry {
 }
 
 /** An entry as it was recorded. The database, not the caller, sets when. */
-export interface AuditRecord extends Omit<AuditEntry, "schoolId"> {
+export interface AuditRecord extends Omit<AuditEntry, "schoolId" | "actorPlatformAdministratorId"> {
   id: string;
   occurredAt: string;
+  actorPlatformAdministratorId: string | null;
 }
 
 /**
@@ -45,11 +51,13 @@ export interface AuditRecord extends Omit<AuditEntry, "schoolId"> {
 export async function appendAuditRecord(transaction: Queryable, entry: AuditEntry): Promise<void> {
   await transaction.query(
     `INSERT INTO app.audit_record
-       (school_id, actor_person_id, action, target_type, target_id, reason, before_value, after_value)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       (school_id, actor_person_id, actor_platform_administrator_id, action, target_type, target_id,
+        reason, before_value, after_value)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       entry.schoolId,
       entry.actorPersonId,
+      entry.actorPlatformAdministratorId ?? null,
       entry.action,
       entry.target.type,
       entry.target.id,
@@ -93,7 +101,9 @@ export interface Refusal {
   schoolId: string;
   /** The caller's Person in that School, when they had one. */
   actorPersonId: string | null;
-  /** The caller's account, when they had one but no Person in that School. */
+  /** The caller as a Platform Administrator, when they were one. */
+  actorPlatformAdministratorId: string | null;
+  /** The caller's account, when they had one but were neither of the above. */
   userAccountId: string | null;
   reason: string;
   target: { type: string; id: string };
@@ -118,8 +128,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function recordRefusal(database: Queryable, refusal: Refusal): Promise<void> {
   await database.query(
     `INSERT INTO app.audit_record
-       (school_id, actor_person_id, action, target_type, target_id, reason, after_value)
-     SELECT id, $2, 'access.refused', $3, $4, $5, $6
+       (school_id, actor_person_id, actor_platform_administrator_id, action, target_type, target_id,
+        reason, after_value)
+     SELECT id, $2, $3, 'access.refused', $4, $5, $6, $7
      FROM app.school
      WHERE id = $1`,
     [
@@ -127,6 +138,7 @@ export async function recordRefusal(database: Queryable, refusal: Refusal): Prom
       // would answer it with an error rather than with nothing.
       UUID.test(refusal.schoolId) ? refusal.schoolId : null,
       refusal.actorPersonId,
+      refusal.actorPlatformAdministratorId,
       refusal.target.type,
       refusal.target.id.slice(0, TARGET_ID_LIMIT),
       refusal.reason,
@@ -147,6 +159,7 @@ export async function readAuditRecords(
     id: string;
     occurred_at: Date;
     actor_person_id: string | null;
+    actor_platform_administrator_id: string | null;
     action: string;
     target_type: string;
     target_id: string | null;
@@ -154,7 +167,7 @@ export async function readAuditRecords(
     before_value: AuditValues | null;
     after_value: AuditValues | null;
   }>(
-    `SELECT id, occurred_at, actor_person_id, action, target_type, target_id, reason,
+    `SELECT id, occurred_at, actor_person_id, actor_platform_administrator_id, action, target_type, target_id, reason,
             before_value, after_value
      FROM app.audit_record
      WHERE school_id = $1
@@ -165,6 +178,7 @@ export async function readAuditRecords(
     id: row.id,
     occurredAt: row.occurred_at.toISOString(),
     actorPersonId: row.actor_person_id,
+    actorPlatformAdministratorId: row.actor_platform_administrator_id,
     action: row.action,
     target: { type: row.target_type, id: row.target_id },
     reason: row.reason,

@@ -63,6 +63,22 @@ export async function createUserAccount(
 }
 
 /**
+ * The account holding this username, matched regardless of letter case, or
+ * null. For naming an account to someone permitted to name it, never for
+ * deciding who a request belongs to.
+ */
+export async function findUserAccount(
+  database: Queryable,
+  username: string,
+): Promise<UserAccount | null> {
+  const { rows } = await database.query<UserAccount>(
+    `SELECT id, username FROM app.user_account WHERE lower(username) = lower($1)`,
+    [username],
+  );
+  return rows[0] ?? null;
+}
+
+/**
  * The account the credentials verify as or, when they do not, the account they
  * named: null if they named none.
  */

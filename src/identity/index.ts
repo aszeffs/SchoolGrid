@@ -1,8 +1,9 @@
 import type { Queryable } from "../db/transaction.ts";
 
 /**
- * The Identity module owns Schools, Persons, and resolving a User account to
- * its Person within one School.
+ * The Identity module owns Schools, Persons, and Platform Administrators, and
+ * resolving a User account to its Person within one School or to the Platform
+ * Administrator it is.
  *
  * Nothing here decides whether anyone may see what it returns. Every lookup is
  * a plain fact about what exists; the Access module alone turns facts into a
@@ -90,6 +91,47 @@ export async function personsInSchool(database: Queryable, schoolId: string): Pr
     [schoolId],
   );
   return rows;
+}
+
+/**
+ * An actor who operates the platform, and belongs to no School. Identity holds
+ * who they are; what they may do is the Access module's decision.
+ */
+export interface PlatformAdministrator {
+  id: string;
+  displayName: string;
+}
+
+const PLATFORM_ADMINISTRATOR_COLUMNS = `id, display_name AS "displayName"`;
+
+/**
+ * Makes a User account a Platform Administrator. The application's role may
+ * not: this is done from outside the running service, as the schema owner
+ * (migrations/0008).
+ */
+export async function createPlatformAdministrator(
+  ownerDatabase: Queryable,
+  { userAccountId, displayName }: { userAccountId: string; displayName: string },
+): Promise<PlatformAdministrator> {
+  const { rows } = await ownerDatabase.query<PlatformAdministrator>(
+    `INSERT INTO app.platform_administrator (user_account_id, display_name)
+     VALUES ($1, $2)
+     RETURNING ${PLATFORM_ADMINISTRATOR_COLUMNS}`,
+    [userAccountId, displayName],
+  );
+  return rows[0]!;
+}
+
+/** The Platform Administrator this User account resolves to, or null. */
+export async function platformAdministratorFor(
+  database: Queryable,
+  userAccountId: string,
+): Promise<PlatformAdministrator | null> {
+  const { rows } = await database.query<PlatformAdministrator>(
+    `SELECT ${PLATFORM_ADMINISTRATOR_COLUMNS} FROM app.platform_administrator WHERE user_account_id = $1`,
+    [userAccountId],
+  );
+  return rows[0] ?? null;
 }
 
 /** The Schools in which this User account resolves to a Person. */
