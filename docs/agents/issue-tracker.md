@@ -46,11 +46,21 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 
 ## Migration note
 
-This repo previously tracked issues as markdown under `.scratch/<feature-slug>/`.
-Those files are kept as a historical record and each migrated ticket carries a
-link to the GitHub issue that replaced it. They are no longer the source of
-truth: read and write GitHub issues.
+This repo previously tracked issues and specs as markdown under
+`.scratch/<feature-slug>/`. Those files are kept as a historical record and each
+migrated ticket carries a link to the GitHub issue that replaced it. They are no
+longer the source of truth: read and write GitHub issues.
 
-Feature specs stay in `.scratch/<feature-slug>/spec.md`. A spec is a long
-document that a ticket references, not itself a unit of work, so it does not
-become an issue. Issues link back to their spec by path.
+## Specs
+
+A feature spec is a GitHub issue labelled `spec` plus the feature's own label
+(e.g. `invitations`). A spec is a long document, not a unit of work, so it is
+never claimed or triaged as ready; it stays open while any of its slices is
+open and closes with the last one.
+
+- **Create a spec**: `gh issue create --label spec --label <feature> --title "Spec: <feature>"`.
+- **Slices**: each slice issue is a GitHub sub-issue of its spec (`gh api --method POST repos/<owner>/<repo>/issues/<spec>/sub_issues -F sub_issue_id=<slice-db-id>`, where the id is the slice's **database id**). Its body ends with `Spec: #<spec>`.
+- **Order**: a slice names what it waits on with a `**Blocked by:** #<n>` line.
+
+Specs written before this convention remain at `.scratch/<feature-slug>/spec.md`,
+and their issues link to them by path.
