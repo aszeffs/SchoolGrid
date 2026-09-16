@@ -110,6 +110,7 @@ export function buildServer({
         database,
         authenticator,
         recordAttempt: recordAuthenticationAttempt,
+        publicOrigin,
       });
       registerIdentityRoutes(api, database, authenticator);
       registerAccessRoutes(api, database, authenticator);

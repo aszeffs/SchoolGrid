@@ -148,9 +148,9 @@ export interface TestServer {
    */
   signIn(credentials: Credentials): Promise<TestClient>;
   /**
-   * Authenticates through the API as a browser does, and returns a client
-   * sending back the cookie it was given. It sends no `Origin`: give it one
-   * with `withOrigin`.
+   * Authenticates through the API as a browser on the public origin does, and
+   * returns a client sending back the cookie it was given. That client sends
+   * no `Origin`: give it one with `withOrigin`.
    */
   signInWithCookie(credentials: Credentials): Promise<TestClient>;
 }
@@ -339,7 +339,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
         return client.withSession(token);
       },
       signInWithCookie: async (credentials) => {
-        const response = await client.post("/api/session", credentials);
+        const response = await client.withOrigin(PUBLIC_ORIGIN).post("/api/session", credentials);
         if (response.status !== 201) {
           throw new Error(`signInWithCookie expected a session but received status ${response.status}`);
         }

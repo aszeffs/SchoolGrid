@@ -51,7 +51,7 @@ describe("Browser sessions", () => {
     it("sets a __Host- session cookie script cannot read, and returns no token", async () => {
       await server().createAccount(ALICE);
 
-      const response = await server().client.post("/api/session", ALICE);
+      const response = await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE);
 
       expect(response.status).toBe(201);
       const cookies = setCookiesOf(response);
@@ -63,6 +63,26 @@ describe("Browser sessions", () => {
       expect(response.body).toEqual({ expiresAt: expect.any(String) });
       expect(response.raw).not.toContain(cookie.value);
     });
+
+    // Another site could otherwise sign a browser in as the attacker's own
+    // account, so that what the victim then enters is recorded there.
+    it.each([
+      ["no Origin", null],
+      ["a foreign Origin", "https://attacker.test"],
+      ["an opaque Origin", "null"],
+    ])(
+      "refuses a sign-in for a cookie from %s identically to a wrong password, setting no cookie",
+      async (_case, origin) => {
+        await server().createAccount(ALICE);
+        const client = origin === null ? server().client : server().client.withOrigin(origin);
+
+        const wrongPassword = await client.post("/api/session", { username: "alice", password: "not the password" });
+        const forged = await client.post("/api/session", ALICE);
+
+        expect(observable(forged)).toEqual(observable(wrongPassword));
+        expect(setCookiesOf(forged)).toEqual([]);
+      },
+    );
 
     it("gives a session that identifies the account when the cookie is sent back", async () => {
       await server().createAccount(ALICE);
@@ -323,7 +343,7 @@ describe("Browser sessions", () => {
     /** Signs Alice in as a browser does, returning the `Cookie` header it would send back. */
     async function signedInCookie(): Promise<string> {
       await server().createAccount(ALICE);
-      const response = await server().client.post("/api/session", ALICE);
+      const response = await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE);
       return cookieSentBackFor(response);
     }
 
@@ -340,7 +360,9 @@ describe("Browser sessions", () => {
         "two live session cookies at once",
         async () => {
           const first = await signedInCookie();
-          const second = cookieSentBackFor(await server().client.post("/api/session", ALICE));
+          const second = cookieSentBackFor(
+            await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE),
+          );
           return `${first}; ${second}`;
         },
       ],

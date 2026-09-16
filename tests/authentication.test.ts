@@ -147,7 +147,7 @@ describe("User account authentication", () => {
       await server().createAccount(ALICE);
       const bearer = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
       const token = (bearer.body as { token: string }).token;
-      const browser = await server().client.post("/api/session", ALICE);
+      const browser = await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE);
       const cookieToken = cookieSentBackFor(browser).split("=")[1]!;
 
       const dump = await dumpAppSchema();

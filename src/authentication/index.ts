@@ -152,6 +152,11 @@ const TOKEN_PATTERN = /^[A-Za-z0-9_-]+$/;
 // change nothing, so they are not what the Origin check guards.
 const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
 
+/** Whether the request was sent by a page on SchoolGrid's own origin. */
+function fromPublicOrigin(request: FastifyRequest, publicOrigin: string): boolean {
+  return request.headers.origin === publicOrigin;
+}
+
 /** Why a request belongs to no User account. */
 export type AuthenticationFailure =
   /** No session, or one that is malformed, unrecognised, ended, or expired. */
@@ -203,7 +208,7 @@ function presentedSession(request: FastifyRequest, publicOrigin: string): Presen
     // second defence, not a replacement for it: neither is dropped because the
     // other exists (ADR-0004). Checked before the session is looked up, so a
     // forged change learns nothing about the cookie it rode on.
-    if (!SAFE_METHODS.includes(request.method) && request.headers.origin !== publicOrigin) {
+    if (!SAFE_METHODS.includes(request.method) && !fromPublicOrigin(request, publicOrigin)) {
       return { failure: "cross-origin" };
     }
     const token = cookies[0]!;
@@ -313,11 +318,12 @@ interface AuthenticationOptions {
   database: Database;
   authenticator: Authenticator;
   recordAttempt: RecordAttempt;
+  publicOrigin: string;
 }
 
 async function authenticationRoutes(
   app: FastifyInstance,
-  { database, authenticator, recordAttempt }: AuthenticationOptions,
+  { database, authenticator, recordAttempt, publicOrigin }: AuthenticationOptions,
 ): Promise<void> {
   async function refuseMalformedAttempt(request: FastifyRequest, reply: FastifyReply) {
     request.log.info("refused: malformed authentication attempt");
@@ -373,6 +379,16 @@ async function authenticationRoutes(
     }
 
     const { account } = verification;
+    // A sign-in from another site would put the browser in the attacker's own
+    // account, so a cookie is only given to a page on the public origin. Checked
+    // after the credentials, so the attempt is recorded against the account it
+    // named, as any other failed attempt is. A Bearer token is not ambient, so
+    // it is not guarded.
+    if (form === "cookie" && !fromPublicOrigin(request, publicOrigin)) {
+      request.log.info("refused: cross-origin sign-in");
+      await recordAttempt(database, { userAccountId: account.id, succeeded: false });
+      return refuse(reply);
+    }
     const session = await withTransaction(database, async (transaction) => {
       const started = await startSession(transaction, account);
       await recordAttempt(transaction, { userAccountId: account.id, succeeded: true });
