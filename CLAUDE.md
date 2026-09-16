@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-GitHub Issues on `aszeffs/SchoolGrid`, via the `gh` CLI. Feature specs stay as `.scratch/<feature-slug>/spec.md`. See `docs/agents/issue-tracker.md`.
+GitHub Issues on `aszeffs/SchoolGrid`, via the `gh` CLI. Feature specs are GitHub issues labelled `spec`, with slices as sub-issues; older specs remain in `.scratch/<feature-slug>/spec.md`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
