@@ -39,7 +39,7 @@ A Platform Administrator creates Schools and provisions each School's first Scho
 
 ```sql
 INSERT INTO app.platform_administrator (user_account_id, display_name)
-SELECT id, 'Platform Operations' FROM app.user_account WHERE lower(username) = lower('<username>');
+SELECT id, 'Platform Operations' FROM app.user_account WHERE app.username_key(username) = app.username_key('<username>');
 ```
 
 Use an account that holds no Person in any School. A Platform Administrator is refused by every School-scoped endpoint, even through a Person their account resolves to.
