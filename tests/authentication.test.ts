@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cookieSentBackFor,
   observable,
   useTestServer,
   type TestClient,
@@ -43,6 +44,16 @@ describe("User account authentication", () => {
     expect(ended.status).toBe(204);
     expect(afterwards.status).toBe(anonymous.status);
     expect(afterwards.raw).toBe(anonymous.raw);
+  });
+
+  it("accepts the Bearer scheme in any letter case", async () => {
+    await server().createAccount(ALICE);
+    const response = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
+    const { token } = response.body as { token: string };
+
+    const identify = await server().client.withAuthorization(`bearer ${token}`).get("/api/session");
+
+    expect(identify.status).toBe(200);
   });
 
   it("treats usernames that differ only by case as the same account", async () => {
@@ -132,15 +143,18 @@ describe("User account authentication", () => {
       return [secret, bytes.toString("hex"), bytes.toString("base64"), bytes.toString("base64url")];
     }
 
-    it("stores neither the password nor the session token", async () => {
+    it("stores neither the password nor a session token, in either form", async () => {
       await server().createAccount(ALICE);
-      const response = await server().client.post("/api/session", ALICE);
-      const token = (response.body as { token: string }).token;
+      const bearer = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
+      const token = (bearer.body as { token: string }).token;
+      const browser = await server().client.post("/api/session", ALICE);
+      const cookieToken = cookieSentBackFor(browser).split("=")[1]!;
 
       const dump = await dumpAppSchema();
 
       expect(dump).toContain("alice");
-      for (const encoded of [...encodings(ALICE.password), ...encodings(token)]) {
+      expect(cookieToken).not.toBe("");
+      for (const encoded of [...encodings(ALICE.password), ...encodings(token), ...encodings(cookieToken)]) {
         expect(dump).not.toContain(encoded);
       }
     });

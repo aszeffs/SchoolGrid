@@ -6,7 +6,7 @@ Built as a practice ground for DevSecOps. The domain is deliberately security-he
 
 ## Status
 
-The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a bearer session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). No School-scoped behaviour yet.
+The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). A browser holds its session in a cookie; a client that sends `"session": "bearer"` with its credentials gets a Bearer token instead. No School-scoped behaviour yet.
 
 ## Running it
 
@@ -67,6 +67,7 @@ The check reports its verdict in the workflow job summary and never fails. It gu
 | Control | What it catches |
 | --- | --- |
 | In-process rate limit on every route, per client address | A flood of requests turning into database round trips and exhausting the connection pool. Unknown routes count too, so probing for paths is not free. Over the limit a client gets `429 {"status":"rate_limited"}` with `Retry-After`. Set with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` (default 100 per minute). Counts are held per instance, and behind a reverse proxy every client shares the proxy's address, so a deployment should limit at the proxy as well. |
+| Browser sessions in a `__Host-` cookie that is `Secure`, `HttpOnly` and `SameSite=Strict` ([ADR-0004](docs/adr/0004-browser-sessions-in-httponly-cookies.md)) | Script injected into a page stealing the session: the token is never in a response body a browser asked for. A change (`POST`, `PATCH`, `DELETE`) made with the cookie must carry an `Origin` equal to `PUBLIC_ORIGIN`, so another site cannot make one as the signed-in user. A request presenting both a cookie and a Bearer token is refused. Every such refusal is the one refusal, and inside a School its true reason is audited. |
 | Gitleaks, full history, on push and weekly | Credentials committed at any point, not just at the tip. |
 | GitHub secret scanning with push protection | Blocks a credential at `git push`, before it reaches the remote. |
 | Dependency review on pull requests | Vulnerable or copyleft-licensed dependencies entering through a PR. |

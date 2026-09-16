@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { findUserAccount } from "../authentication/index.ts";
+import { findUserAccount, type Authenticator } from "../authentication/index.ts";
 import type { Database } from "../db/pool.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { registerPlatformScope } from "../http/platform-scope.ts";
@@ -31,8 +31,12 @@ function parseProvisioning(body: unknown) {
   };
 }
 
-export function registerPlatformRoutes(app: FastifyInstance, database: Database): void {
-  registerPlatformScope(app, database, (scope) => {
+export function registerPlatformRoutes(
+  app: FastifyInstance,
+  database: Database,
+  authenticator: Authenticator,
+): void {
+  registerPlatformScope(app, database, authenticator, (scope) => {
     scope.post("/schools", async (actor, { body }) => {
       const provisioning = parseProvisioning(body);
       const account = await findUserAccount(database, provisioning.username);

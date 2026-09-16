@@ -24,6 +24,11 @@ export interface Config extends MigrationConfig {
   port: number;
   logLevel: LogLevel;
   rateLimit: RateLimit;
+  /**
+   * The origin browsers reach SchoolGrid at, as a browser writes it in an
+   * `Origin` header: a change made with a cookie session must come from here.
+   */
+  publicOrigin: string;
 }
 
 function requireEnv(name: string): string {
@@ -41,6 +46,34 @@ function positiveIntegerEnv(name: string, fallback: number): number {
     throw new Error(`${name} must be a positive integer, received: ${raw}`);
   }
   return value;
+}
+
+// Browsers keep a `Secure` cookie over plain http only on these hosts.
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+
+/**
+ * An origin and nothing more, normalised as a browser serialises it. Anything
+ * else could never equal the `Origin` a browser sends, so every change made
+ * with a cookie would be refused.
+ */
+function originEnv(name: string): string {
+  const raw = requireEnv(name);
+  const invalid = () =>
+    new Error(`${name} must be an https origin, or http on localhost, with no path, received: ${raw}`);
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw invalid();
+  }
+  const secure =
+    url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname));
+  const onlyAnOrigin =
+    url.username === "" && url.password === "" && url.pathname === "/" && url.search === "" && url.hash === "";
+  if (!secure || !onlyAnOrigin) {
+    throw invalid();
+  }
+  return url.origin;
 }
 
 function isLogLevel(value: string): value is LogLevel {
@@ -76,5 +109,6 @@ export function loadConfig(): Config {
       max: positiveIntegerEnv("RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT.max),
       windowMs: positiveIntegerEnv("RATE_LIMIT_WINDOW_MS", DEFAULT_RATE_LIMIT.windowMs),
     },
+    publicOrigin: originEnv("PUBLIC_ORIGIN"),
   };
 }

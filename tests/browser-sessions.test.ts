@@ -1,0 +1,430 @@
+import { isDeepStrictEqual } from "node:util";
+import { describe, expect, it } from "vitest";
+import {
+  cookieSentBackFor,
+  observable,
+  setCookiesOf,
+  useTestServer,
+  type Method,
+  type TestClient,
+  type TestResponse,
+} from "./support/harness.ts";
+
+const ALICE = { username: "alice", password: "correct horse battery staple" };
+const PAT = { username: "pat", password: "the platform's own staple" };
+
+/** Written out here rather than imported, so a renamed cookie fails this test. */
+const SESSION_COOKIE = "__Host-session";
+
+/** A body every route that takes one rejects, once the caller has been permitted to send it. */
+const UNEXPECTED_BODY = { "not-a-field": true };
+
+/** The cookie's name, value, and attributes, with attribute names lower-cased. */
+function parseSetCookie(header: string) {
+  const [pair, ...attributes] = header.split(";").map((part) => part.trim());
+  const separator = pair!.indexOf("=");
+  return {
+    name: pair!.slice(0, separator),
+    value: pair!.slice(separator + 1),
+    attributes: Object.fromEntries(
+      attributes.map((attribute) => {
+        const [name, value = ""] = attribute.split("=");
+        return [name!.toLowerCase(), value];
+      }),
+    ),
+  };
+}
+
+/**
+ * What is sent on the wire. A HEAD response carries no body there, whatever the
+ * handler sent, but `inject` hands one back.
+ */
+function sent(method: string, response: TestResponse) {
+  return method === "HEAD" ? { ...observable(response), raw: "" } : observable(response);
+}
+
+describe("Browser sessions", () => {
+  // The route enumerations below make more requests than the default limit allows.
+  const server = useTestServer({ rateLimit: { max: 10_000, windowMs: 60_000 } });
+
+  describe("signing in", () => {
+    it("sets a __Host- session cookie script cannot read, and returns no token", async () => {
+      await server().createAccount(ALICE);
+
+      const response = await server().client.post("/api/session", ALICE);
+
+      expect(response.status).toBe(201);
+      const cookies = setCookiesOf(response);
+      expect(cookies).toHaveLength(1);
+      const cookie = parseSetCookie(cookies[0]!);
+      expect(cookie.name).toBe(SESSION_COOKIE);
+      expect(cookie.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(cookie.attributes).toEqual({ path: "/", secure: "", httponly: "", samesite: "Strict" });
+      expect(response.body).toEqual({ expiresAt: expect.any(String) });
+      expect(response.raw).not.toContain(cookie.value);
+    });
+
+    it("gives a session that identifies the account when the cookie is sent back", async () => {
+      await server().createAccount(ALICE);
+      const alice = await server().signInWithCookie(ALICE);
+
+      const response = await alice.get("/api/session");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ account: { id: expect.any(String), username: "alice" } });
+    });
+
+    it("gives a Bearer token, and no cookie, to a sign-in that asks for one", async () => {
+      await server().createAccount(ALICE);
+
+      const response = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
+
+      expect(response.status).toBe(201);
+      expect(setCookiesOf(response)).toEqual([]);
+      const { token } = response.body as { token: string };
+      expect(response.body).toEqual({ token: expect.any(String), expiresAt: expect.any(String) });
+      expect((await server().client.withSession(token).get("/api/session")).status).toBe(200);
+    });
+
+    it.each([["an unknown kind", "jwt"], ["a non-string", true]])(
+      "answers a sign-in asking for %s of session identically to a wrong password",
+      async (_case, session) => {
+        await server().createAccount(ALICE);
+
+        const wrongPassword = await server().client.post("/api/session", {
+          username: "alice",
+          password: "not the password",
+        });
+        const unknownKind = await server().client.post("/api/session", { ...ALICE, session });
+
+        expect(observable(unknownKind)).toEqual(observable(wrongPassword));
+      },
+    );
+  });
+
+  /**
+   * Alice administers Northside, where a Student is enrolled and linked to a
+   * Guardian; Pat is a Platform Administrator. Each is signed in twice, once
+   * with each form of session.
+   */
+  async function arrange() {
+    await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
+    const { school } = await server().provisionSchool({
+      name: "Northside",
+      administrator: await server().createAccount(ALICE),
+    });
+    const aliceBearer = (await server().signIn(ALICE)).inSchool(school.id);
+    const student = await server().createPerson({ schoolId: school.id, displayName: "Sam", role: "student" });
+    const guardian = await server().createPerson({ schoolId: school.id, displayName: "Gina", role: "guardian" });
+    const enrolled = await aliceBearer.post("/enrollments", { studentPersonId: student.id });
+    const linked = await aliceBearer.post("/guardian-links", {
+      guardianPersonId: guardian.id,
+      studentPersonId: student.id,
+      accessProfile: { attendanceRead: true, resultsRead: true },
+    });
+    const memberships = await aliceBearer.get("/memberships");
+    expect([enrolled.status, linked.status, memberships.status]).toEqual([201, 201, 200]);
+
+    const identifiers: Record<string, string> = {
+      schoolId: school.id,
+      personId: student.id,
+      enrollmentId: (enrolled.body as { enrollment: { id: string } }).enrollment.id,
+      guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
+      membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
+    };
+    return {
+      school,
+      student,
+      pathOf: (method: string, url: string) =>
+        url.replace(/:(\w+)/g, (_parameter, name: string) => {
+          const identifier = identifiers[name];
+          if (identifier === undefined) {
+            throw new Error(`${method} ${url} takes :${name}, which this suite has no record for.`);
+          }
+          return identifier;
+        }),
+      alice: {
+        bearer: await server().signIn(ALICE),
+        cookie: (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin),
+      },
+      pat: {
+        bearer: await server().signIn(PAT),
+        cookie: (await server().signInWithCookie(PAT)).withOrigin(server().publicOrigin),
+      },
+    };
+  }
+
+  /**
+   * Every route the server registered, requested with each form of session by
+   * a School Administrator and a Platform Administrator. Whatever a route
+   * answers one form, it answers the other, and it answers one of them
+   * differently from a caller with no session at all.
+   */
+  it("is accepted by every School-scoped and platform endpoint exactly as a Bearer session is", async () => {
+    const world = await arrange();
+    // Nothing here authenticates a caller: health answers anyone, sign-in makes
+    // a session rather than reading one, and sign-out ends the session it reads.
+    const notAuthenticated = ["GET /api/health", "HEAD /api/health", "POST /api/session", "DELETE /api/session"];
+    const routes = server().routes.filter(({ method, url }) => !notAuthenticated.includes(`${method} ${url}`));
+    expect(routes.map(({ method, url }) => `${method} ${url}`)).toEqual(
+      expect.arrayContaining(["GET /api/session", "POST /api/platform/schools", "GET /api/schools/:schoolId/persons"]),
+    );
+
+    const differing: string[] = [];
+    for (const { method, url } of routes) {
+      const path = world.pathOf(method, url);
+      const body = method === "GET" || method === "HEAD" ? undefined : UNEXPECTED_BODY;
+      const anonymous = await server().client.request(method as Method, path, body);
+
+      let accepted = false;
+      for (const caller of [world.alice, world.pat]) {
+        const bearer = await caller.bearer.request(method as Method, path, body);
+        const cookie = await caller.cookie.request(method as Method, path, body);
+        if (!isDeepStrictEqual(sent(method, bearer), sent(method, cookie))) {
+          differing.push(`${method} ${url} answered Bearer ${bearer.status} but cookie ${cookie.status}`);
+        }
+        accepted ||= !isDeepStrictEqual(sent(method, bearer), sent(method, anonymous));
+      }
+      if (!accepted) {
+        differing.push(`${method} ${url} answered no session-holder differently from a caller without one`);
+      }
+    }
+
+    expect(differing).toEqual([]);
+  });
+
+  describe("a change authenticated by the cookie", () => {
+    it.each([
+      ["no Origin", null],
+      ["a foreign Origin", "https://attacker.test"],
+      ["an opaque Origin", "null"],
+      ["the public origin over another scheme", "http://schoolgrid.test"],
+      ["a lookalike of the public origin", "https://schoolgrid.test.attacker.test"],
+    ])("from %s is refused exactly as a caller with no session, on every route", async (_case, origin) => {
+      const world = await arrange();
+      const signedIn = await server().signInWithCookie(ALICE);
+      const alice = origin === null ? signedIn : signedIn.withOrigin(origin);
+      const changes = server().routes.filter(
+        ({ method, url }) => ["POST", "PATCH", "DELETE"].includes(method) && url !== "/api/session",
+      );
+      expect(changes.length).toBeGreaterThan(0);
+
+      const answered: string[] = [];
+      // Sign-out last, so a sign-out that went through would not hide the others.
+      for (const { method, url } of [...changes, { method: "DELETE", url: "/api/session" }]) {
+        const path = world.pathOf(method, url);
+        const refused = await alice.request(method as Method, path, UNEXPECTED_BODY);
+        const anonymous = await server().client.request(method as Method, path, UNEXPECTED_BODY);
+        if (!isDeepStrictEqual(observable(refused), observable(anonymous))) {
+          answered.push(`${method} ${url} answered ${refused.status}`);
+        }
+      }
+
+      expect(answered).toEqual([]);
+      expect((await alice.get("/api/session")).status).toBe(200);
+    });
+
+    it("changes nothing when refused, and is recorded in the School's trail with its true reason", async () => {
+      const world = await arrange();
+      const student = await server().createPerson({
+        schoolId: world.school.id,
+        displayName: "Tess",
+        role: "student",
+      });
+      const alice = (await server().signInWithCookie(ALICE)).withOrigin("https://attacker.test");
+
+      const refused = await alice.inSchool(world.school.id).post("/enrollments", { studentPersonId: student.id });
+
+      expect(refused.body).toEqual({ status: "refused" });
+      const bearer = world.alice.bearer.inSchool(world.school.id);
+      const enrollments = (await bearer.get("/enrollments")).body as { enrollments: { studentPersonId: string }[] };
+      expect(enrollments.enrollments.map(({ studentPersonId }) => studentPersonId)).not.toContain(student.id);
+      const trail = (await bearer.get("/audit-records")).body as { auditRecords: unknown[] };
+      expect(trail.auditRecords).toContainEqual(
+        expect.objectContaining({
+          action: "access.refused",
+          reason: "cross-origin",
+          target: { type: "request", id: `POST /api/schools/${world.school.id}/enrollments` },
+        }),
+      );
+    });
+
+    it("goes through from the public origin", async () => {
+      const world = await arrange();
+      const student = await server().createPerson({ schoolId: world.school.id, displayName: "Tess", role: "student" });
+
+      const enrolled = await world.alice.cookie
+        .inSchool(world.school.id)
+        .post("/enrollments", { studentPersonId: student.id });
+
+      expect(enrolled.status).toBe(201);
+    });
+
+    it("is not asked for an Origin when the session is a Bearer token", async () => {
+      const world = await arrange();
+      const student = await server().createPerson({ schoolId: world.school.id, displayName: "Tess", role: "student" });
+
+      const enrolled = await world.alice.bearer
+        .withOrigin("https://attacker.test")
+        .inSchool(world.school.id)
+        .post("/enrollments", { studentPersonId: student.id });
+
+      expect(enrolled.status).toBe(201);
+    });
+
+    it("needs no Origin to read", async () => {
+      await server().createAccount(ALICE);
+      const alice = await server().signInWithCookie(ALICE);
+
+      expect((await alice.get("/api/session")).status).toBe(200);
+    });
+  });
+
+  describe("presenting both a cookie and a Bearer token", () => {
+    it("is refused exactly as a caller with no session, even when both are live", async () => {
+      await server().createAccount(ALICE);
+      const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
+      const bearerResponse = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
+      const both = cookie.withSession((bearerResponse.body as { token: string }).token);
+
+      const identify = await both.get("/api/session");
+      const end = await both.delete("/api/session");
+
+      expect(observable(identify)).toEqual(observable(await server().client.get("/api/session")));
+      expect(observable(end)).toEqual(observable(await server().client.delete("/api/session")));
+      expect((await cookie.get("/api/session")).status).toBe(200);
+    });
+
+    it("is recorded in the School's trail with its true reason", async () => {
+      const world = await arrange();
+      const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
+      const bearerResponse = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
+      const both = cookie.withSession((bearerResponse.body as { token: string }).token);
+
+      await both.inSchool(world.school.id).get("/persons");
+
+      const trail = (await world.alice.bearer.inSchool(world.school.id).get("/audit-records")).body as {
+        auditRecords: unknown[];
+      };
+      expect(trail.auditRecords).toContainEqual(
+        expect.objectContaining({ action: "access.refused", reason: "ambiguous-session" }),
+      );
+    });
+
+    it("does not count a cookie that is not the session", async () => {
+      await server().createAccount(ALICE);
+      const alice = (await server().signIn(ALICE)).withCookie("theme=dark");
+
+      expect((await alice.get("/api/session")).status).toBe(200);
+    });
+  });
+
+  describe("a cookie that is not a live session is treated exactly as no session", () => {
+    /** Signs Alice in as a browser does, returning the `Cookie` header it would send back. */
+    async function signedInCookie(): Promise<string> {
+      await server().createAccount(ALICE);
+      const response = await server().client.post("/api/session", ALICE);
+      return cookieSentBackFor(response);
+    }
+
+    it.each([
+      ["an unrelated cookie", async () => "theme=dark"],
+      ["an unrecognised token", async () => `${SESSION_COOKIE}=dGhpcyBpcyBpbnZlbnRlZA`],
+      ["a malformed token", async () => `${SESSION_COOKIE}=not a token!`],
+      ["an empty value", async () => `${SESSION_COOKIE}=`],
+      [
+        "a live token under a name without the __Host- prefix",
+        async () => (await signedInCookie()).replace("__Host-", ""),
+      ],
+      [
+        "two live session cookies at once",
+        async () => {
+          const first = await signedInCookie();
+          const second = cookieSentBackFor(await server().client.post("/api/session", ALICE));
+          return `${first}; ${second}`;
+        },
+      ],
+      [
+        "an expired session",
+        async () => {
+          const cookie = await signedInCookie();
+          // Arranging the passage of time: the session's lifetime has run out.
+          await server().database.query("UPDATE app.user_session SET expires_at = now() - interval '1 second'");
+          return cookie;
+        },
+      ],
+      [
+        "a signed-out session",
+        async () => {
+          const cookie = await signedInCookie();
+          const ended = await server().client.withCookie(cookie).withOrigin(server().publicOrigin).delete("/api/session");
+          expect(ended.status).toBe(204);
+          return cookie;
+        },
+      ],
+    ])("for %s", async (_case, arrange) => {
+      const bob = await server().createAccount({ username: "bob", password: "yet another staple, longer" });
+      const { school } = await server().provisionSchool({ name: "Northside", administrator: bob });
+      const caller = server().client.withCookie(await arrange()).withOrigin(server().publicOrigin);
+      const anonymous = server().client.withOrigin(server().publicOrigin);
+
+      for (const [method, path] of [
+        ["GET", "/api/session"],
+        ["DELETE", "/api/session"],
+        ["GET", "/api/schools"],
+        ["GET", `/api/schools/${school.id}/persons`],
+      ] as const) {
+        const presented = await caller.request(method, path);
+        const without = await anonymous.request(method, path);
+        expect(without.status, `${method} ${path}`).toBe(404);
+        expect(observable(presented), `${method} ${path}`).toEqual(observable(without));
+      }
+    });
+  });
+
+  describe("signing out", () => {
+    async function signedIn(): Promise<{ alice: TestClient; response: TestResponse }> {
+      await server().createAccount(ALICE);
+      const alice = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
+      return { alice, response: await alice.delete("/api/session") };
+    }
+
+    it("ends the session and expires the cookie", async () => {
+      const { response } = await signedIn();
+
+      expect(response.status).toBe(204);
+      const cookies = setCookiesOf(response);
+      expect(cookies).toHaveLength(1);
+      const cookie = parseSetCookie(cookies[0]!);
+      expect(cookie.name).toBe(SESSION_COOKIE);
+      expect(cookie.value).toBe("");
+      expect(cookie.attributes).toEqual({
+        path: "/",
+        secure: "",
+        httponly: "",
+        samesite: "Strict",
+        "max-age": "0",
+      });
+    });
+
+    it("leaves the old cookie refused when it is replayed", async () => {
+      const { alice } = await signedIn();
+      const anonymous = server().client.withOrigin(server().publicOrigin);
+
+      expect(observable(await alice.get("/api/session"))).toEqual(observable(await anonymous.get("/api/session")));
+      expect(observable(await alice.delete("/api/session"))).toEqual(
+        observable(await anonymous.delete("/api/session")),
+      );
+    });
+
+    it("sets no cookie when a Bearer session signs out", async () => {
+      await server().createAccount(ALICE);
+      const alice = await server().signIn(ALICE);
+
+      const response = await alice.delete("/api/session");
+
+      expect(response.status).toBe(204);
+      expect(setCookiesOf(response)).toEqual([]);
+    });
+  });
+});

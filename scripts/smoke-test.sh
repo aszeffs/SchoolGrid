@@ -173,6 +173,7 @@ container="$(
     --publish "127.0.0.1:${HOST_PORT}:3000" \
     --env "DATABASE_URL=postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     --env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
+    --env "PUBLIC_ORIGIN=http://localhost:${HOST_PORT}" \
     "$IMAGE"
 )"
 
