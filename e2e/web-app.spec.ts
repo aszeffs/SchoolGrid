@@ -15,7 +15,7 @@ function schoolsList(page: Page) {
   return page.getByRole("list", { name: "Schools" }).getByRole("listitem");
 }
 
-test("a user signs in, sees the Schools they reach, survives a refresh, and signs out", async ({
+test("signing in shows the Schools the account reaches, survives a refresh, and signing out ends it", async ({
   page,
   context,
 }) => {
@@ -86,13 +86,17 @@ test("a cross-origin form post to a mutating endpoint is refused", async ({ page
   };
   const endpoint = new URL(`/api/schools/${schools[0]!.id}/memberships`, baseURL).href;
 
-  // Sent from SchoolGrid's own origin, the same request reaches the handler,
-  // which rejects the empty body. So a refusal below is the origin's doing.
+  // Sent with the session from SchoolGrid's own origin, the same request
+  // reaches the handler, which rejects the empty body. So the refusal below
+  // comes from the request crossing sites, not from the endpoint.
   const sameOrigin = await page.request.post(endpoint, { headers: { origin: new URL(baseURL!).origin } });
   expect(await sameOrigin.json()).toEqual({ status: "invalid_request" });
 
-  // Another site, whose page posts a form to SchoolGrid while the user is
-  // signed in there.
+  // Another site's page posts a form to SchoolGrid while the browser is signed
+  // in there. SameSite=Strict keeps the cookie off the request, so it is
+  // refused as carrying no session. The Origin check is the second defence
+  // behind that one; a browser cannot be made to reach it, so it is asserted
+  // at the HTTP seam (tests/browser-sessions.test.ts).
   await page.route("http://attacker.test/**", (route) =>
     route.fulfill({
       contentType: "text/html",

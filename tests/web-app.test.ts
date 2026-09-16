@@ -58,11 +58,14 @@ describe("the web app", () => {
       }
     });
 
-    it("carries no body on a HEAD request", async () => {
-      const response = await navigating(server().client).request("HEAD", "/schools");
+    // `inject` hands back the body of a HEAD response that the wire would drop,
+    // so only what a HEAD request does observe is compared.
+    it("is answered to a HEAD request as to a GET", async () => {
+      const head = await navigating(server().client).request("HEAD", "/schools");
+      const get = await navigating(server().client).get("/schools");
 
-      expect(response.status).toBe(200);
-      expect(response.headers["content-type"]).toBe("text/html; charset=utf-8");
+      expect(head.status).toBe(200);
+      expect(observable(head).headers).toEqual(observable(get).headers);
     });
 
     it("is refused for a method other than GET or HEAD", async () => {

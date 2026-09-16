@@ -16,11 +16,18 @@
 # line as the third leg. A migrate step anywhere in this script or its job would
 # turn that proof into a tautology.
 #
-# Usage: scripts/smoke-test.sh <image-ref>
+# Given a command after the image, the script runs it once the image has passed,
+# while the container is still up, with SCHOOLGRID_ORIGIN set to where a browser
+# reaches it and SCHOOLGRID_DATABASE_URL to its database as the application's
+# login. The command failing fails the script. This is how the browser suite
+# drives the image that ships, and why it needs no boot script of its own.
+#
+# Usage: scripts/smoke-test.sh <image-ref> [command...]
 
 set -euo pipefail
 
-IMAGE="${1:?usage: smoke-test.sh <image-ref>}"
+IMAGE="${1:?usage: smoke-test.sh <image-ref> [command...]}"
+shift
 
 # Where this script reaches Postgres. On a GitHub runner a service container
 # publishes to the host, so the default is the loopback address.
@@ -46,6 +53,16 @@ SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-90}"
 SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
 
 HEALTH_URL="http://127.0.0.1:${HOST_PORT}/api/health"
+
+# `localhost` rather than the loopback address. Browsers keep a `Secure` cookie
+# over plain http only on a host they treat as a secure context, and the image's
+# PUBLIC_ORIGIN must be written exactly as a browser writes its `Origin`.
+ORIGIN="http://localhost:${HOST_PORT}"
+
+# Passed to the container only when set. The browser suite signs in, loads
+# pages and calls the API from one address, which the default limit would
+# throttle rather than test.
+CONTAINER_RATE_LIMIT_MAX="${CONTAINER_RATE_LIMIT_MAX:-}"
 
 workdir="$(mktemp -d)"
 container=""
@@ -173,7 +190,8 @@ container="$(
     --publish "127.0.0.1:${HOST_PORT}:3000" \
     --env "DATABASE_URL=postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     --env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
-    --env "PUBLIC_ORIGIN=http://localhost:${HOST_PORT}" \
+    --env "PUBLIC_ORIGIN=${ORIGIN}" \
+    ${CONTAINER_RATE_LIMIT_MAX:+--env "RATE_LIMIT_MAX=${CONTAINER_RATE_LIMIT_MAX}"} \
     "$IMAGE"
 )"
 
@@ -275,3 +293,16 @@ pass "the container applied ${applied_count} migration(s) on startup"
 
 echo
 echo "the smoke test passed: ${IMAGE} starts, migrates and reports the database reachable"
+
+# --- a command against the passing image ------------------------------------
+
+if [ "$#" -gt 0 ]; then
+  echo
+  if ! SCHOOLGRID_ORIGIN="$ORIGIN" \
+    SCHOOLGRID_DATABASE_URL="postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
+    "$@"; then
+    fail "the command run against the image failed: $*"
+    exit 1
+  fi
+  pass "the command run against the image passed: $*"
+fi

@@ -108,12 +108,17 @@ fi
 # claims to. The web workspace's manifest is read too: the app is bundled at
 # build time, so all it is built from, the framework included, is a dev
 # dependency there.
-dev_dependencies="$(node -p '
+#
+# A manifest that cannot be read ends the script rather than being skipped:
+# skipped, a moved web workspace would quietly shrink the list.
+if ! dev_dependencies="$(node -p '
   process.argv.slice(1)
-    .filter((manifest) => require("node:fs").existsSync(manifest))
     .flatMap((manifest) => Object.keys(require(manifest).devDependencies || {}))
     .join(" ")
-' "${REPO_ROOT}/package.json" "${REPO_ROOT}/web/package.json")"
+' "${REPO_ROOT}/package.json" "${REPO_ROOT}/web/package.json")"; then
+  echo "FAIL: the dev dependency manifests under ${REPO_ROOT} could not be read" >&2
+  exit 1
+fi
 
 # The vacuous case again: an empty list means every check below passes without
 # looking at anything. This repository has dev dependencies, so an empty read

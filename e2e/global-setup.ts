@@ -14,9 +14,11 @@ import { SEEDED, type Seeded } from "./seeded.ts";
  * it has already run against.
  */
 export default async function globalSetup(): Promise<void> {
-  const url = process.env["BROWSER_TEST_DATABASE_URL"];
+  const url = process.env["SCHOOLGRID_DATABASE_URL"];
   if (url === undefined || url === "") {
-    throw new Error("BROWSER_TEST_DATABASE_URL must name the database the server under test uses");
+    throw new Error(
+      "SCHOOLGRID_DATABASE_URL must name the database the server under test uses, as the application's login",
+    );
   }
   const database = createPool(url);
   try {

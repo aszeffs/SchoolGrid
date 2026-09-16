@@ -156,14 +156,26 @@ expect "the web workspace's dev dependencies in the runtime stage are caught" "$
 # none leaves the check with nothing to look for. That is the vacuous pass in
 # a new place, and it has to be loud rather than green.
 empty_manifest="$workdir/empty-manifest"
-mkdir -p "$empty_manifest"
+mkdir -p "$empty_manifest/web"
 echo '{ "name": "no-dev-deps", "devDependencies": {} }' > "$empty_manifest/package.json"
+echo '{ "name": "no-dev-deps-web", "devDependencies": {} }' > "$empty_manifest/web/package.json"
 export REPO_ROOT="$empty_manifest"
 expect "a manifest with no dev dependencies is caught" "$correct" "nonroot" 1 "inspecting nothing"
 unset REPO_ROOT
 
+# The same shrinking list by another route: a web workspace that moved, read as
+# a manifest with nothing in it, would leave its dev dependencies unchecked.
+no_web_manifest="$workdir/no-web-manifest"
+mkdir -p "$no_web_manifest"
+echo '{ "name": "root-only", "devDependencies": { "typescript": "*" } }' > "$no_web_manifest/package.json"
+export REPO_ROOT="$no_web_manifest"
+expect "a missing web workspace manifest is caught" "$correct" "nonroot" 1 "could not be read"
+unset REPO_ROOT
+
 nomigrations="$(fixture nomigrations)"
 rm -rf "$nomigrations/app/migrations"
+expect "a dropped COPY of migrations is caught" "$nomigrations" "nonroot" 1 "missing from the runtime image: /app/migrations/"
+
 noweb="$(fixture noweb)"
 rm -rf "$noweb/app/web"
 expect "a dropped COPY of the web build is caught" "$noweb" "nonroot" 1 "missing from the runtime image: /app/web/dist/index.html"
@@ -174,8 +186,6 @@ websource="$(fixture websource)"
 mkdir -p "$websource/app/web/src"
 touch "$websource/app/web/src/main.tsx" "$websource/app/web/package.json"
 expect "web sources beside the build are caught" "$websource" "nonroot" 1 "outside the web build: /app/web/package.json"
-
-expect "a dropped COPY of migrations is caught" "$nomigrations" "nonroot" 1 "missing from the runtime image: /app/migrations/"
 
 expect "an empty User is caught" "$correct" "" 1 "runs as root"
 expect "User=root:root is caught" "$correct" "root:root" 1 "runs as root"

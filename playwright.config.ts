@@ -2,8 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * The browser suite. It drives a running SchoolGrid, never a development server:
- * in CI that is the image built for the pull request (scripts/browser-test.sh),
- * so what passes here is what ships.
+ * in CI that is the image built for the pull request, once scripts/smoke-test.sh
+ * has passed it, so what passes here is what ships.
  *
  * It covers only what a browser alone can show. Domain behaviour is asserted at
  * the HTTP seam, and is not tested again through the page.
@@ -19,7 +19,7 @@ export default defineConfig({
   retries: 0,
   reporter: process.env["CI"] === undefined ? "list" : [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: process.env["BROWSER_TEST_BASE_URL"] ?? "http://localhost:3000",
+    baseURL: process.env["SCHOOLGRID_ORIGIN"] ?? "http://localhost:3000",
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

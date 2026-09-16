@@ -24,7 +24,7 @@ To run the service itself, copy `.env.example` to `.env`, create the application
 
 `npm run build` compiles the service and builds the web app into `web/dist`, which `npm start` then serves. To work on the web app with reloading instead, run `npm run dev:web` beside `npm run dev` and open Vite's address: Vite proxies `/api` to the service, so set `PUBLIC_ORIGIN` to Vite's origin.
 
-`npm run test:browser` runs the Playwright suite against a SchoolGrid already running at `BROWSER_TEST_BASE_URL` (default `http://localhost:3000`), arranging its fixtures through `BROWSER_TEST_DATABASE_URL`, the application's database login. Install its browser once with `npx playwright install chromium`. In CI it runs against the image built for the pull request (`scripts/browser-test.sh`).
+`npm run test:browser` runs the Playwright suite against a SchoolGrid already running at `SCHOOLGRID_ORIGIN` (default `http://localhost:3000`), arranging its fixtures through `SCHOOLGRID_DATABASE_URL`, the application's database login. Install its browser once with `npx playwright install chromium`. In CI it runs against the image built for the pull request, once the smoke test has passed it (`scripts/smoke-test.sh <image> npx playwright test`).
 
 ## Branches
 
@@ -74,7 +74,7 @@ The check reports its verdict in the workflow job summary and never fails. It gu
 
 | Control | What it catches |
 | --- | --- |
-| In-process rate limit on every route, per client address | A flood of requests turning into database round trips and exhausting the connection pool. Unknown routes count too, so probing for paths is not free. Over the limit a client gets `429 {"status":"rate_limited"}` with `Retry-After`. Set with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` (default 100 per minute). Counts are held per instance, and behind a reverse proxy every client shares the proxy's address, so a deployment should limit at the proxy as well. |
+| In-process rate limit on every route, per client address | A flood of requests turning into database round trips and exhausting the connection pool. Unknown routes count too, so probing for paths is not free. So do the web app's page and static assets, so one page load spends several requests. Over the limit a client gets `429 {"status":"rate_limited"}` with `Retry-After`. Set with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` (default 100 per minute). Counts are held per instance, and behind a reverse proxy every client shares the proxy's address, so a deployment should limit at the proxy as well. |
 | Browser sessions in a `__Host-` cookie that is `Secure`, `HttpOnly` and `SameSite=Strict` ([ADR-0004](docs/adr/0004-browser-sessions-in-httponly-cookies.md)) | Script injected into a page stealing the session: the token is never in a response body a browser asked for. A change (`POST`, `PATCH`, `DELETE`) made with the cookie must carry an `Origin` equal to `PUBLIC_ORIGIN`, so another site cannot make one as the signed-in user. A sign-in is only given the cookie under the same rule, so another site cannot sign the browser in as someone else. A request presenting both a cookie and a Bearer token is refused. Every such refusal is the one refusal, and inside a School its true reason is audited. |
 | Gitleaks, full history, on push and weekly | Credentials committed at any point, not just at the tip. |
 | GitHub secret scanning with push protection | Blocks a credential at `git push`, before it reaches the remote. |
