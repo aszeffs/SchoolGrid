@@ -32,11 +32,12 @@ export interface TestResponse {
 
 /**
  * Everything a caller can observe about a response, minus the clock. Two
- * refusals ADR-0002 calls identical must compare equal through this.
+ * refusals ADR-0002 calls identical must compare equal through this. The order
+ * headers are sent in is observable too, and an object comparison ignores it.
  */
 export function observable({ status, headers, raw }: TestResponse) {
   const { date: _date, ...rest } = headers;
-  return { status, headers: rest, raw };
+  return { status, headers: rest, headerOrder: Object.keys(rest), raw };
 }
 
 export interface TestClient {

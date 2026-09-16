@@ -9,6 +9,7 @@ import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
+import { registerSecurityHeaders, setSecurityHeaders } from "./http/security-headers.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
 
@@ -42,7 +43,7 @@ export function buildServer({
     // for a path that matches a route with a parameter, so that answer would
     // confirm the route exists. It is a refusal like an unmatched route.
     frameworkErrors: (_error, request, reply) =>
-      refuseUnrouted(database, request, reply, "malformed-url"),
+      refuseUnrouted(database, request, setSecurityHeaders(reply), "malformed-url"),
   });
 
   // First, so no route is registered before it is listening.
@@ -53,6 +54,9 @@ export function buildServer({
       }
     });
   }
+
+  // Before the rate limit, so a throttled request has them too.
+  registerSecurityHeaders(app);
 
   registerRateLimit(app, rateLimit);
 
