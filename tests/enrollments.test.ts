@@ -363,7 +363,7 @@ describe("Enrollment", () => {
       const sam = await departed(world);
 
       expect((await sam.get(`/persons/${world.samPerson.id}`)).status).toBe(200);
-      expect((await (await server().signIn(SAM)).get("/schools")).body).toEqual({
+      expect((await (await server().signIn(SAM)).get("/api/schools")).body).toEqual({
         schools: [{ id: world.northsideId, name: "Northside" }],
       });
     });

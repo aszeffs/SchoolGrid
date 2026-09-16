@@ -23,7 +23,7 @@ describe("Schools and Persons", () => {
     });
 
     const caller = await server().signIn(ALICE);
-    const response = await caller.get("/schools");
+    const response = await caller.get("/api/schools");
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -163,7 +163,7 @@ describe("Schools and Persons", () => {
         "a School Administrator asking for a Person in another School",
         (w: World) => w.alice.inSchool(w.northsideId).get(`/persons/${w.westbrookPersonId}`),
       ],
-      ["listing Schools with no session", () => server().client.get("/schools")],
+      ["listing Schools with no session", () => server().client.get("/api/schools")],
     ])("answers %s identically to an absent Person", async (_case, attempt) => {
       const world = await arrange();
 

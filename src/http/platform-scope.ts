@@ -7,7 +7,7 @@ import { refuse } from "./refusal.ts";
 /** The body as sent, not yet validated: validate it after the Access decision, never before. */
 export type PlatformHandler = (actor: PlatformActor, request: { body: unknown }) => Promise<unknown>;
 
-/** Registers routes that act on the platform, under `/platform`. */
+/** Registers routes that act on the platform, under `/api/platform`. */
 export interface PlatformScope {
   /** Answers 201, since it creates. */
   post(path: string, handler: PlatformHandler): void;

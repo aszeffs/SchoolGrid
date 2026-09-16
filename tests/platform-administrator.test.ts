@@ -17,7 +17,7 @@ describe("Platform Administrator", () => {
       await server().createAccount(ALICE);
       const pat = await server().signIn(PAT);
 
-      const provisioned = await pat.post("/platform/schools", {
+      const provisioned = await pat.post("/api/platform/schools", {
         name: "Northside",
         schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
       });
@@ -33,7 +33,7 @@ describe("Platform Administrator", () => {
       });
 
       const alice = await server().signIn(ALICE);
-      expect((await alice.get("/schools")).body).toEqual({ schools: [school] });
+      expect((await alice.get("/api/schools")).body).toEqual({ schools: [school] });
       expect((await alice.inSchool(school.id).get("/persons")).body).toEqual({
         persons: [schoolAdministrator],
       });
@@ -46,7 +46,7 @@ describe("Platform Administrator", () => {
       await server().createAccount(ALICE);
       const pat = await server().signIn(PAT);
 
-      const provisioned = await pat.post("/platform/schools", {
+      const provisioned = await pat.post("/api/platform/schools", {
         name: "Northside",
         schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
       });
@@ -81,7 +81,7 @@ describe("Platform Administrator", () => {
       await server().createPlatformAdministrator({ account: await server().createAccount(QUINN) });
       const pat = await server().signIn(PAT);
 
-      const refused = await pat.post("/platform/schools", {
+      const refused = await pat.post("/api/platform/schools", {
         name: "Northside",
         schoolAdministrator: { username, displayName: "Northside Administrator" },
       });
@@ -107,12 +107,12 @@ describe("Platform Administrator", () => {
         schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
       };
 
-      const refused = await (await caller()).post("/platform/schools", request);
-      const unrouted = await server().client.post("/platform/no-such-thing", request);
+      const refused = await (await caller()).post("/api/platform/schools", request);
+      const unrouted = await server().client.post("/api/platform/no-such-thing", request);
 
       expect(refused.status).not.toBe(201);
       expect(observable(refused)).toEqual(observable(unrouted));
-      expect((await (await server().signIn(ALICE)).get("/schools")).body).toEqual({ schools: [] });
+      expect((await (await server().signIn(ALICE)).get("/api/schools")).body).toEqual({ schools: [] });
     });
   });
 
@@ -174,7 +174,7 @@ describe("Platform Administrator", () => {
       const unauthenticated = await server().client.inSchool(world.schoolId).get("/persons");
 
       expect(observable(asPlatformAdministrator)).toEqual(observable(unauthenticated));
-      expect((await world.pat.get("/schools")).body).toEqual({ schools: [] });
+      expect((await world.pat.get("/api/schools")).body).toEqual({ schools: [] });
     });
 
     it("cannot read any School's Audit records", async () => {
@@ -192,7 +192,7 @@ describe("Platform Administrator", () => {
     });
 
     /**
-     * Every route under `/schools/:schoolId` the server registered, however it
+     * Every route under `/api/schools/:schoolId` the server registered, however it
      * was registered, is requested as Pat against records that exist. Pat's
      * account resolves to a Northside School Administrator, so a route that
      * forgot the Platform Administrator would answer them; this suite is where
@@ -200,33 +200,33 @@ describe("Platform Administrator", () => {
      *
      * A route anywhere else must be one of those named here as reaching no
      * School's records. A new one fails until someone decides which it is: a
-     * School's records are addressed under `/schools/:schoolId`, or nowhere.
+     * School's records are addressed under `/api/schools/:schoolId`, or nowhere.
      */
     it("is refused by every School-scoped endpoint, exactly as a route that does not exist", async () => {
       const world = await arrange();
       const identifiers = await arrangeRecordsFor(world);
-      const isSchoolScoped = ({ url }: { url: string }) => url.startsWith("/schools/:schoolId/");
+      const isSchoolScoped = ({ url }: { url: string }) => url.startsWith("/api/schools/:schoolId/");
       const outsideASchool = server()
         .routes.filter((route) => !isSchoolScoped(route))
         .map(({ method, url }) => `${method} ${url}`);
       expect(outsideASchool.sort()).toEqual(
         [
-          "GET /health",
-          "HEAD /health",
-          "POST /session",
-          "GET /session",
-          "HEAD /session",
-          "DELETE /session",
-          "GET /schools",
-          "HEAD /schools",
-          "POST /platform/schools",
+          "GET /api/health",
+          "HEAD /api/health",
+          "POST /api/session",
+          "GET /api/session",
+          "HEAD /api/session",
+          "DELETE /api/session",
+          "GET /api/schools",
+          "HEAD /api/schools",
+          "POST /api/platform/schools",
         ].sort(),
       );
       const schoolScoped = server().routes.filter(isSchoolScoped);
       expect(schoolScoped).toEqual(
         expect.arrayContaining([
-          { method: "GET", url: "/schools/:schoolId/persons" },
-          { method: "GET", url: "/schools/:schoolId/audit-records" },
+          { method: "GET", url: "/api/schools/:schoolId/persons" },
+          { method: "GET", url: "/api/schools/:schoolId/audit-records" },
         ]),
       );
 
@@ -243,7 +243,7 @@ describe("Platform Administrator", () => {
           return identifier;
         });
         const body = method === "GET" || method === "HEAD" ? undefined : {};
-        const unrouted = `/schools/${world.schoolId}/no-such-route`;
+        const unrouted = `/api/schools/${world.schoolId}/no-such-route`;
 
         const asPlatformAdministrator = await world.pat.request(method as Method, path, body);
         const unauthenticated = await server().client.request(method as Method, path, body);
@@ -276,7 +276,7 @@ describe("Platform Administrator", () => {
           actorPlatformAdministratorId: world.platformAdministrator.id,
           action: "access.refused",
           reason: "platform-administrator",
-          target: { type: "request", id: `GET /schools/${world.schoolId}/persons/${world.patPerson.id}` },
+          target: { type: "request", id: `GET /api/schools/${world.schoolId}/persons/${world.patPerson.id}` },
           after: null,
         }),
       );

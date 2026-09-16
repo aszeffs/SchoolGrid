@@ -6,7 +6,7 @@ Built as a practice ground for DevSecOps. The domain is deliberately security-he
 
 ## Status
 
-The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a bearer session across requests, and end it (`POST`, `GET` and `DELETE /session`). No School-scoped behaviour yet.
+The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a bearer session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). No School-scoped behaviour yet.
 
 ## Running it
 

@@ -8,13 +8,13 @@ describe("rate limiting", () => {
 
   it("throttles a request over the limit before it reaches the route", async () => {
     for (let i = 0; i < LIMIT; i++) {
-      expect((await server().client.get("/health")).status).toBe(200);
+      expect((await server().client.get("/api/health")).status).toBe(200);
     }
 
     // With the database gone, a request that reached the route would answer
     // 503. A 429 shows the limit stopped it before any query was attempted.
     await server().database.end();
-    const response = await server().client.get("/health");
+    const response = await server().client.get("/api/health");
 
     expect(response.status).toBe(429);
     expect(response.body).toEqual({ status: "rate_limited" });
@@ -25,11 +25,11 @@ describe("rate limiting", () => {
     // Otherwise probing for routes would be free, and the limit would reveal
     // which paths exist by applying to some and not others.
     for (let i = 0; i < LIMIT; i++) {
-      await server().client.get("/does-not-exist");
+      await server().client.get("/api/does-not-exist");
     }
 
-    const unknown = await server().client.get("/does-not-exist");
-    const known = await server().client.get("/health");
+    const unknown = await server().client.get("/api/does-not-exist");
+    const known = await server().client.get("/api/health");
 
     expect(unknown.status).toBe(429);
     expect(known.status).toBe(unknown.status);
@@ -39,20 +39,20 @@ describe("rate limiting", () => {
   it("limits each client address separately", async () => {
     const flooding = server().client.fromAddress("203.0.113.7");
     for (let i = 0; i <= LIMIT; i++) {
-      await flooding.get("/health");
+      await flooding.get("/api/health");
     }
 
-    const other = await server().client.fromAddress("198.51.100.20").get("/health");
+    const other = await server().client.fromAddress("198.51.100.20").get("/api/health");
 
-    expect((await flooding.get("/health")).status).toBe(429);
+    expect((await flooding.get("/api/health")).status).toBe(429);
     expect(other.status).toBe(200);
   });
 
   it("does not expose the client's remaining allowance on ordinary responses", async () => {
     // A counter on every response would make two otherwise identical refusals
     // differ, which ADR-0002 forbids.
-    const first = await server().client.get("/session");
-    const second = await server().client.get("/session");
+    const first = await server().client.get("/api/session");
+    const second = await server().client.get("/api/session");
 
     expect(Object.keys(first.headers).filter((name) => name.startsWith("x-ratelimit"))).toEqual([]);
     expect(first.raw).toBe(second.raw);
@@ -64,10 +64,10 @@ describe("rate limiting", () => {
     // throttled has to be visible for the limit to slow guessing at all.
     const attempt = { username: "alice", password: "wrong" };
     for (let i = 0; i < LIMIT; i++) {
-      await server().client.post("/session", attempt);
+      await server().client.post("/api/session", attempt);
     }
 
-    const response = await server().client.post("/session", attempt);
+    const response = await server().client.post("/api/session", attempt);
 
     expect(response.status).toBe(429);
     expect(response.body).toEqual({ status: "rate_limited" });

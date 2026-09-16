@@ -68,7 +68,7 @@ case "$1" in
       # still writing, and the write fails with SIGPIPE, as `docker logs` does
       # for a container that has logged a lot since it migrated.
       echo '{"level":30,"msg":"applied migrations","applied":["0001_initial.sql"]}'
-      line='{"level":30,"msg":"incoming request","req":{"method":"GET","url":"/health"}}'
+      line='{"level":30,"msg":"incoming request","req":{"method":"GET","url":"/api/health"}}'
       for _ in $(seq 1 20000); do echo "$line"; done
     else
       echo '{"level":30,"msg":"applied migrations","applied":["0001_initial.sql"]}'
@@ -120,10 +120,20 @@ cat > "$workdir/bin/curl" <<'DOUBLE'
 #!/usr/bin/env bash
 set -euo pipefail
 out=""
+url=""
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   if [ "${args[$i]}" = "--output" ]; then out="${args[$((i + 1))]}"; fi
+  case "${args[$i]}" in http://*) url="${args[$i]}" ;; esac
 done
+
+# The API is served under /api, and anywhere else the service refuses as the
+# real one does, so a subject polling the wrong path never sees a healthy answer.
+if [ "${url%/api/health}" = "$url" ]; then
+  echo '{"status":"refused"}' > "$out"
+  echo "404"
+  exit 0
+fi
 
 refuse() {
   : > "$out"

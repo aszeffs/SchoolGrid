@@ -35,7 +35,7 @@ DATABASE_URL=postgres://schoolgrid_runtime:<password>@<host>:5432/schoolgrid
 
 ## Making a Platform Administrator
 
-A Platform Administrator creates Schools and provisions each School's first School Administrator, through `POST /platform/schools`. No request can make one, because `schoolgrid_app` can only read `app.platform_administrator`. Make one as the schema owner, for an existing User account:
+A Platform Administrator creates Schools and provisions each School's first School Administrator, through `POST /api/platform/schools`. No request can make one, because `schoolgrid_app` can only read `app.platform_administrator`. Make one as the schema owner, for an existing User account:
 
 ```sql
 INSERT INTO app.platform_administrator (user_account_id, display_name)

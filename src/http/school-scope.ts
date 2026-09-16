@@ -3,6 +3,7 @@ import { resolveActor, Refused, type Actor, type RefusalReason } from "../access
 import { recordRefusal } from "../audit/index.ts";
 import { accountForRequest, type UserAccount } from "../authentication/index.ts";
 import type { Database } from "../db/pool.ts";
+import { API_PREFIX } from "./api.ts";
 import { refuse } from "./refusal.ts";
 
 export interface SchoolScopedRequest {
@@ -17,7 +18,7 @@ export interface SchoolScopedRequest {
 export type SchoolScopedHandler = (actor: Actor, request: SchoolScopedRequest) => Promise<unknown>;
 
 /**
- * Registers routes addressed within a School, under `/schools/:schoolId`. A
+ * Registers routes addressed within a School, under `/api/schools/:schoolId`. A
  * `post` answers 201, since it creates; every other method answers 200.
  */
 export interface SchoolScope {
@@ -28,6 +29,12 @@ export interface SchoolScope {
 }
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
+
+/**
+ * A request path addressed within a School, capturing the School. Routes are
+ * registered inside the API prefix; a request URL still carries it.
+ */
+const SCHOOL_PATH = new RegExp(`^${API_PREFIX}/schools/([^/?#]+)`);
 
 /**
  * The boundary every School-scoped request passes through.
@@ -80,7 +87,7 @@ export function registerSchoolScope(
 }
 
 /**
- * Refuses a request that no route handled. Under `/schools/:schoolId` it is a
+ * Refuses a request that no route handled. Under `/api/schools/:schoolId` it is a
  * refusal in that School like any other, so it is recorded like any other.
  * Anything outside a School is refused without a record: there is no trail to
  * hold it.
@@ -91,7 +98,7 @@ export async function refuseUnrouted(
   reply: FastifyReply,
   reason: Extract<RefusalReason, "no-such-route" | "malformed-url">,
 ): Promise<FastifyReply> {
-  const schoolId = /^\/schools\/([^/?#]+)/.exec(request.url)?.[1];
+  const schoolId = SCHOOL_PATH.exec(request.url)?.[1];
   if (schoolId === undefined) {
     request.log.info({ reason, url: request.url }, "refused");
     return refuse(reply);

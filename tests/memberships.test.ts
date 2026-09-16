@@ -376,7 +376,7 @@ describe("School memberships", () => {
       const faculty = await grant(world.aliceAdmin, { personId: world.terryPerson.id, role: "faculty" });
       const guardian = await grant(world.aliceAdmin, { personId: world.terryPerson.id, role: "guardian" });
       const terry = await server().signIn(TERRY);
-      expect(((await terry.get("/schools")).body as { schools: unknown[] }).schools).toHaveLength(1);
+      expect(((await terry.get("/api/schools")).body as { schools: unknown[] }).schools).toHaveLength(1);
 
       await world.aliceAdmin.delete(`/memberships/${faculty.id}`);
       await world.aliceAdmin.delete(`/memberships/${guardian.id}`);
@@ -386,7 +386,7 @@ describe("School memberships", () => {
         .inSchool(world.northsideId)
         .get(`/persons/${ABSENT_ID}`);
       expect(observable(self)).toEqual(observable(absent));
-      expect((await terry.get("/schools")).body).toEqual({ schools: [] });
+      expect((await terry.get("/api/schools")).body).toEqual({ schools: [] });
       // The refusal is recorded against the Person the School knows.
       expect(await trailOf(world.aliceAdmin, "access.refused")).toContainEqual(
         expect.objectContaining({
