@@ -16,19 +16,24 @@ FROM node:24-bookworm@sha256:6dac556d980b7f0e5498d08f08cee0ca67798b4ad6c23964a92
 
 # ---- build -----------------------------------------------------------------
 # A full Node image, because compiling needs the toolchain. Nothing from this
-# stage reaches the runtime image except the contents of `dist`.
+# stage reaches the runtime image except the contents of `dist` and the web
+# app's `web/dist`: the service compiled, and the web app bundled into static
+# files that the service serves.
 FROM node-base AS build
 
 WORKDIR /app
 
 # Manifests first, source second. Dependencies change far less often than
 # code, so this ordering lets an unchanged lockfile reuse the install layer
-# instead of reinstalling on every commit.
+# instead of reinstalling on every commit. The web workspace's manifest is part
+# of the lockfile's tree, so `npm ci` refuses to install without it.
 COPY package.json package-lock.json ./
+COPY web/package.json ./web/
 RUN npm ci
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY web ./web
 RUN npm run build
 
 # ---- production dependencies -----------------------------------------------
@@ -36,12 +41,17 @@ RUN npm run build
 # strictly from the lockfile and never sees a dev dependency at all, so the
 # tree that ships is derived from the manifest rather than from whatever
 # survived a prune.
+#
+# The web workspace is left out. Everything it is built from is a dev
+# dependency, since the bundle already holds what the page runs, and
+# `--workspaces=false` keeps npm from linking the workspace itself into
+# `node_modules`, where it would point at sources this image does not have.
 FROM node-base AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --workspaces=false
 
 # ---- runtime ---------------------------------------------------------------
 # Distroless: no shell, no package manager, nothing to pivot with. The
@@ -54,6 +64,9 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# The build output alone, never the workspace: served from memory, resolved
+# relative to the compiled entrypoint, which puts it here.
+COPY --from=build /app/web/dist ./web/dist
 # Resolved at runtime relative to the compiled migrate module, which puts them
 # here. The entrypoint applies them on start, so an image without this
 # directory boots and then fails at the first query.

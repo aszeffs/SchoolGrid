@@ -1,0 +1,142 @@
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { observable, useTestServer, type TestClient } from "./support/harness.ts";
+
+const ALICE = { username: "alice", password: "correct horse battery staple" };
+
+/** What a browser sends when it navigates to a page. */
+const NAVIGATION = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+const FIXTURE = new URL("./support/web-app/", import.meta.url);
+
+async function fixture(path: string): Promise<string> {
+  return readFile(new URL(path, FIXTURE), "utf8");
+}
+
+function navigating(client: TestClient): TestClient {
+  return client.withAccept(NAVIGATION);
+}
+
+describe("the web app", () => {
+  const server = useTestServer();
+
+  describe("a navigation outside /api", () => {
+    it("is answered with the app", async () => {
+      const response = await navigating(server().client).get("/");
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toBe("text/html; charset=utf-8");
+      expect(response.raw).toBe(await fixture("index.html"));
+    });
+
+    it("is answered identically whatever the path, so a deep link opens the app", async () => {
+      const root = await navigating(server().client).get("/");
+
+      for (const path of [
+        "/schools",
+        "/schools/5f0c1c1e-0000-4000-8000-000000000000/persons",
+        "/sign-in?next=%2Fschools",
+        "/no/such/page",
+        "/assets/app.js",
+        "/API/health",
+      ]) {
+        expect(observable(await navigating(server().client).get(path)), path).toEqual(observable(root));
+      }
+    });
+
+    it("is answered identically whoever asks, so it reveals nothing about the caller", async () => {
+      const { school } = await server().provisionSchool({
+        name: "Northside",
+        administrator: await server().createAccount(ALICE),
+      });
+      const anonymous = await navigating(server().client).get(`/schools/${school.id}`);
+
+      for (const caller of [await server().signIn(ALICE), await server().signInWithCookie(ALICE)]) {
+        expect(observable(await navigating(caller).get(`/schools/${school.id}`))).toEqual(
+          observable(anonymous),
+        );
+      }
+    });
+
+    it("carries no body on a HEAD request", async () => {
+      const response = await navigating(server().client).request("HEAD", "/schools");
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toBe("text/html; charset=utf-8");
+    });
+
+    it("is refused for a method other than GET or HEAD", async () => {
+      const refusal = await server().client.get("/api/no-such-route");
+
+      for (const method of ["POST", "PUT", "PATCH", "DELETE"] as const) {
+        const response = await navigating(server().client).request(method, "/schools", {});
+        expect(observable(response), method).toEqual(observable(refusal));
+      }
+    });
+  });
+
+  describe("a static asset", () => {
+    it("is served with its content type", async () => {
+      const script = await server().client.get("/assets/app.js");
+      const stylesheet = await server().client.get("/assets/app.css");
+
+      expect(script.status).toBe(200);
+      expect(script.headers["content-type"]).toBe("text/javascript; charset=utf-8");
+      expect(script.raw).toBe(await fixture("assets/app.js"));
+      expect(stylesheet.status).toBe(200);
+      expect(stylesheet.headers["content-type"]).toBe("text/css; charset=utf-8");
+      expect(stylesheet.raw).toBe(await fixture("assets/app.css"));
+    });
+
+    it("is refused, like any unrouted path, when the build holds no such file", async () => {
+      const refusal = await server().client.get("/api/no-such-route");
+
+      for (const path of [
+        "/assets/missing.js",
+        "/assets/app.js/",
+        "/assets/../../package.json",
+        "/assets/%2e%2e/%2e%2e/package.json",
+        "/web-app.test.ts",
+        "/",
+      ]) {
+        expect(observable(await server().client.get(path)), path).toEqual(observable(refusal));
+      }
+    });
+  });
+
+  describe("under /api", () => {
+    it("never answers a navigation with the app, and refuses it exactly as before", async () => {
+      const refusal = await server().client.get("/api/no-such-route");
+
+      for (const path of ["/api", "/api/", "/api/no-such-route", "/api/schools/unknown/persons"]) {
+        expect(observable(await navigating(server().client).get(path)), path).toEqual(observable(refusal));
+      }
+    });
+
+    it("still answers a route that exists", async () => {
+      const response = await navigating(server().client).get("/api/health");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: "ok", database: "reachable" });
+    });
+
+    it("still records a navigation refused within a School in that School's Audit records", async () => {
+      const { school } = await server().provisionSchool({
+        name: "Northside",
+        administrator: await server().createAccount(ALICE),
+      });
+      const alice = await server().signIn(ALICE);
+
+      await navigating(alice).get(`/api/schools/${school.id}/no-such-route`);
+
+      const { body } = await alice.inSchool(school.id).get("/audit-records");
+      expect((body as { auditRecords: unknown[] }).auditRecords).toContainEqual(
+        expect.objectContaining({
+          action: "access.refused",
+          reason: "no-such-route",
+          target: { type: "request", id: `GET /api/schools/${school.id}/no-such-route` },
+        }),
+      );
+    });
+  });
+});

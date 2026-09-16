@@ -139,6 +139,69 @@ jobs:
         # migrating here would make that proof pass whatever the image does.
         run: scripts/smoke-test.sh "schoolgrid:${{ github.sha }}"
 
+  browser:
+    name: Browser tests against the image
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      # The same Postgres as the smoke job, for the same reasons.
+      postgres:
+        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: schoolgrid
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username postgres --dbname schoolgrid"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    # Installing a browser takes most of this; the suite itself takes seconds.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        # For the test runner and the fixtures it arranges. Nothing installed
+        # here reaches the image under test, which was built in another job.
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Download the image built above
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: container-image
+
+      - name: Load the image
+        # The exact bytes the build job verified and the scan job scans, so the
+        # browser drives the image that would ship, not a development server.
+        run: docker load --input image.tar
+
+      - name: Drive the image in a browser
+        env:
+          CI: "true"
+        run: scripts/browser-test.sh "schoolgrid:${{ github.sha }}"
+
+      - name: Upload the browser report
+        # Traces and screenshots of a failure, readable without rerunning it.
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
   scan:
     name: Trivy image scan
     needs: build
@@ -229,6 +292,45 @@ jobs:
           # workspace from the run above.
           skip-setup-trivy: true
 
+      # The image scan sees only what the runtime installs. The web app ships
+      # too, but as a bundle built from dev dependencies, so the packages it is
+      # made of never appear in the image as packages. The lockfile is scanned
+      # for them, dev dependencies included, which Trivy leaves out unless told.
+
+      - name: Scan the lockfile and report every finding
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_INCLUDE_DEV_DEPS: "true"
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: sarif
+          output: trivy-dependencies.sarif
+          exit-code: "0"
+          trivyignores: .trivyignore.yaml
+          skip-setup-trivy: true
+
+      - name: Upload the lockfile findings
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: trivy-dependencies.sarif
+          category: trivy-dependencies
+
+      - name: Fail on high or critical dependency vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_INCLUDE_DEV_DEPS: "true"
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+          skip-setup-trivy: true
+
       - name: Scan the Dockerfile and report every misconfiguration
         # A base image choice does not prevent the hardening mistakes that live
         # in the Dockerfile itself, and those are one-line changes that read as
@@ -290,10 +392,11 @@ jobs:
 
   publish:
     name: Publish to GHCR
-    # All three, not just the build. An image reaches the registry only once
-    # the scan has found nothing unaccounted for and the smoke test has watched
-    # it boot, so a vulnerable or unstartable image is never published.
-    needs: [build, smoke, scan]
+    # All of them, not just the build. An image reaches the registry only once
+    # the scan has found nothing unaccounted for, the smoke test has watched it
+    # boot, and a browser has used it, so a vulnerable, unstartable or unusable
+    # image is never published.
+    needs: [build, smoke, browser, scan]
     # A merge to `main` alone. A pull request, including one from a fork, and a
     # push to `dev` build and check the image but never reach this job.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
