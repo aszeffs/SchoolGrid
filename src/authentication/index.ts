@@ -63,16 +63,18 @@ export async function createUserAccount(
 }
 
 /**
- * The account holding this username, matched regardless of letter case, or
- * null. For naming an account to someone permitted to name it, never for
- * deciding who a request belongs to.
+ * The account holding this username, matched regardless of letter case and of
+ * look-alike Unicode spellings (`app.username_key`), or null. For naming an
+ * account to someone permitted to name it, never for deciding who a request
+ * belongs to.
  */
 export async function findUserAccount(
   database: Queryable,
   username: string,
 ): Promise<UserAccount | null> {
   const { rows } = await database.query<UserAccount>(
-    `SELECT id, username FROM app.user_account WHERE lower(username) = lower($1)`,
+    `SELECT id, username FROM app.user_account
+     WHERE app.username_key(username) = app.username_key($1)`,
     [username],
   );
   return rows[0] ?? null;
@@ -91,7 +93,8 @@ async function verifyCredentials(
   { username, password }: Credentials,
 ): Promise<Verification> {
   const { rows } = await database.query<UserAccount & { password_hash: string }>(
-    `SELECT id, username, password_hash FROM app.user_account WHERE lower(username) = lower($1)`,
+    `SELECT id, username, password_hash FROM app.user_account
+     WHERE app.username_key(username) = app.username_key($1)`,
     [username],
   );
   const account = rows[0];
