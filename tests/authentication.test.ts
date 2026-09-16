@@ -55,6 +55,33 @@ describe("User account authentication", () => {
     await expect(server().createAccount({ ...ALICE, username: "Alice" })).rejects.toThrow();
   });
 
+  // Usernames a person would read as the same are one username: equal after
+  // NFKC and case-folding, not merely after lower-casing.
+  describe.each([
+    ["a precomposed and a combining accent", "rené", "rené"],
+    ["a ligature and its letters", "ﬁona", "fiona"],
+    ["full-width and ASCII letters", "ａｌｉｃｅ", "alice"],
+    ["upper- and lower-case accented letters", "Élodie", "élodie"],
+    ["a sharp s and its full case-folding", "straße", "STRASSE"],
+  ])("usernames spelled with %s", (_case, stored, lookAlike) => {
+    it("cannot be two User accounts", async () => {
+      await server().createAccount({ ...ALICE, username: stored });
+
+      await expect(
+        server().createAccount({ username: lookAlike, password: "another password entirely" }),
+      ).rejects.toThrow();
+    });
+
+    it("sign in to the same account whichever spelling is used", async () => {
+      const account = await server().createAccount({ ...ALICE, username: stored });
+
+      const caller = await server().signIn({ ...ALICE, username: lookAlike });
+      const response = await caller.get("/api/session");
+
+      expect(response.body).toEqual({ account: { id: account.id, username: stored } });
+    });
+  });
+
   it("holds credentials and authentication state only: no School, Person, role, or permission", async () => {
     const { rows: columns } = await server().database.query<{ table: string; column: string }>(
       `SELECT table_name AS table, column_name AS column
@@ -189,6 +216,22 @@ describe("User account authentication", () => {
       expect(wrongPassword.status).not.toBe(201);
       expect(observable(unknownAccount)).toEqual(observable(wrongPassword));
       expect(wrongPassword.raw).not.toMatch(/token|password|username|account/i);
+    });
+
+    it("answers an unknown username that normalisation changes identically to a wrong password", async () => {
+      await server().createAccount(ALICE);
+
+      const wrongPassword = await server().client.post("/api/session", {
+        username: "alice",
+        password: "not the password",
+      });
+      const unknownLookAlike = await server().client.post("/api/session", {
+        // Full-width "Mallory": normalised, it names no account either.
+        username: "Ｍａｌｌｏｒｙ",
+        password: "not the password",
+      });
+
+      expect(observable(unknownLookAlike)).toEqual(observable(wrongPassword));
     });
 
     it.each([
