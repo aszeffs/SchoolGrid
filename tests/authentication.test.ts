@@ -254,7 +254,8 @@ describe("User account authentication", () => {
 
       const apartFromConnection = (response: TestResponse) => {
         const { connection: _connection, ...headers } = observable(response).headers;
-        return { ...observable(response), headers };
+        const headerOrder = observable(response).headerOrder.filter((name) => name !== "connection");
+        return { ...observable(response), headers, headerOrder };
       };
       expect(oversized.headers.connection).toBe("close");
       expect(apartFromConnection(oversized)).toEqual(apartFromConnection(wrongPassword));
