@@ -5,6 +5,7 @@ import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
+import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
@@ -81,22 +82,29 @@ export function buildServer({
     return reply.status(500).send({ status: "internal_error" });
   });
 
-  app.get("/health", async (request, reply) => {
-    try {
-      await database.query("SELECT 1");
-      return reply.status(200).send({ status: "ok", database: "reachable" });
-    } catch (error) {
-      // Why the database is unreachable is operational detail: logged, never served.
-      request.log.error({ err: error }, "health check could not reach the database");
-      return reply.status(503).send({ status: "unavailable", database: "unreachable" });
-    }
-  });
+  // Every route, under the one prefix. The refusal, error and rate-limit
+  // handling above is the root's, so it covers paths inside and outside alike.
+  app.register(
+    async (api) => {
+      api.get("/health", async (request, reply) => {
+        try {
+          await database.query("SELECT 1");
+          return reply.status(200).send({ status: "ok", database: "reachable" });
+        } catch (error) {
+          // Why the database is unreachable is operational detail: logged, never served.
+          request.log.error({ err: error }, "health check could not reach the database");
+          return reply.status(503).send({ status: "unavailable", database: "unreachable" });
+        }
+      });
 
-  registerAuthenticationRoutes(app, database, recordAuthenticationAttempt);
-  registerIdentityRoutes(app, database);
-  registerAccessRoutes(app, database);
-  registerAuditRoutes(app, database);
-  registerPlatformRoutes(app, database);
+      registerAuthenticationRoutes(api, database, recordAuthenticationAttempt);
+      registerIdentityRoutes(api, database);
+      registerAccessRoutes(api, database);
+      registerAuditRoutes(api, database);
+      registerPlatformRoutes(api, database);
+    },
+    { prefix: API_PREFIX },
+  );
 
   return app;
 }

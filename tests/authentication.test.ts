@@ -15,7 +15,7 @@ describe("User account authentication", () => {
     await server().createAccount(ALICE);
 
     const caller = await server().signIn(ALICE);
-    const response = await caller.get("/session");
+    const response = await caller.get("/api/session");
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ account: { id: expect.any(String), username: "alice" } });
@@ -25,8 +25,8 @@ describe("User account authentication", () => {
     await server().createAccount(ALICE);
     const caller = await server().signIn(ALICE);
 
-    const first = await caller.get("/session");
-    const second = await caller.get("/session");
+    const first = await caller.get("/api/session");
+    const second = await caller.get("/api/session");
 
     expect(second.status).toBe(200);
     expect(second.body).toEqual(first.body);
@@ -36,9 +36,9 @@ describe("User account authentication", () => {
     await server().createAccount(ALICE);
     const caller = await server().signIn(ALICE);
 
-    const ended = await caller.delete("/session");
-    const afterwards = await caller.get("/session");
-    const anonymous = await server().client.get("/session");
+    const ended = await caller.delete("/api/session");
+    const afterwards = await caller.get("/api/session");
+    const anonymous = await server().client.get("/api/session");
 
     expect(ended.status).toBe(204);
     expect(afterwards.status).toBe(anonymous.status);
@@ -49,7 +49,7 @@ describe("User account authentication", () => {
     await server().createAccount(ALICE);
 
     const caller = await server().signIn({ ...ALICE, username: "ALICE" });
-    const response = await caller.get("/session");
+    const response = await caller.get("/api/session");
 
     expect(response.body).toMatchObject({ account: { username: "alice" } });
     await expect(server().createAccount({ ...ALICE, username: "Alice" })).rejects.toThrow();
@@ -107,7 +107,7 @@ describe("User account authentication", () => {
 
     it("stores neither the password nor the session token", async () => {
       await server().createAccount(ALICE);
-      const response = await server().client.post("/session", ALICE);
+      const response = await server().client.post("/api/session", ALICE);
       const token = (response.body as { token: string }).token;
 
       const dump = await dumpAppSchema();
@@ -150,10 +150,10 @@ describe("User account authentication", () => {
     ])("for %s", async (_case, arrange) => {
       const caller = await arrange();
 
-      const anonymous = await server().client.get("/session");
-      const identify = await caller.get("/session");
-      const end = await caller.delete("/session");
-      const anonymousEnd = await server().client.delete("/session");
+      const anonymous = await server().client.get("/api/session");
+      const identify = await caller.get("/api/session");
+      const end = await caller.delete("/api/session");
+      const anonymousEnd = await server().client.delete("/api/session");
 
       expect(anonymous.status).not.toBe(200);
       expect(observable(identify)).toEqual(observable(anonymous));
@@ -164,10 +164,10 @@ describe("User account authentication", () => {
     it("does not revive when its own token is presented again after ending", async () => {
       await server().createAccount(ALICE);
       const caller = await server().signIn(ALICE);
-      await caller.delete("/session");
+      await caller.delete("/api/session");
 
-      const endedAgain = await caller.delete("/session");
-      const anonymousEnd = await server().client.delete("/session");
+      const endedAgain = await caller.delete("/api/session");
+      const anonymousEnd = await server().client.delete("/api/session");
 
       expect(observable(endedAgain)).toEqual(observable(anonymousEnd));
     });
@@ -177,11 +177,11 @@ describe("User account authentication", () => {
     it("answers a wrong password and an unknown account identically", async () => {
       await server().createAccount(ALICE);
 
-      const wrongPassword = await server().client.post("/session", {
+      const wrongPassword = await server().client.post("/api/session", {
         username: "alice",
         password: "not the password",
       });
-      const unknownAccount = await server().client.post("/session", {
+      const unknownAccount = await server().client.post("/api/session", {
         username: "mallory",
         password: "not the password",
       });
@@ -192,35 +192,35 @@ describe("User account authentication", () => {
     });
 
     it.each([
-      ["no body", (c: TestClient) => c.post("/session")],
-      ["an empty object", (c: TestClient) => c.post("/session", {})],
-      ["a missing password", (c: TestClient) => c.post("/session", { username: "alice" })],
+      ["no body", (c: TestClient) => c.post("/api/session")],
+      ["an empty object", (c: TestClient) => c.post("/api/session", {})],
+      ["a missing password", (c: TestClient) => c.post("/api/session", { username: "alice" })],
       [
         "a non-string password",
-        (c: TestClient) => c.post("/session", { username: "alice", password: 1 }),
+        (c: TestClient) => c.post("/api/session", { username: "alice", password: 1 }),
       ],
       [
         "an empty password",
-        (c: TestClient) => c.post("/session", { username: "alice", password: "" }),
+        (c: TestClient) => c.post("/api/session", { username: "alice", password: "" }),
       ],
-      ["an array body", (c: TestClient) => c.post("/session", ["alice", "password"])],
+      ["an array body", (c: TestClient) => c.post("/api/session", ["alice", "password"])],
       [
         "an oversized password",
-        (c: TestClient) => c.post("/session", { username: "alice", password: "x".repeat(5000) }),
+        (c: TestClient) => c.post("/api/session", { username: "alice", password: "x".repeat(5000) }),
       ],
       [
         "invalid JSON",
-        (c: TestClient) => c.postRaw("/session", '{"username": "alice",', "application/json"),
+        (c: TestClient) => c.postRaw("/api/session", '{"username": "alice",', "application/json"),
       ],
       [
         "valid credentials under a non-JSON content type",
-        (c: TestClient) => c.postRaw("/session", JSON.stringify(ALICE), "text/plain"),
+        (c: TestClient) => c.postRaw("/api/session", JSON.stringify(ALICE), "text/plain"),
       ],
       [
         "form-encoded credentials",
         (c: TestClient) =>
           c.postRaw(
-            "/session",
+            "/api/session",
             `username=alice&password=${encodeURIComponent(ALICE.password)}`,
             "application/x-www-form-urlencoded",
           ),
@@ -228,7 +228,7 @@ describe("User account authentication", () => {
     ])("answers %s identically to a wrong password", async (_case, attempt) => {
       await server().createAccount(ALICE);
 
-      const wrongPassword = await server().client.post("/session", {
+      const wrongPassword = await server().client.post("/api/session", {
         username: "alice",
         password: "not the password",
       });
@@ -242,12 +242,12 @@ describe("User account authentication", () => {
     it("answers a body over the server's size limit identically apart from closing the connection", async () => {
       await server().createAccount(ALICE);
 
-      const wrongPassword = await server().client.post("/session", {
+      const wrongPassword = await server().client.post("/api/session", {
         username: "alice",
         password: "not the password",
       });
       const oversized = await server().client.postRaw(
-        "/session",
+        "/api/session",
         JSON.stringify({ username: "alice", password: "x".repeat(2 * 1024 * 1024) }),
         "application/json",
       );

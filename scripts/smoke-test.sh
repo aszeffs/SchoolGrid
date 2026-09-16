@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Start the built runtime image against a real Postgres and require it to
-# answer /health with the database reachable.
+# answer /api/health with the database reachable.
 #
 # This is the only check in the pipeline that runs the real process. The test
 # suite drives the application through Fastify's `inject`, which never binds a
@@ -45,7 +45,7 @@ HOST_PORT="${HOST_PORT:-3000}"
 SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-90}"
 SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
 
-HEALTH_URL="http://127.0.0.1:${HOST_PORT}/health"
+HEALTH_URL="http://127.0.0.1:${HOST_PORT}/api/health"
 
 workdir="$(mktemp -d)"
 container=""
@@ -182,7 +182,7 @@ if ! docker start "$container" >/dev/null; then
 fi
 pass "started ${IMAGE} as ${container}"
 
-# --- poll /health -----------------------------------------------------------
+# --- poll /api/health -------------------------------------------------------
 
 # A deadline rather than a number of attempts, so the bound is wall clock
 # however long a single poll blocks. The job must fail on timeout rather than
@@ -208,10 +208,10 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
   )"
   set -e
 
-  # 200 alone is not the assertion. /health answers 503 with the same shape when
-  # the database is unreachable, which is exactly what a bad connection string
-  # or a missing `pg` in the runtime image produces, and a check reading only
-  # the status code would call that a pass.
+  # 200 alone is not the assertion. /api/health answers 503 with the same shape
+  # when the database is unreachable, which is exactly what a bad connection
+  # string or a missing `pg` in the runtime image produces, and a check reading
+  # only the status code would call that a pass.
   if [ "$status" = "200" ] && grep -Eq '"database"[[:space:]]*:[[:space:]]*"reachable"' "$workdir/health.json"; then
     healthy=true
     break
@@ -221,13 +221,13 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
 done
 
 if [ "$healthy" != true ]; then
-  fail "/health did not become healthy within ${SMOKE_TIMEOUT_SECONDS}s (last status: ${status:-none})"
+  fail "/api/health did not become healthy within ${SMOKE_TIMEOUT_SECONDS}s (last status: ${status:-none})"
   if [ -s "$workdir/health.json" ]; then
     echo "  last body: $(cat "$workdir/health.json")" >&2
   fi
   exit 1
 fi
-pass "/health answered 200 with the database reachable"
+pass "/api/health answered 200 with the database reachable"
 
 # --- the container migrated on boot -----------------------------------------
 

@@ -54,7 +54,7 @@ export interface TestClient {
   withAuthorization(value: string): TestClient;
   /** A client whose requests arrive from this remote address. */
   fromAddress(address: string): TestClient;
-  /** A client acting within this School: `/persons` addresses `/schools/<id>/persons`. */
+  /** A client acting within this School: `/persons` addresses `/api/schools/<id>/persons`. */
   inSchool(schoolId: string): TestClient;
 }
 
@@ -63,7 +63,7 @@ export interface TestServer {
   client: TestClient;
   /**
    * Every route the server registered, as Fastify registered it, with its
-   * parameters unfilled: `/schools/:schoolId/persons`.
+   * parameters unfilled: `/api/schools/:schoolId/persons`.
    */
   routes: readonly RegisteredRoute[];
   /**
@@ -199,7 +199,7 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
     withAuthorization: (value) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: value } }),
     fromAddress: (address) => buildClient(app, { ...identity, remoteAddress: address }),
-    inSchool: (schoolId) => buildClient(app, { ...identity, prefix: `/schools/${schoolId}` }),
+    inSchool: (schoolId) => buildClient(app, { ...identity, prefix: `/api/schools/${schoolId}` }),
   };
 }
 
@@ -291,7 +291,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       },
       appendAuditRecord: (entry) => appendAuditRecord(pool, entry),
       signIn: async (credentials) => {
-        const response = await client.post("/session", credentials);
+        const response = await client.post("/api/session", credentials);
         const token = (response.body as { token?: unknown } | undefined)?.token;
         if (response.status !== 201 || typeof token !== "string") {
           throw new Error(`signIn expected a session but received status ${response.status}`);
