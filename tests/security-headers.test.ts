@@ -67,7 +67,7 @@ describe("security headers", () => {
       await server().createAccount(ALICE);
       await server().ownerDatabase.query("REVOKE INSERT ON app.audit_record FROM schoolgrid_app");
 
-      const response = await server().client.post("/api/session", ALICE);
+      const response = await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE);
 
       expect(response.status).toBe(500);
       expect(missingOrWeakened(response)).toEqual([]);

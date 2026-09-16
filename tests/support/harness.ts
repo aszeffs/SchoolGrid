@@ -21,6 +21,9 @@ import { provisionSchool, type ProvisionedSchool } from "../../src/platform/inde
 import type { RateLimit } from "../../src/config.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
 
+/** The origin every test server is configured to be served from. */
+const PUBLIC_ORIGIN = "https://schoolgrid.test";
+
 export type Method = NonNullable<InjectOptions["method"]>;
 
 export interface TestResponse {
@@ -40,6 +43,23 @@ export function observable({ status, headers, raw }: TestResponse) {
   return { status, headers: rest, headerOrder: Object.keys(rest), raw };
 }
 
+/** Every `Set-Cookie` header a response carries, attributes and all. */
+export function setCookiesOf(response: TestResponse): string[] {
+  return [response.headers["set-cookie"] ?? []].flat();
+}
+
+/**
+ * What a browser sends back for the one cookie a response set: its name and
+ * value, without the attributes.
+ */
+export function cookieSentBackFor(response: TestResponse): string {
+  const cookies = setCookiesOf(response);
+  if (cookies.length !== 1) {
+    throw new Error(`expected one cookie to be set but received ${cookies.length}`);
+  }
+  return cookies[0]!.split(";")[0]!;
+}
+
 export interface TestClient {
   /** Sends any method, with a JSON body if one is given. */
   request(method: Method, path: string, body?: unknown): Promise<TestResponse>;
@@ -51,6 +71,10 @@ export interface TestClient {
   postRaw(path: string, payload: string, contentType: string): Promise<TestResponse>;
   /** A client presenting this session token on every request. */
   withSession(token: string): TestClient;
+  /** A client sending this exact `Cookie` header on every request, as a browser would. */
+  withCookie(value: string): TestClient;
+  /** A client sending this exact `Origin` header on every request, as a browser would. */
+  withOrigin(origin: string): TestClient;
   /** A client sending this exact `Authorization` header on every request. */
   withAuthorization(value: string): TestClient;
   /** A client whose requests arrive from this remote address. */
@@ -116,8 +140,19 @@ export interface TestServer {
   enroll(student: Person): Promise<void>;
   /** Arranges an Audit record, appended exactly as the application appends one. */
   appendAuditRecord(entry: AuditEntry): Promise<void>;
-  /** Authenticates through the API and returns a client carrying the session. */
+  /** The origin the server is configured to be served from. */
+  publicOrigin: string;
+  /**
+   * Authenticates through the API, asking for a Bearer token, and returns a
+   * client presenting it.
+   */
   signIn(credentials: Credentials): Promise<TestClient>;
+  /**
+   * Authenticates through the API as a browser on the public origin does, and
+   * returns a client sending back the cookie it was given. That client sends
+   * no `Origin`: give it one with `withOrigin`.
+   */
+  signInWithCookie(credentials: Credentials): Promise<TestClient>;
 }
 
 function connectionString(database: string): string {
@@ -197,6 +232,8 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
     postRaw: (path, raw, contentType) => request("POST", path, { raw, contentType }),
     withSession: (token) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: `Bearer ${token}` } }),
+    withCookie: (value) => buildClient(app, { ...identity, headers: { ...headers, cookie: value } }),
+    withOrigin: (origin) => buildClient(app, { ...identity, headers: { ...headers, origin } }),
     withAuthorization: (value) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: value } }),
     fromAddress: (address) => buildClient(app, { ...identity, remoteAddress: address }),
@@ -245,6 +282,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
     app = buildServer({
       database: pool,
       logLevel: "silent",
+      publicOrigin: PUBLIC_ORIGIN,
       ...(rateLimit === undefined ? {} : { rateLimit }),
       onRoute: (route) => routes.push(route),
     });
@@ -291,13 +329,21 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
         await recordEnrollment(pool, student);
       },
       appendAuditRecord: (entry) => appendAuditRecord(pool, entry),
+      publicOrigin: PUBLIC_ORIGIN,
       signIn: async (credentials) => {
-        const response = await client.post("/api/session", credentials);
+        const response = await client.post("/api/session", { ...credentials, session: "bearer" });
         const token = (response.body as { token?: unknown } | undefined)?.token;
         if (response.status !== 201 || typeof token !== "string") {
           throw new Error(`signIn expected a session but received status ${response.status}`);
         }
         return client.withSession(token);
+      },
+      signInWithCookie: async (credentials) => {
+        const response = await client.withOrigin(PUBLIC_ORIGIN).post("/api/session", credentials);
+        if (response.status !== 201) {
+          throw new Error(`signInWithCookie expected a session but received status ${response.status}`);
+        }
+        return client.withCookie(cookieSentBackFor(response));
       },
     };
   });

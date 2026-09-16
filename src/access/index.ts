@@ -1,4 +1,4 @@
-import type { UserAccount } from "../authentication/index.ts";
+import type { Authentication, UserAccount } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import {
   personFor,
@@ -35,6 +35,8 @@ export type { AccessProfile, GuardianLink } from "./guardian-links.ts";
  */
 export type RefusalReason =
   | "unauthenticated"
+  | "cross-origin"
+  | "ambiguous-session"
   | "no-person-in-school"
   | "no-active-membership"
   | "no-such-route"
@@ -115,11 +117,11 @@ const standingOf = new WeakMap<Actor, Standing>();
  */
 export async function resolveActor(
   database: Queryable,
-  account: UserAccount | null,
+  { account, failure }: Authentication,
   schoolId: string,
 ): Promise<Actor> {
   if (account === null) {
-    throw new Refused("unauthenticated");
+    throw new Refused(failure);
   }
   const platformAdministrator = await platformAdministratorFor(database, account.id);
   if (platformAdministrator !== null) {
@@ -154,10 +156,10 @@ export interface PlatformActor {
  */
 export async function resolvePlatformActor(
   database: Queryable,
-  account: UserAccount | null,
+  { account, failure }: Authentication,
 ): Promise<PlatformActor> {
   if (account === null) {
-    throw new Refused("unauthenticated");
+    throw new Refused(failure);
   }
   const platformAdministrator = await platformAdministratorFor(database, account.id);
   if (platformAdministrator === null) {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authorizeReadPerson, reachableSchools, readablePersons } from "../access/index.ts";
-import { accountForRequest } from "../authentication/index.ts";
+import type { Authenticator } from "../authentication/index.ts";
 import type { Database } from "../db/pool.ts";
 import { refuse } from "../http/refusal.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
@@ -11,20 +11,24 @@ function present({ id, displayName }: Person) {
   return { id, displayName };
 }
 
-export function registerIdentityRoutes(app: FastifyInstance, database: Database): void {
+export function registerIdentityRoutes(
+  app: FastifyInstance,
+  database: Database,
+  authenticator: Authenticator,
+): void {
   // Not School-scoped: it answers which Schools a caller may choose to act in.
   // A School the account does not reach, or reaches only through memberships
   // that are not in force, is simply not listed.
   app.get("/schools", async (request, reply) => {
-    const account = await accountForRequest(database, request);
+    const { account, failure } = await authenticator.authenticate(request);
     if (account === null) {
-      request.log.info({ reason: "unauthenticated", url: request.url }, "refused");
+      request.log.info({ reason: failure, url: request.url }, "refused");
       return refuse(reply);
     }
     return reply.status(200).send({ schools: await reachableSchools(database, account) });
   });
 
-  registerSchoolScope(app, database, (scope) => {
+  registerSchoolScope(app, database, authenticator, (scope) => {
     scope.get("/persons", async (actor) => {
       const persons = await personsInSchool(database, actor.schoolId);
       return { persons: readablePersons(actor, persons).map(present) };

@@ -180,7 +180,7 @@ describe("Audit coverage for authentication and refusals", () => {
       await arrange();
       await server().ownerDatabase.query("REVOKE INSERT ON app.audit_record FROM schoolgrid_app");
 
-      const attempt = await server().client.post("/api/session", ALICE);
+      const attempt = await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE);
 
       expect(attempt.status).toBe(500);
       const { rows } = await server().ownerDatabase.query<{ sessions: number }>(

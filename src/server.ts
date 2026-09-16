@@ -3,7 +3,7 @@ import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
-import { registerAuthenticationRoutes } from "./authentication/index.ts";
+import { createAuthenticator, registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
 import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
@@ -17,6 +17,8 @@ export interface ServerOptions {
   database: Database;
   logLevel?: LogLevel;
   rateLimit?: RateLimit;
+  /** The origin browsers reach the server at. See `Config.publicOrigin`. */
+  publicOrigin: string;
   /**
    * Told of every route as it is registered, however it is registered. For a
    * test that must cover every route there is, not only those it knew of.
@@ -33,8 +35,11 @@ export function buildServer({
   database,
   logLevel = "info",
   rateLimit = DEFAULT_RATE_LIMIT,
+  publicOrigin,
   onRoute,
 }: ServerOptions): FastifyInstance {
+  const authenticator = createAuthenticator(database, publicOrigin);
+
   const app = Fastify({
     logger: logLevel === "silent" ? false : { level: logLevel },
     // A URL the router cannot take apart — an identifier over its length
@@ -43,7 +48,7 @@ export function buildServer({
     // for a path that matches a route with a parameter, so that answer would
     // confirm the route exists. It is a refusal like an unmatched route.
     frameworkErrors: (_error, request, reply) =>
-      refuseUnrouted(database, request, setSecurityHeaders(reply), "malformed-url"),
+      refuseUnrouted(database, authenticator, request, setSecurityHeaders(reply), "malformed-url"),
   });
 
   // First, so no route is registered before it is listening.
@@ -63,7 +68,7 @@ export function buildServer({
   acceptEveryBody(app);
 
   app.setNotFoundHandler((request, reply) =>
-    refuseUnrouted(database, request, reply, "no-such-route"),
+    refuseUnrouted(database, authenticator, request, reply, "no-such-route"),
   );
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -101,11 +106,16 @@ export function buildServer({
         }
       });
 
-      registerAuthenticationRoutes(api, database, recordAuthenticationAttempt);
-      registerIdentityRoutes(api, database);
-      registerAccessRoutes(api, database);
-      registerAuditRoutes(api, database);
-      registerPlatformRoutes(api, database);
+      registerAuthenticationRoutes(api, {
+        database,
+        authenticator,
+        recordAttempt: recordAuthenticationAttempt,
+        publicOrigin,
+      });
+      registerIdentityRoutes(api, database, authenticator);
+      registerAccessRoutes(api, database, authenticator);
+      registerAuditRoutes(api, database, authenticator);
+      registerPlatformRoutes(api, database, authenticator);
     },
     { prefix: API_PREFIX },
   );

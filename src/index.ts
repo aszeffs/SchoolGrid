@@ -10,6 +10,7 @@ const app = buildServer({
   database,
   logLevel: config.logLevel,
   rateLimit: config.rateLimit,
+  publicOrigin: config.publicOrigin,
 });
 
 async function shutdown(signal: string): Promise<void> {
