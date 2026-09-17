@@ -312,8 +312,34 @@ export function authorizeReadAuditRecords(actor: Actor): string {
  * The Persons among these that the actor may read. The rest are omitted, not
  * redacted or flagged, so a listing cannot be used to count what is withheld.
  */
-export function readablePersons(actor: Actor, persons: readonly Person[]): Person[] {
+export function readablePersons<P extends Person>(actor: Actor, persons: readonly P[]): P[] {
   return persons.filter((person) => decideReadPerson(actor, person) === null);
+}
+
+/**
+ * Whether the actor may see which Persons are claimed, that is, attached to a
+ * User account. Only a School Administrator may: it tells them who still needs
+ * an Invitation. To anyone else, whether a Person can sign in is an
+ * administrative matter, so it is left out of what they are served altogether.
+ */
+export function mayReadClaimedState(actor: Actor): boolean {
+  return holds(actor, "school_administrator");
+}
+
+/**
+ * Returns the School the actor may create a Person in, and refuses otherwise.
+ * Only a School Administrator shapes who belongs to a School, and only in the
+ * School they are acting in.
+ *
+ * Asked before a request's body is read, so a caller who may not create
+ * Persons is refused whatever they sent, and never learns that a body was
+ * wrong.
+ */
+export function authorizeCreatePerson(actor: Actor): string {
+  if (!holds(actor, "school_administrator")) {
+    throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+  }
+  return actor.schoolId;
 }
 
 /**

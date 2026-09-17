@@ -35,7 +35,7 @@ describe("Platform Administrator", () => {
       const alice = await server().signIn(ALICE);
       expect((await alice.get("/api/schools")).body).toEqual({ schools: [school] });
       expect((await alice.inSchool(school.id).get("/persons")).body).toEqual({
-        persons: [schoolAdministrator],
+        persons: [{ ...schoolAdministrator, claimed: true }],
       });
     });
 
@@ -226,6 +226,7 @@ describe("Platform Administrator", () => {
       expect(schoolScoped).toEqual(
         expect.arrayContaining([
           { method: "GET", url: "/api/schools/:schoolId/persons" },
+          { method: "POST", url: "/api/schools/:schoolId/persons" },
           { method: "GET", url: "/api/schools/:schoolId/audit-records" },
         ]),
       );

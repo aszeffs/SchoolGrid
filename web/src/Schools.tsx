@@ -1,7 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { api, type School } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
+
+function personsPath(school: School): string {
+  return `/schools/${encodeURIComponent(school.id)}/persons`;
+}
+
+function open(event: MouseEvent<HTMLAnchorElement>, school: School): void {
+  event.preventDefault();
+  navigate(personsPath(school));
+}
 
 type State =
   | { kind: "loading" }
@@ -69,7 +78,11 @@ export function Schools() {
           ) : (
             <ul aria-label="Schools">
               {state.schools.map((school) => (
-                <li key={school.id}>{school.name}</li>
+                <li key={school.id}>
+                  <a href={personsPath(school)} onClick={(event) => open(event, school)}>
+                    {school.name}
+                  </a>
+                </li>
               ))}
             </ul>
           )}

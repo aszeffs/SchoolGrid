@@ -3,17 +3,8 @@ import { findUserAccount, type Authenticator } from "../authentication/index.ts"
 import type { Database } from "../db/pool.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { registerPlatformScope } from "../http/platform-scope.ts";
-import { fieldsOf } from "../http/request-body.ts";
+import { boundedText, fieldsOf } from "../http/request-body.ts";
 import { provisionSchool } from "./index.ts";
-
-const MAX_TEXT_LENGTH = 200;
-
-function boundedText(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim().length === 0 || value.length > MAX_TEXT_LENGTH) {
-    throw new InvalidRequest(`${field} must be text of at most ${MAX_TEXT_LENGTH} characters`);
-  }
-  return value;
-}
 
 // Validation below runs only once the Access decision has permitted the
 // caller: see InvalidRequest.

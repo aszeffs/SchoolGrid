@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { seeded } from "./seeded.ts";
 import { expect, test } from "./test.ts";
@@ -90,8 +91,44 @@ test("a deep link opens the app at that page", async ({ page }) => {
   await page.goto("/sign-in?from=a-bookmark");
   await expect(page.getByRole("heading", { name: "Sign in to SchoolGrid" })).toBeVisible();
 
+  await signIn(page, seeded().schoolAdministrator);
+  await expect(schoolsList(page)).not.toHaveCount(0);
+  const { schools } = (await (await page.request.get("/api/schools")).json()) as {
+    schools: { id: string }[];
+  };
+
+  await page.goto(`/schools/${schools[0]!.id}/persons`);
+  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
+
   await page.goto("/schools/no-such-school/persons");
   await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
+  await page.goto("/no/such/page");
+  await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
+});
+
+test("a School Administrator adds a Person, who is listed unclaimed", async ({ page }) => {
+  const { schoolAdministrator, schools } = seeded();
+  const displayName = `Riley ${randomUUID().slice(0, 8)}`;
+
+  await signIn(page, schoolAdministrator);
+  await schoolsList(page).getByRole("link", { name: schools[0]! }).click();
+  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
+
+  await page.getByLabel("Display name").fill(displayName);
+  await page.getByRole("button", { name: "Add Person" }).click();
+
+  const persons = page.getByRole("list", { name: "Persons" }).getByRole("listitem");
+  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}Unclaimed`);
+  await expect(page.getByLabel("Display name")).toHaveValue("");
+
+  // A refresh lists them from the API, not from what the page remembered.
+  await page.reload();
+  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}Unclaimed`);
+  // The Person is in the School that was chosen, and no other.
+  await page.goto("/");
+  await schoolsList(page).getByRole("link", { name: schools[1]! }).click();
+  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
+  await expect(persons.filter({ hasText: displayName })).toHaveCount(0);
 });
 
 test("a cross-origin form post to a mutating endpoint is refused", async ({ page, baseURL }) => {

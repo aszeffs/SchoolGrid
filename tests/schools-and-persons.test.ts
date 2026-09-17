@@ -51,8 +51,8 @@ describe("Schools and Persons", () => {
     expect(listed.status).toBe(200);
     expect(listed.body).toEqual({
       persons: [
-        { id: schoolAdministrator.id, displayName: "alice" },
-        { id: student.id, displayName: "Sam Student" },
+        { id: schoolAdministrator.id, displayName: "alice", claimed: true },
+        { id: student.id, displayName: "Sam Student", claimed: false },
       ],
     });
   });
@@ -95,7 +95,7 @@ describe("Schools and Persons", () => {
     const atWestbrook = await caller.inSchool(westbrook.school.id).get("/persons");
 
     expect(atNorthside.body).toEqual({
-      persons: [{ id: northside.schoolAdministrator.id, displayName: "alice" }],
+      persons: [{ id: northside.schoolAdministrator.id, displayName: "alice", claimed: true }],
     });
     expect(atWestbrook.body).toEqual({
       persons: [{ id: aliceAtWestbrook.id, displayName: "alice" }],

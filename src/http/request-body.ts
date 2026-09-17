@@ -7,6 +7,7 @@ import { InvalidRequest } from "./invalid-request.ts";
  */
 
 const MAX_REASON_LENGTH = 1000;
+const MAX_TEXT_LENGTH = 200;
 
 /** The body's fields, refusing a body that is not an object or names a field not allowed. */
 export function fieldsOf(body: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -34,4 +35,16 @@ export function reasonFrom(value: unknown): string | null {
 /** The reason from a body carrying nothing else, or no body at all. */
 export function reasonOnly(body: unknown): string | null {
   return reasonFrom(body === undefined ? undefined : fieldsOf(body, ["reason"])["reason"]);
+}
+
+/**
+ * A short piece of text naming something, such as a School's name or a
+ * Person's display name: not blank, and within the one bound every such name
+ * shares.
+ */
+export function boundedText(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > MAX_TEXT_LENGTH) {
+    throw new InvalidRequest(`${field} must be text of at most ${MAX_TEXT_LENGTH} characters`);
+  }
+  return value;
 }

@@ -42,6 +42,22 @@ body {
   color: var(--muted);
 }
 
+.muted {
+  color: var(--muted);
+}
+
+.persons {
+  padding: 0;
+  list-style: none;
+}
+
+.persons li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+}
+
 form {
   display: grid;
   gap: 1rem;
