@@ -39,6 +39,22 @@ test("signing in shows the Schools the account reaches, survives a refresh, and 
   await expect(page).toHaveURL("/sign-in");
 });
 
+test("a sign-out that did not work shows the page is not available", async ({
+  page,
+  context,
+}) => {
+  await signIn(page, seeded().schoolAdministrator);
+  await expect(schoolsList(page)).not.toHaveCount(0);
+
+  await page.route("**/api/session", (route) =>
+    route.request().method() === "DELETE" ? route.fulfill({ status: 503 }) : route.fallback(),
+  );
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
+  expect((await context.cookies()).map(({ name }) => name)).toContain(SESSION_COOKIE);
+});
+
 test("the session is held where page script cannot read it", async ({ page, context }) => {
   await signIn(page, seeded().schoolAdministrator);
   await expect(schoolsList(page)).not.toHaveCount(0);
