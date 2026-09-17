@@ -1,14 +1,40 @@
 import type { FastifyInstance } from "fastify";
-import { authorizeReadPerson, reachableSchools, readablePersons } from "../access/index.ts";
+import {
+  authorizeCreatePerson,
+  authorizeReadPerson,
+  mayReadClaimedState,
+  reachableSchools,
+  readablePersons,
+} from "../access/index.ts";
+import { appendAuditRecord } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
 import type { Database } from "../db/pool.ts";
+import { withTransaction } from "../db/transaction.ts";
 import { refuse } from "../http/refusal.ts";
+import { boundedText, fieldsOf } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
-import { findPerson, personsInSchool, type Person } from "./index.ts";
+import { createPerson, findPerson, personsInSchool, type ListedPerson, type Person } from "./index.ts";
 
 /** A Person as served. The School is the one the caller addressed. */
 function present({ id, displayName }: Person) {
   return { id, displayName };
+}
+
+/** A Person as served in a listing, with whether they are claimed only when the caller may see it. */
+function presentListed(person: ListedPerson, withClaimedState: boolean) {
+  return withClaimedState ? { ...present(person), claimed: person.claimed } : present(person);
+}
+
+// Validation below runs only once the Access decision has permitted the
+// caller: see InvalidRequest.
+
+/**
+ * A Person is created from a display name alone, and attached to no User
+ * account: that is for the human behind the record to claim, not for a School
+ * Administrator to assign.
+ */
+function parseCreation(body: unknown) {
+  return { displayName: boundedText(fieldsOf(body, ["displayName"])["displayName"], "displayName") };
 }
 
 export function registerIdentityRoutes(
@@ -30,8 +56,31 @@ export function registerIdentityRoutes(
 
   registerSchoolScope(app, database, authenticator, (scope) => {
     scope.get("/persons", async (actor) => {
-      const persons = await personsInSchool(database, actor.schoolId);
-      return { persons: readablePersons(actor, persons).map(present) };
+      const persons = readablePersons(actor, await personsInSchool(database, actor.schoolId));
+      // Left out entirely for anyone else, rather than sent empty: see mayReadClaimedState.
+      const withClaimedState = mayReadClaimedState(actor);
+      return { persons: persons.map((person) => presentListed(person, withClaimedState)) };
+    });
+
+    scope.post("/persons", async (actor, { body }) => {
+      const schoolId = authorizeCreatePerson(actor);
+      const { displayName } = parseCreation(body);
+      return withTransaction(database, async (transaction) => {
+        const person = await createPerson(transaction, { schoolId, displayName });
+        await appendAuditRecord(transaction, {
+          schoolId,
+          actorPersonId: actor.person.id,
+          action: "person.created",
+          target: { type: "person", id: person.id },
+          reason: null,
+          before: null,
+          // Named by identifier alone. A display name may be a Student's, and
+          // does not belong in a trail that can never be erased.
+          after: null,
+        });
+        // One just created is attached to no account.
+        return { person: presentListed({ ...person, claimed: false }, mayReadClaimedState(actor)) };
+      });
     });
 
     scope.get("/persons/:personId", async (actor, { params: { personId } }) => {

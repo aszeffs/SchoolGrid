@@ -37,10 +37,21 @@ export interface School {
   name: string;
 }
 
+export interface ListedPerson {
+  id: string;
+  displayName: string;
+  /** Whether a User account is attached. Sent only to a School Administrator. */
+  claimed?: boolean;
+}
+
 export const api = {
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<{ account: { id: string; username: string } }>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
   schools: () => request<{ schools: School[] }>("GET", "/schools"),
+  persons: (schoolId: string) =>
+    request<{ persons: ListedPerson[] }>("GET", `/schools/${encodeURIComponent(schoolId)}/persons`),
+  createPerson: (schoolId: string, person: { displayName: string }) =>
+    request<{ person: ListedPerson }>("POST", `/schools/${encodeURIComponent(schoolId)}/persons`, person),
 };

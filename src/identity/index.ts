@@ -85,9 +85,17 @@ export async function findPerson(database: Queryable, personId: string): Promise
   return rows[0] ?? null;
 }
 
-export async function personsInSchool(database: Queryable, schoolId: string): Promise<Person[]> {
-  const { rows } = await database.query<Person>(
-    `SELECT ${PERSON_COLUMNS} FROM app.person WHERE school_id = $1 ORDER BY lower(display_name), display_name, id`,
+/** A Person, and whether a User account is attached to them. */
+export interface ListedPerson extends Person {
+  claimed: boolean;
+}
+
+export async function personsInSchool(database: Queryable, schoolId: string): Promise<ListedPerson[]> {
+  const { rows } = await database.query<ListedPerson>(
+    `SELECT ${PERSON_COLUMNS}, user_account_id IS NOT NULL AS claimed
+     FROM app.person
+     WHERE school_id = $1
+     ORDER BY lower(display_name), display_name, id`,
     [schoolId],
   );
   return rows;
