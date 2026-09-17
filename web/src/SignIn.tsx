@@ -49,8 +49,9 @@ export function SignIn() {
         </label>
         {/*
           One message whatever went wrong: an unknown username, a wrong
-          password, a throttled attempt or a server error. The API answers them
-          alike, so the page cannot tell them apart and must not try to.
+          password, a throttled attempt or a server error. The API refuses the
+          first two alike (ADR-0002), and the page does not tell any of them
+          apart, so it cannot explain a refusal the API did not.
         */}
         {failed && (
           <p role="alert" className="error">
