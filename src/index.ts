@@ -2,16 +2,38 @@ import { loadConfig } from "./config.ts";
 import { createPool } from "./db/pool.ts";
 import { migrate } from "./db/migrate.ts";
 import { assertLeastPrivilege } from "./db/runtime-role.ts";
+import { loadWebApp, type WebApp } from "./http/web-app.ts";
 import { buildServer } from "./server.ts";
 
 const config = loadConfig();
 const database = createPool(config.databaseUrl);
+const webApp = await loadBuiltWebApp();
 const app = buildServer({
   database,
   logLevel: config.logLevel,
   rateLimit: config.rateLimit,
   publicOrigin: config.publicOrigin,
+  ...(webApp === null ? {} : { webApp }),
 });
+if (webApp === null) {
+  app.log.warn("the web app has not been built, so only the API is served");
+}
+
+/**
+ * The web app's build, where the image puts it: beside the compiled service,
+ * as `web/dist` is beside `src` in a checkout. Absent only in a checkout that
+ * has not built it, where the API alone is still worth running.
+ */
+async function loadBuiltWebApp(): Promise<WebApp | null> {
+  try {
+    return await loadWebApp(new URL("../web/dist/", import.meta.url));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "shutting down");

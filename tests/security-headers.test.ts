@@ -53,6 +53,16 @@ describe("security headers", () => {
       expect(observable(unparsable)).toEqual(observable(routed));
     });
 
+    // Answered outside every route, so the enumeration below never sees them.
+    it("are on the web app and its static assets", async () => {
+      const page = await server().client.withAccept("text/html").get("/schools");
+      const asset = await server().client.get("/assets/app.js");
+
+      expect([page.status, asset.status]).toEqual([200, 200]);
+      expect(missingOrWeakened(page)).toEqual([]);
+      expect(missingOrWeakened(asset)).toEqual([]);
+    });
+
     it("are on a malformed-request rejection", async () => {
       await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
       const pat = await server().signIn(PAT);

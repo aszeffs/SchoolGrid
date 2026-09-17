@@ -19,10 +19,18 @@ import {
 } from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
 import type { RateLimit } from "../../src/config.ts";
+import { loadWebApp } from "../../src/http/web-app.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
 
 /** The origin every test server is configured to be served from. */
 const PUBLIC_ORIGIN = "https://schoolgrid.test";
+
+/**
+ * A stand-in for the built web app, served by every test server as the image
+ * serves the real one. Tests assert on serving, never on what the app does:
+ * that is the browser suite's seam.
+ */
+const WEB_APP_FIXTURE = new URL("./web-app/", import.meta.url);
 
 export type Method = NonNullable<InjectOptions["method"]>;
 
@@ -75,6 +83,8 @@ export interface TestClient {
   withCookie(value: string): TestClient;
   /** A client sending this exact `Origin` header on every request, as a browser would. */
   withOrigin(origin: string): TestClient;
+  /** A client sending this exact `Accept` header on every request, as a browser would. */
+  withAccept(value: string): TestClient;
   /** A client sending this exact `Authorization` header on every request. */
   withAuthorization(value: string): TestClient;
   /** A client whose requests arrive from this remote address. */
@@ -234,6 +244,7 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
       buildClient(app, { ...identity, headers: { ...headers, authorization: `Bearer ${token}` } }),
     withCookie: (value) => buildClient(app, { ...identity, headers: { ...headers, cookie: value } }),
     withOrigin: (origin) => buildClient(app, { ...identity, headers: { ...headers, origin } }),
+    withAccept: (accept) => buildClient(app, { ...identity, headers: { ...headers, accept } }),
     withAuthorization: (value) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: value } }),
     fromAddress: (address) => buildClient(app, { ...identity, remoteAddress: address }),
@@ -283,6 +294,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       database: pool,
       logLevel: "silent",
       publicOrigin: PUBLIC_ORIGIN,
+      webApp: await loadWebApp(WEB_APP_FIXTURE),
       ...(rateLimit === undefined ? {} : { rateLimit }),
       onRoute: (route) => routes.push(route),
     });

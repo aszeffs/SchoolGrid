@@ -10,6 +10,7 @@ import { acceptEveryBody } from "./http/body-parsing.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerSecurityHeaders, setSecurityHeaders } from "./http/security-headers.ts";
+import { serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
 
@@ -19,6 +20,11 @@ export interface ServerOptions {
   rateLimit?: RateLimit;
   /** The origin browsers reach the server at. See `Config.publicOrigin`. */
   publicOrigin: string;
+  /**
+   * The web app, served on every path outside `/api`. Without it, those paths
+   * are refused like any other path no route matches.
+   */
+  webApp?: WebApp;
   /**
    * Told of every route as it is registered, however it is registered. For a
    * test that must cover every route there is, not only those it knew of.
@@ -36,6 +42,7 @@ export function buildServer({
   logLevel = "info",
   rateLimit = DEFAULT_RATE_LIMIT,
   publicOrigin,
+  webApp,
   onRoute,
 }: ServerOptions): FastifyInstance {
   const authenticator = createAuthenticator(database, publicOrigin);
@@ -63,12 +70,21 @@ export function buildServer({
   // Before the rate limit, so a throttled request has them too.
   registerSecurityHeaders(app);
 
-  registerRateLimit(app, rateLimit);
+  // The web app's page and assets are served from memory and reach nothing a
+  // flood could exhaust, while one page load fetches several of them. Counted,
+  // they would spend a browser's allowance before it made a single API call.
+  // Exempting them reveals nothing: a path is exempt when the web app answers
+  // it, which its 200 already says.
+  registerRateLimit(app, rateLimit, (request) =>
+    webApp === undefined ? false : webAppFileFor(webApp, request) !== null,
+  );
 
   acceptEveryBody(app);
 
-  app.setNotFoundHandler((request, reply) =>
-    refuseUnrouted(database, authenticator, request, reply, "no-such-route"),
+  app.setNotFoundHandler(
+    (request, reply) =>
+      (webApp === undefined ? null : serveWebApp(webApp, request, reply)) ??
+      refuseUnrouted(database, authenticator, request, reply, "no-such-route"),
   );
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
