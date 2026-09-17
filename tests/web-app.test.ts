@@ -111,16 +111,30 @@ describe("the web app", () => {
     it("never answers a navigation with the app, and refuses it exactly as before", async () => {
       const refusal = await server().client.get("/api/no-such-route");
 
-      for (const path of ["/api", "/api/", "/api/no-such-route", "/api/schools/unknown/persons"]) {
+      for (const path of [
+        "/api",
+        "/api/",
+        "/api/no-such-route",
+        "/api/schools/unknown/persons",
+        // The router decodes a path before matching it, so these are under
+        // /api too. Answered with the app, they would tell a route that exists
+        // from one that does not.
+        "/%61pi",
+        "/%61pi/no-such-route",
+        "/%61%70%69/schools/unknown/persons",
+        "/api%2Fno-such-route",
+      ]) {
         expect(observable(await navigating(server().client).get(path)), path).toEqual(observable(refusal));
       }
     });
 
-    it("still answers a route that exists", async () => {
-      const response = await navigating(server().client).get("/api/health");
+    it("still answers a route that exists, however its path is encoded", async () => {
+      for (const path of ["/api/health", "/%61pi/health"]) {
+        const response = await navigating(server().client).get(path);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual({ status: "ok", database: "reachable" });
+        expect(response.status, path).toBe(200);
+        expect(response.body, path).toEqual({ status: "ok", database: "reachable" });
+      }
     });
 
     it("still records a navigation refused within a School in that School's Audit records", async () => {

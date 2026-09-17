@@ -68,11 +68,19 @@ export async function loadWebApp(directory: URL): Promise<WebApp> {
  * does (ADR-0002). Only a static asset depends on what exists, and the build is
  * public. Under `/api` nothing is ever answered here, so every refusal there
  * stays exactly as it was.
+ *
+ * A request a route matched is never the web app's, and neither is one whose
+ * decoded path is under `/api`: the router decodes a path before matching it,
+ * so `/%61pi/health` reaches `/api/health`. Judged on the raw path, it would be
+ * exempt from the rate limit, and an unmatched one would get the app where a
+ * matched one gets its route, telling the two apart.
  */
 export function webAppFileFor(webApp: WebApp, request: FastifyRequest): Asset | null {
-  const requestPath = request.url.split("?")[0]!;
+  const requestPath = decodedPath(request);
   if (
+    request.routeOptions.url !== undefined ||
     (request.method !== "GET" && request.method !== "HEAD") ||
+    requestPath === null ||
     requestPath === API_PREFIX ||
     requestPath.startsWith(`${API_PREFIX}/`)
   ) {
@@ -99,6 +107,15 @@ export function serveWebApp(
     return null;
   }
   return reply.status(200).header("content-type", file.contentType).send(file.body);
+}
+
+/** The request's path with every escape decoded, or null if it does not decode. */
+function decodedPath(request: FastifyRequest): string | null {
+  try {
+    return decodeURIComponent(request.url.split("?")[0]!);
+  } catch {
+    return null;
+  }
 }
 
 /**

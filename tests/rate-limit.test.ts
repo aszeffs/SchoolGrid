@@ -80,6 +80,23 @@ describe("rate limiting", () => {
         expect((await send()).status).toBe(429);
       }
     });
+    it("do not exempt a request for /api, however its path is encoded", async () => {
+      // The router decodes a path before matching it, so each of these reaches
+      // an /api route or its refusal, and must cost what that costs.
+      const encoded = [
+        () => server().client.withAccept(navigation).get("/%61pi/health"),
+        () => server().client.withAccept(navigation).get("/%61%70%69/no-such-route"),
+        () => server().client.withAccept(navigation).get("/%61pi"),
+      ];
+      for (const send of encoded) {
+        await send();
+      }
+
+      expect((await server().client.get("/api/health")).status).toBe(429);
+      for (const send of encoded) {
+        expect((await send()).status).toBe(429);
+      }
+    });
   });
 
   it("limits each client address separately", async () => {
