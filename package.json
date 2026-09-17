@@ -10,7 +10,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && npm run build --workspace=@schoolgrid/web",
+    "build": "npm run build:service && npm run build --workspace=@schoolgrid/web",
+    "build:service": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/index.ts",
     "dev:web": "npm run dev --workspace=@schoolgrid/web",
     "start": "node dist/index.js",

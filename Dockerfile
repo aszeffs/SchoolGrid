@@ -6,8 +6,8 @@
 # these current so pinning does not decay into shipping something ancient.
 
 # ---- the build toolchain ---------------------------------------------------
-# Named once so the two stages that use it share a digest. Written twice, a
-# Dependabot bump would have to change both and could change one.
+# Named once so the stages that use it share a digest. Written more than once,
+# a Dependabot bump would have to change each copy and could miss one.
 #
 # The Node major here must match the distroless runtime below. Compiled output
 # and installed dependencies built on one major and run on another work until a
@@ -16,25 +16,41 @@ FROM node:24-bookworm@sha256:6dac556d980b7f0e5498d08f08cee0ca67798b4ad6c23964a92
 
 # ---- build -----------------------------------------------------------------
 # A full Node image, because compiling needs the toolchain. Nothing from this
-# stage reaches the runtime image except the contents of `dist` and the web
-# app's `web/dist`: the service compiled, and the web app bundled into static
-# files that the service serves.
+# stage reaches the runtime image except the contents of `dist`.
 FROM node-base AS build
 
 WORKDIR /app
 
 # Manifests first, source second. Dependencies change far less often than
 # code, so this ordering lets an unchanged lockfile reuse the install layer
-# instead of reinstalling on every commit. The web workspace's manifest is part
-# of the lockfile's tree, so `npm ci` refuses to install without it.
+# instead of reinstalling on every commit. `--workspaces=false` installs the
+# service's own dependencies and nothing of the web app's, which its stage
+# below installs for itself.
 COPY package.json package-lock.json ./
-COPY web/package.json ./web/
-RUN npm ci
+RUN npm ci --workspaces=false
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+RUN npm run build:service
+
+# ---- web build -------------------------------------------------------------
+# The web app, bundled into static files that the service serves. A stage of
+# its own, so a change to the page and a change to the service invalidate
+# different layers, and nothing from here reaches the runtime image except
+# `web/dist`.
+FROM node-base AS web-build
+
+WORKDIR /app
+
+# The workspace's dependencies alone, resolved from the one root lockfile, and
+# none of the service's. The web manifest is part of the lockfile's tree, so
+# `npm ci` refuses to install without it.
+COPY package.json package-lock.json ./
+COPY web/package.json ./web/
+RUN npm ci --workspace=@schoolgrid/web --include-workspace-root=false
+
 COPY web ./web
-RUN npm run build
+RUN npm run build --workspace=@schoolgrid/web
 
 # ---- production dependencies -----------------------------------------------
 # A second install rather than pruning the first. `npm ci --omit=dev` resolves
@@ -66,7 +82,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 # The build output alone, never the workspace: served from memory, resolved
 # relative to the compiled entrypoint, which puts it here.
-COPY --from=build /app/web/dist ./web/dist
+COPY --from=web-build /app/web/dist ./web/dist
 # Resolved at runtime relative to the compiled migrate module, which puts them
 # here. The entrypoint applies them on start, so an image without this
 # directory boots and then fails at the first query.
