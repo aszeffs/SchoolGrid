@@ -157,13 +157,17 @@ describe("Platform Administrator", () => {
         accessProfile: { attendanceRead: true, resultsRead: true },
       });
       const memberships = await world.alice.get("/memberships");
-      expect([enrolled.status, linked.status, memberships.status]).toEqual([201, 201, 200]);
+      const invited = await world.alice.post("/invitations", {
+        personId: (await server().createPerson({ schoolId: world.schoolId, displayName: "Riley" })).id,
+      });
+      expect([enrolled.status, linked.status, memberships.status, invited.status]).toEqual([201, 201, 200, 201]);
       return {
         schoolId: world.schoolId,
         personId: student.id,
         enrollmentId: (enrolled.body as { enrollment: { id: string } }).enrollment.id,
         guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
         membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
+        invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
       } as Record<string, string>;
     }
 
@@ -228,6 +232,9 @@ describe("Platform Administrator", () => {
           { method: "GET", url: "/api/schools/:schoolId/persons" },
           { method: "POST", url: "/api/schools/:schoolId/persons" },
           { method: "GET", url: "/api/schools/:schoolId/audit-records" },
+          { method: "POST", url: "/api/schools/:schoolId/invitations" },
+          { method: "GET", url: "/api/schools/:schoolId/invitations" },
+          { method: "DELETE", url: "/api/schools/:schoolId/invitations/:invitationId" },
         ]),
       );
 

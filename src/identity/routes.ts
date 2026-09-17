@@ -13,6 +13,7 @@ import { withTransaction } from "../db/transaction.ts";
 import { refuse } from "../http/refusal.ts";
 import { boundedText, fieldsOf } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
+import { registerInvitationRoutes } from "./invitation-routes.ts";
 import { createPerson, findPerson, personsInSchool, type ListedPerson, type Person } from "./index.ts";
 
 /** A Person as served. The School is the one the caller addressed. */
@@ -41,6 +42,7 @@ export function registerIdentityRoutes(
   app: FastifyInstance,
   database: Database,
   authenticator: Authenticator,
+  publicOrigin: string,
 ): void {
   // Not School-scoped: it answers which Schools a caller may choose to act in.
   // A School the account does not reach, or reaches only through memberships
@@ -87,5 +89,7 @@ export function registerIdentityRoutes(
       const person = authorizeReadPerson(actor, personId!, await findPerson(database, personId!));
       return { person: present(person) };
     });
+
+    registerInvitationRoutes(scope, database, publicOrigin);
   });
 }

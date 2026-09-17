@@ -124,8 +124,8 @@ describe("Browser sessions", () => {
 
   /**
    * Alice administers Northside, where a Student is enrolled and linked to a
-   * Guardian; Pat is a Platform Administrator. Each is signed in twice, once
-   * with each form of session.
+   * Guardian, and an unclaimed Person is invited; Pat is a Platform
+   * Administrator. Each is signed in twice, once with each form of session.
    */
   async function arrange() {
     await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
@@ -143,7 +143,10 @@ describe("Browser sessions", () => {
       accessProfile: { attendanceRead: true, resultsRead: true },
     });
     const memberships = await aliceBearer.get("/memberships");
-    expect([enrolled.status, linked.status, memberships.status]).toEqual([201, 201, 200]);
+    const invited = await aliceBearer.post("/invitations", {
+      personId: (await server().createPerson({ schoolId: school.id, displayName: "Riley" })).id,
+    });
+    expect([enrolled.status, linked.status, memberships.status, invited.status]).toEqual([201, 201, 200, 201]);
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -151,6 +154,7 @@ describe("Browser sessions", () => {
       enrollmentId: (enrolled.body as { enrollment: { id: string } }).enrollment.id,
       guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
       membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
+      invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
     };
     return {
       school,

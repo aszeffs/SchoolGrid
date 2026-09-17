@@ -90,9 +90,38 @@ export interface ListedPerson extends Person {
   claimed: boolean;
 }
 
+const LISTED_PERSON_COLUMNS = `${PERSON_COLUMNS}, user_account_id IS NOT NULL AS claimed`;
+
+/** The Person with this identifier, and whether they are claimed, or null. */
+export async function findListedPerson(database: Queryable, personId: string): Promise<ListedPerson | null> {
+  if (!couldIdentify(personId)) {
+    return null;
+  }
+  const { rows } = await database.query<ListedPerson>(
+    `SELECT ${LISTED_PERSON_COLUMNS} FROM app.person WHERE id = $1`,
+    [personId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Locks a Person until the transaction ends, so whether they are claimed cannot
+ * change underneath it, and returns them as they now stand.
+ *
+ * Only for a Person the caller has already been permitted to act on, for the
+ * reason given at lockMembership.
+ */
+export async function lockPerson(transaction: Queryable, person: Person): Promise<ListedPerson> {
+  const { rows } = await transaction.query<ListedPerson>(
+    `SELECT ${LISTED_PERSON_COLUMNS} FROM app.person WHERE school_id = $1 AND id = $2 FOR UPDATE`,
+    [person.schoolId, person.id],
+  );
+  return rows[0]!;
+}
+
 export async function personsInSchool(database: Queryable, schoolId: string): Promise<ListedPerson[]> {
   const { rows } = await database.query<ListedPerson>(
-    `SELECT ${PERSON_COLUMNS}, user_account_id IS NOT NULL AS claimed
+    `SELECT ${LISTED_PERSON_COLUMNS}
      FROM app.person
      WHERE school_id = $1
      ORDER BY lower(display_name), display_name, id`,

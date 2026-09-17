@@ -118,17 +118,55 @@ test("a School Administrator adds a Person, who is listed unclaimed", async ({ p
   await page.getByRole("button", { name: "Add Person" }).click();
 
   const persons = page.getByRole("list", { name: "Persons" }).getByRole("listitem");
-  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}Unclaimed`);
+  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}UnclaimedInvite`);
   await expect(page.getByLabel("Display name")).toHaveValue("");
 
   // A refresh lists them from the API, not from what the page remembered.
   await page.reload();
-  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}Unclaimed`);
+  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}UnclaimedInvite`);
   // The Person is in the School that was chosen, and no other.
   await page.goto("/");
   await schoolsList(page).getByRole("link", { name: schools[1]! }).click();
   await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
   await expect(persons.filter({ hasText: displayName })).toHaveCount(0);
+});
+
+test("a School Administrator invites an unclaimed Person, copies the link once, and revokes it", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const { schoolAdministrator, schools } = seeded();
+  const displayName = `Casey ${randomUUID().slice(0, 8)}`;
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+
+  await signIn(page, schoolAdministrator);
+  await schoolsList(page).getByRole("link", { name: schools[0]! }).click();
+  await page.getByLabel("Display name").fill(displayName);
+  await page.getByRole("button", { name: "Add Person" }).click();
+  await page.getByRole("button", { name: `Invite ${displayName}` }).click();
+
+  const link = page.getByLabel("Invitation link");
+  await expect(link).toHaveValue(new RegExp(`^${new URL(baseURL!).origin}/invitation#[A-Za-z0-9_-]{43}$`));
+  const issuedLink = await link.inputValue();
+  await page.getByRole("button", { name: "Copy link" }).click();
+  await expect(page.getByRole("status")).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(issuedLink);
+
+  const pending = page.getByRole("list", { name: "Pending Invitations" }).getByRole("listitem");
+  await expect(pending.filter({ hasText: displayName })).toHaveCount(1);
+
+  // Once the page is left, the link is gone for good; the Invitation is still pending.
+  await page.reload();
+  await expect(pending.filter({ hasText: displayName })).toHaveCount(1);
+  await expect(page.getByLabel("Invitation link")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(issuedLink);
+
+  await page.getByRole("button", { name: `Revoke the Invitation for ${displayName}` }).click();
+  await expect(pending.filter({ hasText: displayName })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Pending Invitations" })).toBeVisible();
+  await expect(pending.filter({ hasText: displayName })).toHaveCount(0);
 });
 
 test("a cross-origin form post to a mutating endpoint is refused", async ({ page, baseURL }) => {
