@@ -51,7 +51,9 @@ export type RefusalReason =
   | "claimed"
   | "revoked"
   | "redeemed"
-  | "expired";
+  | "expired"
+  /** An account redeeming an Invitation into a School where it already resolves to a Person. */
+  | "duplicate-person";
 
 /** What a refused request asked for, as the caller named it. */
 export interface RefusedTarget {

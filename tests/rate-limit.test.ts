@@ -145,9 +145,11 @@ describe("rate limiting", () => {
     const inspected = await server().client.post("/api/invitations/inspect", guess);
     const redeemed = await server()
       .client.post("/api/invitations/redeem", { ...guess, username: "someone", password: "a plausible password" });
+    const redeemedSignedIn = await server().client.post("/api/invitations/redeem-signed-in", guess);
 
     expect(inspected.status).toBe(429);
     expect(redeemed.status).toBe(429);
+    expect(redeemedSignedIn.status).toBe(429);
     expect(inspected.body).toEqual({ status: "rate_limited" });
   });
 });

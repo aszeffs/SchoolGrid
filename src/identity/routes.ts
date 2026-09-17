@@ -57,9 +57,9 @@ export function registerIdentityRoutes(
     return reply.status(200).send({ schools: await reachableSchools(database, account) });
   });
 
-  // Not School-scoped either: the human behind the secret holds no session
-  // and belongs to no School yet.
-  registerInvitationRedemptionRoutes(app, database, publicOrigin);
+  // Not School-scoped either: the caller is known by the secret they hold,
+  // not by a Person in any School.
+  registerInvitationRedemptionRoutes(app, database, authenticator, publicOrigin);
 
   registerSchoolScope(app, database, authenticator, (scope) => {
     scope.get("/persons", async (actor) => {
