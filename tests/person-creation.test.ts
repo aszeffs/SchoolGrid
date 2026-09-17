@@ -84,8 +84,8 @@ describe("creating Persons", () => {
     };
   }
 
-  const persons = async () =>
-    (await server().ownerDatabase.query("SELECT * FROM app.person ORDER BY id")).rows;
+  /** Every Person in Northside, as its School Administrator lists them. */
+  const listedBy = async (world: World) => (await world.alice.get("/persons")).body;
 
   it("lets a School Administrator create a Person, who is then listed unclaimed", async () => {
     const world = await arrange();
@@ -166,12 +166,16 @@ describe("creating Persons", () => {
       target: { type: "person", id: person.id },
       reason: null,
       before: null,
-      after: { displayName: "Riley Student" },
+      after: null,
     });
   });
 
   it("does not create a Person whose Audit record cannot be written", async () => {
     const world = await arrange();
+    // Rolling back with the audit write is a database guarantee no caller can
+    // observe, so the table is read directly.
+    const persons = async () =>
+      (await server().ownerDatabase.query("SELECT * FROM app.person ORDER BY id")).rows;
     const before = await persons();
     await server().ownerDatabase.query("REVOKE INSERT ON app.audit_record FROM schoolgrid_app");
 
@@ -192,13 +196,13 @@ describe("creating Persons", () => {
       ["a body that is not an object", ["Riley"]],
     ])("rejects %s, creating nothing", async (_case, body) => {
       const world = await arrange();
-      const before = await persons();
+      const before = await listedBy(world);
 
       const rejected = await world.alice.post("/persons", body);
 
       expect(rejected.status).toBe(400);
       expect(rejected.body).toEqual({ status: "invalid_request" });
-      expect(await persons()).toEqual(before);
+      expect(await listedBy(world)).toEqual(before);
     });
 
     it("accepts a display name at the length bound", async () => {
@@ -220,7 +224,7 @@ describe("creating Persons", () => {
       ["a caller with no session", (w: World) => server().client.inSchool(w.northsideId)],
     ])("refuses %s exactly as an absent Person is refused, whatever the body, creating nothing", async (_case, caller) => {
       const world = await arrange();
-      const before = await persons();
+      const before = await listedBy(world);
       const absent = await world.sam.get(`/persons/${ABSENT_ID}`);
 
       const wellFormed = await caller(world).post("/persons", { displayName: "Riley Student" });
@@ -229,7 +233,7 @@ describe("creating Persons", () => {
       expect(absent.status).not.toBe(200);
       expect(observable(wellFormed)).toEqual(observable(absent));
       expect(observable(malformed)).toEqual(observable(absent));
-      expect(await persons()).toEqual(before);
+      expect(await listedBy(world)).toEqual(before);
     });
 
     it("refuses a School Administrator creating a Person in a School that does not exist", async () => {

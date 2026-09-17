@@ -74,11 +74,12 @@ export function registerIdentityRoutes(
           target: { type: "person", id: person.id },
           reason: null,
           before: null,
-          after: { displayName },
+          // Named by identifier alone. A display name may be a Student's, and
+          // does not belong in a trail that can never be erased.
+          after: null,
         });
-        // Only a School Administrator creates a Person, and one just created
-        // is attached to no account.
-        return { person: presentListed({ ...person, claimed: false }, true) };
+        // One just created is attached to no account.
+        return { person: presentListed({ ...person, claimed: false }, mayReadClaimedState(actor)) };
       });
     });
 
