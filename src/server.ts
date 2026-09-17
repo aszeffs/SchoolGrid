@@ -10,7 +10,7 @@ import { acceptEveryBody } from "./http/body-parsing.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerSecurityHeaders, setSecurityHeaders } from "./http/security-headers.ts";
-import { serveWebApp, type WebApp } from "./http/web-app.ts";
+import { serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
 
@@ -70,7 +70,14 @@ export function buildServer({
   // Before the rate limit, so a throttled request has them too.
   registerSecurityHeaders(app);
 
-  registerRateLimit(app, rateLimit);
+  // The web app's page and assets are served from memory and reach nothing a
+  // flood could exhaust, while one page load fetches several of them. Counted,
+  // they would spend a browser's allowance before it made a single API call.
+  // Exempting them reveals nothing: a path is exempt when the web app answers
+  // it, which its 200 already says.
+  registerRateLimit(app, rateLimit, (request) =>
+    webApp === undefined ? false : webAppFileFor(webApp, request) !== null,
+  );
 
   acceptEveryBody(app);
 

@@ -59,11 +59,6 @@ HEALTH_URL="http://127.0.0.1:${HOST_PORT}/api/health"
 # PUBLIC_ORIGIN must be written exactly as a browser writes its `Origin`.
 ORIGIN="http://localhost:${HOST_PORT}"
 
-# Passed to the container only when set. The browser suite signs in, loads
-# pages and calls the API from one address, which the default limit would
-# throttle rather than test.
-CONTAINER_RATE_LIMIT_MAX="${CONTAINER_RATE_LIMIT_MAX:-}"
-
 workdir="$(mktemp -d)"
 container=""
 
@@ -191,7 +186,6 @@ container="$(
     --env "DATABASE_URL=postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     --env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     --env "PUBLIC_ORIGIN=${ORIGIN}" \
-    ${CONTAINER_RATE_LIMIT_MAX:+--env "RATE_LIMIT_MAX=${CONTAINER_RATE_LIMIT_MAX}"} \
     "$IMAGE"
 )"
 

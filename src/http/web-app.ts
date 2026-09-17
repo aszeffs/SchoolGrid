@@ -59,8 +59,8 @@ export async function loadWebApp(directory: URL): Promise<WebApp> {
 }
 
 /**
- * Answers a request no route matched with the web app, if it is one the web
- * app answers, and otherwise returns null for the caller to refuse.
+ * The file the web app answers a request with, or null if it does not answer
+ * it and the request is the caller's to refuse.
  *
  * A navigation outside `/api` gets `index.html` whatever its path, and the app
  * decides what the path shows. That answer depends only on the request, never
@@ -69,11 +69,7 @@ export async function loadWebApp(directory: URL): Promise<WebApp> {
  * public. Under `/api` nothing is ever answered here, so every refusal there
  * stays exactly as it was.
  */
-export function serveWebApp(
-  webApp: WebApp,
-  request: FastifyRequest,
-  reply: FastifyReply,
-): FastifyReply | null {
+export function webAppFileFor(webApp: WebApp, request: FastifyRequest): Asset | null {
   const requestPath = request.url.split("?")[0]!;
   if (
     (request.method !== "GET" && request.method !== "HEAD") ||
@@ -83,13 +79,26 @@ export function serveWebApp(
     return null;
   }
   if (acceptsHtml(request)) {
-    return reply.status(200).header("content-type", CONTENT_TYPES[".html"]).send(webApp.index);
+    return { body: webApp.index, contentType: CONTENT_TYPES[".html"]! };
   }
-  const asset = webApp.assets.get(requestPath);
-  if (asset === undefined) {
+  return webApp.assets.get(requestPath) ?? null;
+}
+
+/**
+ * Answers a request no route matched with the web app, if it is one the web
+ * app answers (see `webAppFileFor`), and otherwise returns null for the caller
+ * to refuse.
+ */
+export function serveWebApp(
+  webApp: WebApp,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): FastifyReply | null {
+  const file = webAppFileFor(webApp, request);
+  if (file === null) {
     return null;
   }
-  return reply.status(200).header("content-type", asset.contentType).send(asset.body);
+  return reply.status(200).header("content-type", file.contentType).send(file.body);
 }
 
 /**

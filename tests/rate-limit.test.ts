@@ -36,6 +36,52 @@ describe("rate limiting", () => {
     expect(known.raw).toBe(unknown.raw);
   });
 
+  describe("the web app's page and static assets", () => {
+    const navigation = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+    it("are not counted, so loading pages does not use up the API's allowance", async () => {
+      // Served from memory, they cost nothing a flood could exhaust, and one
+      // page load fetches several of them.
+      for (let i = 0; i <= LIMIT * 3; i++) {
+        expect((await server().client.withAccept(navigation).get(`/schools/${i}`)).status).toBe(200);
+        expect((await server().client.get("/assets/app.js")).status).toBe(200);
+      }
+
+      for (let i = 0; i < LIMIT; i++) {
+        expect((await server().client.get("/api/health")).status).toBe(200);
+      }
+      expect((await server().client.get("/api/health")).status).toBe(429);
+    });
+
+    it("are still served to a client over the limit", async () => {
+      for (let i = 0; i <= LIMIT; i++) {
+        await server().client.get("/api/health");
+      }
+
+      expect((await server().client.get("/api/health")).status).toBe(429);
+      expect((await server().client.withAccept(navigation).get("/")).status).toBe(200);
+      expect((await server().client.get("/assets/app.css")).status).toBe(200);
+    });
+
+    it("do not exempt a request outside /api that the web app does not answer", async () => {
+      // Refused like an unknown route, and it costs what one costs.
+      const unanswered = [
+        () => server().client.get("/assets/missing.js"),
+        () => server().client.withAccept(navigation).request("POST", "/schools", {}),
+        () => server().client.withAccept(navigation).get("/api/no-such-route"),
+      ];
+      for (const send of unanswered) {
+        await send();
+      }
+
+      const throttled = await server().client.get("/api/health");
+      expect(throttled.status).toBe(429);
+      for (const send of unanswered) {
+        expect((await send()).status).toBe(429);
+      }
+    });
+  });
+
   it("limits each client address separately", async () => {
     const flooding = server().client.fromAddress("203.0.113.7");
     for (let i = 0; i <= LIMIT; i++) {

@@ -155,9 +155,10 @@ jobs:
         # so it drives the image that would ship, never a development server.
         # A failing browser test fails this step. Playwright also fails when it
         # finds no tests, so a suite that stopped being collected cannot pass.
+        # The image keeps its default rate limit, so a page that spends a
+        # browser's allowance fails here rather than for a user.
         env:
           CI: "true"
-          CONTAINER_RATE_LIMIT_MAX: "100000"
         run: scripts/smoke-test.sh "schoolgrid:${{ github.sha }}" npx playwright test
 
       - name: Upload the browser report
