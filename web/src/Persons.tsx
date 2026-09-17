@@ -89,13 +89,12 @@ export function Persons({ schoolId }: { schoolId: string }) {
     setBusy(false);
     if (loaded?.ok) {
       setState(loaded.body);
+    } else if (!(await api.session()).ok) {
+      // A session that ended while the page was open, whether the change itself
+      // was refused or the reload after a change that succeeded was.
+      navigate("/sign-in", { replace: true });
     } else if (!sent.ok) {
-      if (!(await api.session()).ok) {
-        // A session that ended while the page was open.
-        navigate("/sign-in", { replace: true });
-      } else {
-        setState({ kind: "not-available" });
-      }
+      setState({ kind: "not-available" });
     }
     return sent;
   };
