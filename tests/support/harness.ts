@@ -148,6 +148,18 @@ export interface TestServer {
    * enrolling enrolls through the client instead.
    */
   enroll(student: Person): Promise<void>;
+  /**
+   * Arranges an Invitation as if it had been issued more than 7 days ago, so it
+   * has expired. Its issuing moves back with its expiry, as the database
+   * requires; nothing about it is written to say it expired.
+   */
+  expireInvitation(invitationId: string): Promise<void>;
+  /**
+   * Arranges an Invitation as redeemed by this account, with no Audit record
+   * and without attaching the Person. A test of redeeming redeems through the
+   * client instead.
+   */
+  markInvitationRedeemed(invitationId: string, account: UserAccount): Promise<void>;
   /** Arranges an Audit record, appended exactly as the application appends one. */
   appendAuditRecord(entry: AuditEntry): Promise<void>;
   /** The origin the server is configured to be served from. */
@@ -339,6 +351,21 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       },
       enroll: async (student) => {
         await recordEnrollment(pool, student);
+      },
+      // As the schema owner: when an Invitation was issued is not the application's to change.
+      expireInvitation: async (invitationId) => {
+        await ownerPool.query(
+          `UPDATE app.invitation
+           SET created_at = created_at - interval '8 days', expires_at = expires_at - interval '8 days'
+           WHERE id = $1`,
+          [invitationId],
+        );
+      },
+      markInvitationRedeemed: async (invitationId, account) => {
+        await pool.query(
+          `UPDATE app.invitation SET redeemed_at = now(), redeemed_by_user_account_id = $2 WHERE id = $1`,
+          [invitationId, account.id],
+        );
       },
       appendAuditRecord: (entry) => appendAuditRecord(pool, entry),
       publicOrigin: PUBLIC_ORIGIN,

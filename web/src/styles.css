@@ -58,6 +58,26 @@ body {
   padding: 0.25rem 0;
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.issued {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+}
+
+.issued h2,
+.issued p {
+  margin: 0;
+}
+
 form {
   display: grid;
   gap: 1rem;

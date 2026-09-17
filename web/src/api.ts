@@ -44,14 +44,33 @@ export interface ListedPerson {
   claimed?: boolean;
 }
 
+/** A pending Invitation. Its secret is never among what is listed. */
+export interface Invitation {
+  id: string;
+  person: { id: string; displayName: string };
+  issuedAt: string;
+  expiresAt: string;
+}
+
+/** A path within one School. */
+const inSchool = (schoolId: string, path: string) => `/schools/${encodeURIComponent(schoolId)}${path}`;
+
 export const api = {
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<{ account: { id: string; username: string } }>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
   schools: () => request<{ schools: School[] }>("GET", "/schools"),
-  persons: (schoolId: string) =>
-    request<{ persons: ListedPerson[] }>("GET", `/schools/${encodeURIComponent(schoolId)}/persons`),
+  persons: (schoolId: string) => request<{ persons: ListedPerson[] }>("GET", inSchool(schoolId, "/persons")),
   createPerson: (schoolId: string, person: { displayName: string }) =>
-    request<{ person: ListedPerson }>("POST", `/schools/${encodeURIComponent(schoolId)}/persons`, person),
+    request<{ person: ListedPerson }>("POST", inSchool(schoolId, "/persons"), person),
+  invitations: (schoolId: string) => request<{ invitations: Invitation[] }>("GET", inSchool(schoolId, "/invitations")),
+  /** The one response that carries the Invitation's link. It cannot be asked for again. */
+  issueInvitation: (schoolId: string, personId: string) =>
+    request<{ invitation: Invitation; link: string }>("POST", inSchool(schoolId, "/invitations"), { personId }),
+  revokeInvitation: (schoolId: string, invitationId: string) =>
+    request<{ invitation: Invitation }>(
+      "DELETE",
+      inSchool(schoolId, `/invitations/${encodeURIComponent(invitationId)}`),
+    ),
 };

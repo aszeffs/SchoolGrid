@@ -4,10 +4,12 @@ import {
   personFor,
   platformAdministratorFor,
   schoolsReachedBy,
+  type ListedPerson,
   type Person,
   type PlatformAdministrator,
   type School,
 } from "../identity/index.ts";
+import { invitationState, type Invitation, type InvitationState } from "../identity/invitations.ts";
 import { hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
 import { linkedStudentIds, type GuardianLink } from "./guardian-links.ts";
 import {
@@ -45,7 +47,11 @@ export type RefusalReason =
   | "outside-school"
   | "forbidden"
   | "not-platform-administrator"
-  | "platform-administrator";
+  | "platform-administrator"
+  | "claimed"
+  | "revoked"
+  | "redeemed"
+  | "expired";
 
 /** What a refused request asked for, as the caller named it. */
 export interface RefusedTarget {
@@ -340,6 +346,51 @@ export function authorizeCreatePerson(actor: Actor): string {
     throw new Refused("forbidden", { type: "school", id: actor.schoolId });
   }
   return actor.schoolId;
+}
+
+/**
+ * Returns the School whose Invitations the actor may issue, list, and revoke,
+ * and refuses otherwise. Only a School Administrator may, in the School they are
+ * acting in: any of them, whoever issued the Invitation. Asked before a
+ * request's body is read, as for memberships.
+ */
+export function authorizeManageInvitations(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/**
+ * Returns the Person the actor may invite, and refuses otherwise. An Invitation
+ * attaches a Person to whoever redeems it, so a Person already attached to a
+ * User account is never invited: that would hand their access to someone else.
+ */
+export function authorizeInvite(actor: Actor, personId: string, target: ListedPerson | null): ListedPerson {
+  const reason = decideManageRelationships(actor, target) ?? (target!.claimed ? "claimed" : null);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "person", id: personId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Invitation the actor may revoke, and refuses otherwise. Only a
+ * pending one can be: one already revoked, redeemed, or expired is refused like
+ * one that does not exist, with why written to the Audit record.
+ */
+export function authorizeRevokeInvitation(
+  actor: Actor,
+  invitationId: string,
+  target: Invitation | null,
+  now: Date,
+): Invitation {
+  const reason = decideManageRelationships(actor, target) ?? notPending(invitationState(target!, now));
+  if (reason !== null) {
+    throw new Refused(reason, { type: "invitation", id: invitationId });
+  }
+  return target!;
+}
+
+function notPending(state: InvitationState): RefusalReason | null {
+  return state === "pending" ? null : state;
 }
 
 /**
