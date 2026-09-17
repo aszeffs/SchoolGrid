@@ -40,8 +40,13 @@ export function Schools() {
   }, []);
 
   const signOut = async () => {
-    await api.signOut();
-    navigate("/sign-in", { replace: true });
+    // A sign-out that did not work leaves the session live, and the sign-in
+    // page would send a live session straight back here as if nothing happened.
+    if ((await api.signOut()).ok) {
+      navigate("/sign-in", { replace: true });
+    } else {
+      setState({ kind: "not-available" });
+    }
   };
 
   switch (state.kind) {
