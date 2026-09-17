@@ -135,4 +135,19 @@ describe("rate limiting", () => {
     expect(response.status).toBe(429);
     expect(response.body).toEqual({ status: "rate_limited" });
   });
+
+  it("limits guesses at an Invitation's secret the same way, on inspecting and redeeming alike", async () => {
+    const guess = { secret: "a-guess-that-matches-no-invitation-at-all" };
+    for (let i = 0; i < LIMIT; i++) {
+      await server().client.post("/api/invitations/inspect", guess);
+    }
+
+    const inspected = await server().client.post("/api/invitations/inspect", guess);
+    const redeemed = await server()
+      .client.post("/api/invitations/redeem", { ...guess, username: "someone", password: "a plausible password" });
+
+    expect(inspected.status).toBe(429);
+    expect(redeemed.status).toBe(429);
+    expect(inspected.body).toEqual({ status: "rate_limited" });
+  });
 });

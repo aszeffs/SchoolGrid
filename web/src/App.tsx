@@ -1,5 +1,6 @@
 import { NotAvailable } from "./NotAvailable.tsx";
 import { Persons } from "./Persons.tsx";
+import { RedeemInvitation } from "./RedeemInvitation.tsx";
 import { Schools } from "./Schools.tsx";
 import { SignIn } from "./SignIn.tsx";
 import { usePath } from "./navigation.ts";
@@ -30,6 +31,8 @@ export function App() {
       return <Schools />;
     case "/sign-in":
       return <SignIn />;
+    case "/invitation":
+      return <RedeemInvitation />;
     default:
       return <NotAvailable />;
   }

@@ -9,13 +9,14 @@
 
 export type ApiResult<T> = { ok: true; body: T } | { ok: false };
 
-/**
- * Sends a request and says only whether it was answered. A refusal, a throttled
- * request, a server error and a network failure are all `ok: false`: the app
- * has one state for all of them, and never explains a refusal the API
- * deliberately did not explain (ADR-0002).
- */
-async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
+/** A response that was sent and read, or null for a network failure. */
+interface Sent {
+  status: number;
+  body: unknown;
+}
+
+/** The one place a request is actually sent, so every call shares its parsing and its failure handling. */
+async function send(method: string, path: string, body?: unknown): Promise<Sent | null> {
   try {
     const response = await fetch(`/api${path}`, {
       method,
@@ -23,13 +24,24 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         ? {}
         : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
     });
-    if (!response.ok) {
-      return { ok: false };
-    }
-    return { ok: true, body: (response.status === 204 ? undefined : await response.json()) as T };
+    return { status: response.status, body: response.status === 204 ? undefined : await response.json() };
   } catch {
+    return null;
+  }
+}
+
+/**
+ * Sends a request and says only whether it was answered. A refusal, a throttled
+ * request, a server error and a network failure are all `ok: false`: the app
+ * has one state for all of them, and never explains a refusal the API
+ * deliberately did not explain (ADR-0002).
+ */
+async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
+  const sent = await send(method, path, body);
+  if (sent === null || sent.status < 200 || sent.status >= 300) {
     return { ok: false };
   }
+  return { ok: true, body: sent.body as T };
 }
 
 export interface School {
@@ -55,6 +67,33 @@ export interface Invitation {
 /** A path within one School. */
 const inSchool = (schoolId: string, path: string) => `/schools/${encodeURIComponent(schoolId)}${path}`;
 
+/** What an Invitation's secret names, and nothing else about it (ADR-0002). */
+export interface InvitationInspection {
+  school: { name: string };
+  person: { displayName: string };
+}
+
+/**
+ * Redeeming an Invitation has one field-level message beyond the generic
+ * refusal: a taken username, reachable only once the secret itself is
+ * accepted. `request`'s `ApiResult` cannot express that third outcome, so
+ * this reads the status `send` returns instead, rather than collapsing it.
+ */
+async function redeemInvitation(credentials: {
+  secret: string;
+  username: string;
+  password: string;
+}): Promise<{ status: "redeemed" } | { status: "username_unavailable" } | { status: "refused" }> {
+  const sent = await send("POST", "/invitations/redeem", credentials);
+  if (sent?.status === 201) {
+    return { status: "redeemed" };
+  }
+  if (sent?.status === 409) {
+    return { status: "username_unavailable" };
+  }
+  return { status: "refused" };
+}
+
 export const api = {
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
@@ -73,4 +112,7 @@ export const api = {
       "DELETE",
       inSchool(schoolId, `/invitations/${encodeURIComponent(invitationId)}`),
     ),
+  inspectInvitation: (secret: string) =>
+    request<InvitationInspection>("POST", "/invitations/inspect", { secret }),
+  redeemInvitation,
 };

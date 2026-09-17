@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { UserAccount } from "../src/authentication/index.ts";
-import { observable, useTestServer, type TestClient, type TestResponse } from "./support/harness.ts";
+import {
+  cookieSentBackFor,
+  observable,
+  setCookiesOf,
+  useTestServer,
+  type TestClient,
+  type TestResponse,
+} from "./support/harness.ts";
 
 const ALICE = { username: "alice", password: "correct horse battery staple" };
 const ANNE = { username: "anne", password: "a second administrator's staple" };
@@ -477,6 +484,224 @@ describe("Invitations", () => {
           target: { type: "invitation", id: invitation.id },
         }),
       );
+    });
+  });
+
+  describe("redeeming with a new account", () => {
+    const NEW = { username: "riley-new", password: "a brand new staple, plenty long" };
+
+    const inspect = (secret: string) => server().client.post("/api/invitations/inspect", { secret });
+    const redeem = (secret: string, credentials: { username: string; password: string }) =>
+      server().client.withOrigin(server().publicOrigin).post("/api/invitations/redeem", { secret, ...credentials });
+    const UNKNOWN_SECRET = "an-unknown-secret-that-matches-nothing-at-all";
+
+    it("inspecting shows only the School's name and the Person's display name", async () => {
+      const world = await arrange();
+      const { link } = await issue(world.alice, world.rileyId);
+
+      const inspected = await inspect(secretOf(link));
+
+      expect(inspected.status).toBe(200);
+      expect(inspected.body).toEqual({ school: { name: "Northside" }, person: { displayName: "Riley" } });
+      expect(inspected.raw).not.toContain(world.rileyId);
+    });
+
+    it("creates the account, attaches the Person, marks the Invitation redeemed, and signs the caller in", async () => {
+      const world = await arrange();
+      const { invitation, link } = await issue(world.alice, world.rileyId);
+
+      const redeemed = await redeem(secretOf(link), NEW);
+
+      expect(redeemed.status).toBe(201);
+      expect(redeemed.body).toEqual({ expiresAt: expect.any(String) });
+      const cookies = setCookiesOf(redeemed);
+      expect(cookies).toHaveLength(1);
+      const signedIn = server().client.withCookie(cookieSentBackFor(redeemed)).withOrigin(server().publicOrigin);
+
+      const session = await signedIn.get("/api/session");
+      expect(session.status).toBe(200);
+      const { account } = session.body as { account: { id: string; username: string } };
+      expect(account.username).toBe(NEW.username);
+
+      // Attached, and nowhere else: a database guarantee no caller can observe
+      // through the Access module, which refuses a Person with no membership.
+      const { rows } = await server().ownerDatabase.query<{ id: string }>(
+        "SELECT id FROM app.person WHERE user_account_id = $1",
+        [account.id],
+      );
+      expect(rows).toEqual([{ id: world.rileyId }]);
+      expect(await pending(world)).toEqual([]);
+
+      const [record] = await trail(world);
+      expect(record).toEqual({
+        id: expect.any(String),
+        occurredAt: expect.any(String),
+        actorPersonId: world.rileyId,
+        actorPlatformAdministratorId: null,
+        action: "invitation.redeemed",
+        target: { type: "invitation", id: invitation.id },
+        reason: null,
+        before: null,
+        after: { userAccountId: account.id },
+      });
+    });
+
+    it("grants no membership: the new account is refused inside the School exactly as any Person with none is", async () => {
+      const world = await arrange();
+      const { link } = await issue(world.alice, world.rileyId);
+
+      const redeemed = await redeem(secretOf(link), NEW);
+      const signedIn = server().client.withCookie(cookieSentBackFor(redeemed)).withOrigin(server().publicOrigin);
+
+      const refused = await signedIn.inSchool(world.northsideId).get(`/persons/${world.rileyId}`);
+
+      expect(observable(refused)).toEqual(observable(await standardRefusal(world)));
+    });
+
+    describe("a secret that is not a pending Invitation", () => {
+      const cases: [string, (world: World) => Promise<string>][] = [
+        ["unknown", async () => UNKNOWN_SECRET],
+        [
+          "expired",
+          async (w) => {
+            const { link, invitation } = await issue(w.alice, w.rileyId);
+            await server().expireInvitation(invitation.id);
+            return secretOf(link);
+          },
+        ],
+        [
+          "revoked",
+          async (w) => {
+            const { link, invitation } = await issue(w.alice, w.rileyId);
+            await w.alice.delete(`/invitations/${invitation.id}`);
+            return secretOf(link);
+          },
+        ],
+        [
+          "already redeemed",
+          async (w) => {
+            const { link } = await issue(w.alice, w.rileyId);
+            const secret = secretOf(link);
+            await redeem(secret, NEW);
+            return secret;
+          },
+        ],
+      ];
+
+      it.each(cases)(
+        "refuses inspecting and redeeming a secret that is %s, byte-identically to one that matches nothing",
+        async (_case, makeSecret) => {
+          const world = await arrange();
+          const secret = await makeSecret(world);
+          const unknown = await inspect(UNKNOWN_SECRET);
+
+          const inspected = await inspect(secret);
+          const redeemed = await redeem(secret, { username: "someone-else-entirely", password: "another good staple" });
+          const redeemedDifferently = await redeem(secret, { username: "x", password: "y" });
+
+          expect(observable(inspected)).toEqual(observable(unknown));
+          expect(observable(redeemed)).toEqual(observable(unknown));
+          expect(observable(redeemedDifferently)).toEqual(observable(unknown));
+        },
+      );
+    });
+
+    it("audits the true reason once a secret has matched an Invitation, and records nothing for one that matches nothing", async () => {
+      const world = await arrange();
+      const { link, invitation } = await issue(world.alice, world.rileyId);
+      await world.alice.delete(`/invitations/${invitation.id}`);
+
+      await inspect(secretOf(link));
+      await redeem(secretOf(link), NEW);
+      await inspect(UNKNOWN_SECRET);
+      await redeem(UNKNOWN_SECRET, NEW);
+
+      const refusals = (await trail(world)).filter(({ action }) => action === "access.refused");
+      expect(refusals.map(({ reason, target }) => [reason, target])).toEqual([
+        ["revoked", { type: "invitation", id: invitation.id }],
+        ["revoked", { type: "invitation", id: invitation.id }],
+      ]);
+    });
+
+    it("refuses a redemption from another origin exactly as any other refusal, and audits the true reason", async () => {
+      const world = await arrange();
+      const { link, invitation } = await issue(world.alice, world.rileyId);
+
+      const refused = await server().client.post("/api/invitations/redeem", { secret: secretOf(link), ...NEW });
+
+      expect(observable(refused)).toEqual(observable(await inspect(UNKNOWN_SECRET)));
+      expect(await pending(world)).toHaveLength(1);
+      expect(await trail(world)).toContainEqual(
+        expect.objectContaining({
+          action: "access.refused",
+          reason: "cross-origin",
+          target: { type: "invitation", id: invitation.id },
+        }),
+      );
+    });
+
+    it("reports a taken username as unavailable only once the secret is pending, leaving it pending", async () => {
+      const world = await arrange();
+      const { link } = await issue(world.alice, world.rileyId);
+
+      const unavailable = await redeem(secretOf(link), { username: "sam", password: "another good staple entirely" });
+
+      expect(unavailable.status).toBe(409);
+      expect(unavailable.body).toEqual({ status: "username_unavailable" });
+      expect(await pending(world)).toHaveLength(1);
+    });
+
+    it("never reports username availability before the secret is accepted", async () => {
+      await arrange();
+
+      const refused = await redeem(UNKNOWN_SECRET, { username: "sam", password: "another good staple entirely" });
+
+      expect(refused.status).not.toBe(409);
+      expect(observable(refused)).toEqual(observable(await inspect(UNKNOWN_SECRET)));
+    });
+
+    it("produces exactly one account attached to the Person when two redemptions race", async () => {
+      const world = await arrange();
+      const { link } = await issue(world.alice, world.rileyId);
+      const secret = secretOf(link);
+
+      const [first, second] = await Promise.all([
+        redeem(secret, { username: "riley-one", password: "a good staple, quite long" }),
+        redeem(secret, { username: "riley-two", password: "another good staple, long" }),
+      ]);
+
+      expect([first.status, second.status].sort()).toEqual([201, 404]);
+      const { rows } = await server().ownerDatabase.query<{ user_account_id: string | null }>(
+        "SELECT user_account_id FROM app.person WHERE id = $1",
+        [world.rileyId],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.user_account_id).not.toBeNull();
+      const { rows: accounts } = await server().ownerDatabase.query(
+        "SELECT id FROM app.user_account WHERE username IN ('riley-one', 'riley-two')",
+      );
+      expect(accounts).toHaveLength(1);
+    });
+
+    describe("bounds matching sign-in's", () => {
+      it.each([
+        ["no username", { password: "a good staple, plenty long" }],
+        ["an empty username", { username: "", password: "a good staple, plenty long" }],
+        ["a username over the bound", { username: "x".repeat(255), password: "a good staple, plenty long" }],
+        ["no password", { username: "riley-bounded" }],
+        ["an empty password", { username: "riley-bounded", password: "" }],
+        ["a password over the bound", { username: "riley-bounded", password: "x".repeat(1025) }],
+      ])("refuses redeeming with %s exactly as an unknown secret, leaving the Invitation pending", async (_case, body) => {
+        const world = await arrange();
+        const { link } = await issue(world.alice, world.rileyId);
+
+        const refused = await server()
+          .client.withOrigin(server().publicOrigin)
+          .post("/api/invitations/redeem", { secret: secretOf(link), ...body });
+
+        expect(observable(refused)).toEqual(observable(await inspect(UNKNOWN_SECRET)));
+        expect(await pending(world)).toHaveLength(1);
+      });
     });
   });
 

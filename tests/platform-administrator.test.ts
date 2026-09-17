@@ -223,6 +223,8 @@ describe("Platform Administrator", () => {
           "DELETE /api/session",
           "GET /api/schools",
           "HEAD /api/schools",
+          "POST /api/invitations/inspect",
+          "POST /api/invitations/redeem",
           "POST /api/platform/schools",
         ].sort(),
       );

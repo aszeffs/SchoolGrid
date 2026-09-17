@@ -13,6 +13,7 @@ import { withTransaction } from "../db/transaction.ts";
 import { refuse } from "../http/refusal.ts";
 import { boundedText, fieldsOf } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
+import { registerInvitationRedemptionRoutes } from "./invitation-redemption-routes.ts";
 import { registerInvitationRoutes } from "./invitation-routes.ts";
 import { createPerson, findPerson, personsInSchool, type ListedPerson, type Person } from "./index.ts";
 
@@ -55,6 +56,10 @@ export function registerIdentityRoutes(
     }
     return reply.status(200).send({ schools: await reachableSchools(database, account) });
   });
+
+  // Not School-scoped either: the human behind the secret holds no session
+  // and belongs to no School yet.
+  registerInvitationRedemptionRoutes(app, database, publicOrigin);
 
   registerSchoolScope(app, database, authenticator, (scope) => {
     scope.get("/persons", async (actor) => {
