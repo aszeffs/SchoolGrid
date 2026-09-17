@@ -1,7 +1,9 @@
 # Trivy exceptions
 
-The container workflow fails on HIGH and CRITICAL findings in the built image
-and on HIGH and CRITICAL misconfigurations in the `Dockerfile`. Sometimes a
+The container workflow fails on HIGH and CRITICAL findings in the built image,
+in the lockfile (dev dependencies included, since the web app is bundled from
+them), and on HIGH and CRITICAL misconfigurations in the `Dockerfile`. All
+three read the same `.trivyignore.yaml`. Sometimes a
 finding cannot be fixed here: the vulnerable package comes from the base image,
 no patched version exists yet, and waiting for one means the pipeline is red
 until someone else ships a release.

@@ -27,7 +27,8 @@ multi-ecosystem-groups:
 
 updates:
   # Application and development dependencies, from `package.json` and the
-  # lockfile.
+  # lockfile. The web app is an npm workspace sharing that one lockfile, so its
+  # dependencies are updated from here too.
   - package-ecosystem: npm
     directory: /
     multi-ecosystem-group: all-dependencies

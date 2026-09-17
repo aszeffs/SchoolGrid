@@ -182,7 +182,7 @@ expect() {
     STATE="$state" \
     SMOKE_TIMEOUT_SECONDS=2 \
     SMOKE_POLL_INTERVAL_SECONDS=1 \
-    bash "$subject" schoolgrid:test 2>&1
+    bash "$subject" schoolgrid:test ${then_command[@]+"${then_command[@]}"} 2>&1
   )" || code=$?
 
   if [ "$code" -ne "$expected_code" ]; then
@@ -226,6 +226,10 @@ expect_removed() {
 }
 
 # --- cases ------------------------------------------------------------------
+
+# A command to run against the image once it has passed, as the browser suite
+# is run. Empty unless a case sets it.
+then_command=()
 
 expect "an image that boots and reaches the database passes" healthy 0 "the smoke test passed"
 
@@ -282,6 +286,25 @@ expect "an unreachable database fails before anything is started" database-down 
 # The same after boot: a database lost mid-run is the harness failing, and must
 # not be reported as an image that applied nothing.
 expect "a database lost after boot is reported as itself" database-lost 1 "could not query the database" "applied no migrations"
+
+# A command given after the image runs against the image the smoke test passed,
+# while it is still up, and is told where to reach it and its database.
+then_command=(bash -c 'echo "then saw ${SCHOOLGRID_ORIGIN} and ${SCHOOLGRID_DATABASE_URL}"')
+expect "a command given after the image runs against the passing image" healthy 0 \
+  "then saw http://localhost:3000 and postgres://schoolgrid_runtime:schoolgrid_runtime@127.0.0.1:5432/schoolgrid"
+expect_removed "a command given after the image runs against the passing image"
+
+# The browser suite failing must fail the job, not print and pass.
+then_command=(false)
+expect "a failing command fails the smoke test" healthy 1 "the command run against the image failed"
+expect "a failing command surfaces the container logs" healthy 1 "Server listening"
+
+# Nothing is run against an image that did not pass: its failure would only
+# bury the real one.
+then_command=(bash -c 'echo "then ran"')
+expect "no command is run against an image that never becomes healthy" never-ready 1 \
+  "did not become healthy within" "then ran"
+then_command=()
 
 # --- verdict ----------------------------------------------------------------
 

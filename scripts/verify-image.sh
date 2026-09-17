@@ -105,8 +105,20 @@ fi
 # The names come from package.json rather than a list kept here. A second copy
 # goes stale the first time someone adds a dev dependency, and it goes stale
 # silently: the control keeps reporting success while checking less than it
-# claims to.
-dev_dependencies="$(node -p 'Object.keys(require(process.argv[1]).devDependencies || {}).join(" ")' "${REPO_ROOT}/package.json")"
+# claims to. The web workspace's manifest is read too: the app is bundled at
+# build time, so all it is built from, the framework included, is a dev
+# dependency there.
+#
+# A manifest that cannot be read ends the script rather than being skipped:
+# skipped, a moved web workspace would quietly shrink the list.
+if ! dev_dependencies="$(node -p '
+  process.argv.slice(1)
+    .flatMap((manifest) => Object.keys(require(manifest).devDependencies || {}))
+    .join(" ")
+' "${REPO_ROOT}/package.json" "${REPO_ROOT}/web/package.json")"; then
+  echo "FAIL: the dev dependency manifests under ${REPO_ROOT} could not be read" >&2
+  exit 1
+fi
 
 # The vacuous case again: an empty list means every check below passes without
 # looking at anything. This repository has dev dependencies, so an empty read
@@ -123,7 +135,19 @@ for dev_dependency in $dev_dependencies; do
   fi
 done
 
-for required in app/dist/index.js app/package.json app/migrations/; do
+# The web app ships as its build output and nothing else. Its sources and its
+# manifest are build inputs, and beside the build they would be shipped for no
+# reason.
+outside_web_build="$(grep -E "${TAR_ROOT_ANCHOR}app/web/." "$workdir/files.txt" | grep -Ev "${TAR_ROOT_ANCHOR}app/web/dist(/|$)" || true)"
+if [ -n "$outside_web_build" ]; then
+  while IFS= read -r entry; do
+    fail "the runtime image holds a file outside the web build: /${entry#./}"
+  done <<< "$outside_web_build"
+else
+  pass "the web app ships as its build output alone"
+fi
+
+for required in app/dist/index.js app/package.json app/migrations/ app/web/dist/index.html; do
   if grep -Eq "${TAR_ROOT_ANCHOR}${required}" "$workdir/files.txt"; then
     pass "present: /${required}"
   else

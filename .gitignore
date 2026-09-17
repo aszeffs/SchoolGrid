@@ -34,3 +34,7 @@ Thumbs.db
 
 # Local tooling
 .claude/settings.local.json
+
+# Browser tests
+playwright-report/
+test-results/
