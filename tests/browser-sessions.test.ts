@@ -188,7 +188,14 @@ describe("Browser sessions", () => {
     const world = await arrange();
     // Nothing here authenticates a caller: health answers anyone, sign-in makes
     // a session rather than reading one, and sign-out ends the session it reads.
-    const notAuthenticated = ["GET /api/health", "HEAD /api/health", "POST /api/session", "DELETE /api/session"];
+    const notAuthenticated = [
+      "GET /api/health",
+      "HEAD /api/health",
+      "POST /api/session",
+      "DELETE /api/session",
+      "POST /api/invitations/inspect",
+      "POST /api/invitations/redeem",
+    ];
     const routes = server().routes.filter(({ method, url }) => !notAuthenticated.includes(`${method} ${url}`));
     expect(routes.map(({ method, url }) => `${method} ${url}`)).toEqual(
       expect.arrayContaining(["GET /api/session", "POST /api/platform/schools", "GET /api/schools/:schoolId/persons"]),

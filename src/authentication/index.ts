@@ -50,7 +50,7 @@ function hashToken(token: string): Buffer {
 }
 
 export async function createUserAccount(
-  database: Database,
+  database: Queryable,
   { username, password }: Credentials,
 ): Promise<UserAccount> {
   const { rows } = await database.query<UserAccount>(
@@ -146,6 +146,19 @@ function sessionCookie(token: string): string {
 /** Replaces the session cookie with one the browser discards at once. */
 const EXPIRED_SESSION_COOKIE = `${SESSION_COOKIE}=; ${SESSION_COOKIE_ATTRIBUTES}; Max-Age=0`;
 
+/**
+ * Starts a session and returns it ready to set as a browser's cookie
+ * (ADR-0004), for a caller elsewhere in the system that signs a browser in
+ * without going through sign-in itself, such as redeeming an Invitation.
+ */
+export async function startBrowserSession(
+  transaction: Queryable,
+  account: UserAccount,
+): Promise<{ cookie: string; expiresAt: string }> {
+  const { token, expiresAt } = await startSession(transaction, account);
+  return { cookie: sessionCookie(token), expiresAt: expiresAt.toISOString() };
+}
+
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 // A browser attaches the cookie to any request a page can make it send. These
@@ -153,7 +166,7 @@ const TOKEN_PATTERN = /^[A-Za-z0-9_-]+$/;
 const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
 
 /** Whether the request was sent by a page on SchoolGrid's own origin. */
-function fromPublicOrigin(request: FastifyRequest, publicOrigin: string): boolean {
+export function fromPublicOrigin(request: FastifyRequest, publicOrigin: string): boolean {
   return request.headers.origin === publicOrigin;
 }
 
@@ -272,7 +285,13 @@ export function createAuthenticator(database: Database, publicOrigin: string): A
   };
 }
 
-function parseCredentials(body: unknown): Credentials | null {
+/**
+ * The username and password a body carries, within sign-in's own bounds,
+ * ignoring any other field: reused wherever else credentials are taken
+ * alongside something else, such as redeeming an Invitation with a new
+ * account.
+ */
+export function parseCredentials(body: unknown): Credentials | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }

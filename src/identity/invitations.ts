@@ -44,7 +44,7 @@ function isPending(alias: string): string {
     AND ${alias}.expires_at > statement_timestamp()`;
 }
 
-function hashSecret(secret: string): Buffer {
+export function hashSecret(secret: string): Buffer {
   return createHash("sha256").update(secret).digest();
 }
 
@@ -123,6 +123,18 @@ export async function lockInvitation(transaction: Queryable, invitation: Invitat
   return rows[0]!;
 }
 
+/** The Invitation whose secret hashes to this, whatever its state, or null. */
+export async function findInvitationBySecretHash(
+  database: Queryable,
+  secretHash: Buffer,
+): Promise<Invitation | null> {
+  const { rows } = await database.query<Invitation>(
+    `SELECT ${INVITATION_COLUMNS} FROM ${INVITATION_FROM} WHERE invitation.secret_hash = $1`,
+    [secretHash],
+  );
+  return rows[0] ?? null;
+}
+
 /** Every pending Invitation in the School, soonest to expire first. */
 export async function pendingInvitationsInSchool(database: Queryable, schoolId: string): Promise<Invitation[]> {
   const { rows } = await database.query<Invitation>(
@@ -145,6 +157,42 @@ export async function lockPendingInvitationFor(transaction: Queryable, person: P
     [person.schoolId, person.id],
   );
   return rows[0] ?? null;
+}
+
+/**
+ * Attaches the Invitation's Person to this User account and marks the
+ * Invitation redeemed, conditional on the Person still being unclaimed and the
+ * Invitation still pending, both checked in the same statement so two
+ * simultaneous redemptions produce exactly one winner (spec #74). Returns
+ * null, changing nothing, when the Invitation was no longer pending at that
+ * moment: the caller's transaction should then roll back rather than commit a
+ * User account nothing is attached to.
+ */
+export async function redeemInvitationFor(
+  transaction: Queryable,
+  { invitation, account }: { invitation: Invitation; account: { id: string } },
+): Promise<Invitation | null> {
+  const { rows } = await transaction.query<{ claimed: number }>(
+    `WITH claimed_invitation AS (
+       UPDATE app.invitation
+       SET redeemed_at = statement_timestamp(), redeemed_by_user_account_id = $1
+       WHERE id = $2 AND school_id = $3 AND person_id = $4
+         AND revoked_at IS NULL AND redeemed_at IS NULL AND expires_at > statement_timestamp()
+       RETURNING id
+     ), claimed_person AS (
+       UPDATE app.person
+       SET user_account_id = $1
+       WHERE school_id = $3 AND id = $4 AND user_account_id IS NULL
+         AND EXISTS (SELECT 1 FROM claimed_invitation)
+       RETURNING id
+     )
+     SELECT (SELECT count(*) FROM claimed_invitation)::int AS claimed`,
+    [account.id, invitation.id, invitation.schoolId, invitation.person.id],
+  );
+  if (rows[0]!.claimed === 0) {
+    return null;
+  }
+  return (await findInvitation(transaction, invitation.id))!;
 }
 
 /** Revokes an Invitation now. Whether it is still pending is the caller's to have decided. */

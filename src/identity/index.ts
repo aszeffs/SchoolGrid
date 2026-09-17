@@ -28,6 +28,15 @@ export async function createSchool(database: Queryable, { name }: { name: string
   return rows[0]!;
 }
 
+/** The School with this identifier, or null. */
+export async function findSchool(database: Queryable, schoolId: string): Promise<School | null> {
+  if (!couldIdentify(schoolId)) {
+    return null;
+  }
+  const { rows } = await database.query<School>(`SELECT id, name FROM app.school WHERE id = $1`, [schoolId]);
+  return rows[0] ?? null;
+}
+
 const PERSON_COLUMNS = `id, school_id AS "schoolId", display_name AS "displayName"`;
 
 export async function createPerson(

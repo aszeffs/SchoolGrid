@@ -169,6 +169,71 @@ test("a School Administrator invites an unclaimed Person, copies the link once, 
   await expect(pending.filter({ hasText: displayName })).toHaveCount(0);
 });
 
+test("an invited Person redeems the link with a new account and lands signed in", async ({ page, context }) => {
+  const { schoolAdministrator, schools } = seeded();
+  const displayName = `Jordan ${randomUUID().slice(0, 8)}`;
+  const credentials = {
+    username: `jordan-${randomUUID().slice(0, 8)}`,
+    password: "a brand new staple, plenty long",
+  };
+
+  await signIn(page, schoolAdministrator);
+  await schoolsList(page).getByRole("link", { name: schools[0]! }).click();
+  await page.getByLabel("Display name").fill(displayName);
+  await page.getByRole("button", { name: "Add Person" }).click();
+  await page.getByRole("button", { name: `Invite ${displayName}` }).click();
+  const link = await page.getByLabel("Invitation link").inputValue();
+
+  // The human behind the Invitation, in a fresh browser context: nothing here
+  // shares a cookie or any other state with the administrator's page.
+  const invitee = await context.browser()!.newContext();
+  try {
+    const inviteePage = await invitee.newPage();
+    await inviteePage.goto(link);
+
+    await expect(inviteePage.getByRole("heading", { name: `Join ${schools[0]!}` })).toBeVisible();
+    await expect(inviteePage.getByText(displayName)).toBeVisible();
+    // Nothing else about the School or Person is on the page.
+    for (const other of schools.slice(1)) {
+      await expect(inviteePage.locator("body")).not.toContainText(other);
+    }
+
+    await inviteePage.getByLabel("Username").fill(credentials.username);
+    await inviteePage.getByLabel("Password").fill(credentials.password);
+    await inviteePage.getByRole("button", { name: "Redeem Invitation" }).click();
+
+    await expect(inviteePage).toHaveURL("/");
+    await expect(inviteePage.getByText(`Signed in as ${credentials.username}`)).toBeVisible();
+  } finally {
+    await invitee.close();
+  }
+});
+
+test("a stale Invitation link shows the one generic state", async ({ page, context }) => {
+  const { schoolAdministrator, schools } = seeded();
+  const displayName = `Riley ${randomUUID().slice(0, 8)}`;
+
+  await signIn(page, schoolAdministrator);
+  await schoolsList(page).getByRole("link", { name: schools[0]! }).click();
+  await page.getByLabel("Display name").fill(displayName);
+  await page.getByRole("button", { name: "Add Person" }).click();
+  await page.getByRole("button", { name: `Invite ${displayName}` }).click();
+  const link = await page.getByLabel("Invitation link").inputValue();
+  await page.getByRole("button", { name: `Revoke the Invitation for ${displayName}` }).click();
+
+  const stale = await context.browser()!.newContext();
+  try {
+    const stalePage = await stale.newPage();
+    await stalePage.goto(link);
+    await expect(stalePage.getByRole("heading", { name: "Not available" })).toBeVisible();
+
+    await stalePage.goto("/invitation#this-secret-was-never-issued-at-all");
+    await expect(stalePage.getByRole("heading", { name: "Not available" })).toBeVisible();
+  } finally {
+    await stale.close();
+  }
+});
+
 test("a cross-origin form post to a mutating endpoint is refused", async ({ page, baseURL }) => {
   await signIn(page, seeded().schoolAdministrator);
   await expect(schoolsList(page)).not.toHaveCount(0);
