@@ -179,6 +179,12 @@ pass "the application's login ${APP_DB_USER} exists, holding only schoolgrid_app
 # cannot exec the CMD at all, `run` fails without ever handing back the id of the
 # container it created, so the logs could not be read and the container would
 # never be removed. With the id held first, the cleanup trap covers that case too.
+#
+# RATE_LIMIT_MAX is raised well past the production default (see
+# DEFAULT_RATE_LIMIT in src/config.ts). Every request the browser suite makes
+# below shares this one container's IP as far as the rate limiter can tell, so
+# the production limit — sized for one real client — throttles the whole suite
+# partway through, not the abuse it is meant to catch.
 container="$(
   docker create \
     --add-host "${CONTAINER_POSTGRES_HOST}:host-gateway" \
@@ -186,6 +192,7 @@ container="$(
     --env "DATABASE_URL=postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     --env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     --env "PUBLIC_ORIGIN=${ORIGIN}" \
+    --env "RATE_LIMIT_MAX=${SMOKE_RATE_LIMIT_MAX:-1000}" \
     "$IMAGE"
 )"
 
