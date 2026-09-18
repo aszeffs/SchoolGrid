@@ -134,3 +134,41 @@ describe("loadConfig public origin", () => {
     expect(() => loadConfig()).toThrow(/PUBLIC_ORIGIN must be/);
   });
 });
+
+describe("loadConfig client address header", () => {
+  beforeEach(() => {
+    vi.stubEnv("DATABASE_URL", "postgres://user:password@localhost:5432/schoolgrid");
+    vi.stubEnv("PUBLIC_ORIGIN", "https://schoolgrid.example");
+    vi.stubEnv("CLIENT_ADDRESS_HEADER", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([undefined, ""])("limits by socket address when CLIENT_ADDRESS_HEADER is %j", (value) => {
+    vi.stubEnv("CLIENT_ADDRESS_HEADER", value);
+
+    expect(loadConfig().rateLimit).not.toHaveProperty("clientAddressHeader");
+  });
+
+  it("limits by the named header, as Node names it, when one is set", () => {
+    vi.stubEnv("CLIENT_ADDRESS_HEADER", "X-Vercel-Forwarded-For");
+
+    expect(loadConfig().rateLimit.clientAddressHeader).toBe("x-vercel-forwarded-for");
+  });
+
+  // A name no request could carry would silently key every caller on the
+  // socket address, which behind a proxy is one bucket for everyone.
+  it.each([
+    ["a space", "x forwarded for"],
+    ["a colon", "x-forwarded-for:"],
+    ["a trailing newline", "x-forwarded-for\n"],
+    ["a non-ASCII character", "x-forwärded-for"],
+    ["only whitespace", " "],
+  ])("refuses to start with a header name containing %s", (_case, value) => {
+    vi.stubEnv("CLIENT_ADDRESS_HEADER", value);
+
+    expect(() => loadConfig()).toThrow(/CLIENT_ADDRESS_HEADER must be an HTTP header name/);
+  });
+});

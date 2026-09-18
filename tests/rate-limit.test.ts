@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { useTestServer } from "./support/harness.ts";
+import { useTestServer, type TestClient } from "./support/harness.ts";
 
 const LIMIT = 3;
+
+// The header Vercel overwrites with the client's address.
+const CLIENT_ADDRESS_HEADER = "x-vercel-forwarded-for";
+
+/** Spends a client's whole allowance, and shows the next request is throttled. */
+async function exhaust(client: TestClient): Promise<void> {
+  for (let i = 0; i < LIMIT; i++) {
+    expect((await client.get("/api/health")).status).toBe(200);
+  }
+  expect((await client.get("/api/health")).status).toBe(429);
+}
 
 describe("rate limiting", () => {
   const server = useTestServer({ rateLimit: { max: LIMIT, windowMs: 60_000 } });
@@ -151,5 +162,60 @@ describe("rate limiting", () => {
     expect(redeemed.status).toBe(429);
     expect(redeemedSignedIn.status).toBe(429);
     expect(inspected.body).toEqual({ status: "rate_limited" });
+  });
+});
+
+describe("rate limiting on a client address header", () => {
+  const server = useTestServer({
+    rateLimit: { max: LIMIT, windowMs: 60_000, clientAddressHeader: CLIENT_ADDRESS_HEADER },
+  });
+
+  // Behind a proxy every request arrives from the proxy's address.
+  const PROXY = "10.0.0.1";
+
+  it("limits two callers differing only in the header independently", async () => {
+    await exhaust(server().client.fromAddress(PROXY).withHeader(CLIENT_ADDRESS_HEADER, "203.0.113.7"));
+
+    const other = await server()
+      .client.fromAddress(PROXY)
+      .withHeader(CLIENT_ADDRESS_HEADER, "198.51.100.20")
+      .get("/api/health");
+
+    expect(other.status).toBe(200);
+  });
+
+  it("limits a request without the header by its socket address", async () => {
+    await exhaust(server().client.fromAddress("203.0.113.7"));
+
+    const other = await server().client.fromAddress("198.51.100.20").get("/api/health");
+
+    expect(other.status).toBe(200);
+  });
+
+  it("keys a request carrying the header on it, not on its socket address", async () => {
+    await exhaust(server().client.fromAddress("203.0.113.7"));
+
+    const response = await server()
+      .client.fromAddress("203.0.113.7")
+      .withHeader(CLIENT_ADDRESS_HEADER, "198.51.100.20")
+      .get("/api/health");
+
+    expect(response.status).toBe(200);
+  });
+});
+
+describe("rate limiting without a client address header", () => {
+  const server = useTestServer({ rateLimit: { max: LIMIT, windowMs: 60_000 } });
+
+  it("ignores the header, so a caller cannot choose their own key", async () => {
+    const client = server().client.fromAddress("203.0.113.7");
+    for (let i = 0; i < LIMIT; i++) {
+      const response = await client.withHeader(CLIENT_ADDRESS_HEADER, `198.51.100.${i}`).get("/api/health");
+      expect(response.status).toBe(200);
+    }
+
+    const response = await client.withHeader(CLIENT_ADDRESS_HEADER, "192.0.2.99").get("/api/health");
+
+    expect(response.status).toBe(429);
   });
 });
