@@ -122,6 +122,8 @@ export interface TestClient {
   withAccept(value: string): TestClient;
   /** A client sending this exact `Authorization` header on every request. */
   withAuthorization(value: string): TestClient;
+  /** A client sending this header, as a proxy in front of the server might add it. */
+  withHeader(name: string, value: string): TestClient;
   /** A client whose requests arrive from this remote address. */
   fromAddress(address: string): TestClient;
   /** A client acting within this School: `/persons` addresses `/api/schools/<id>/persons`. */
@@ -294,6 +296,7 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
     withAccept: (accept) => buildClient(app, { ...identity, headers: { ...headers, accept } }),
     withAuthorization: (value) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: value } }),
+    withHeader: (name, value) => buildClient(app, { ...identity, headers: { ...headers, [name]: value } }),
     fromAddress: (address) => buildClient(app, { ...identity, remoteAddress: address }),
     inSchool: (schoolId) => buildClient(app, { ...identity, prefix: `/api/schools/${schoolId}` }),
   };

@@ -14,6 +14,13 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 export interface RateLimit {
   max: number;
   windowMs: number;
+  /**
+   * The request header holding the client's address, lower case as Node names
+   * it, for a request without it falling back to the socket's. Trusted as is:
+   * set it only behind a proxy that overwrites the header, or any caller could
+   * choose their own key. Unset, every request is keyed on the socket address.
+   */
+  clientAddressHeader?: string;
 }
 
 export const DEFAULT_RATE_LIMIT: RateLimit = { max: 100, windowMs: 60_000 };
@@ -84,6 +91,21 @@ export function parsePublicOrigin(raw: string): PublicOrigin {
   return url.origin as PublicOrigin;
 }
 
+// A header name is an RFC 9110 token.
+const HEADER_NAME_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/** The header the client's address is read from, if one is named. */
+function optionalClientAddressHeader(): Pick<RateLimit, "clientAddressHeader"> {
+  const raw = optionalEnv("CLIENT_ADDRESS_HEADER");
+  if (raw === undefined) {
+    return {};
+  }
+  if (!HEADER_NAME_TOKEN.test(raw)) {
+    throw new Error(`CLIENT_ADDRESS_HEADER must be an HTTP header name, received: ${JSON.stringify(raw)}`);
+  }
+  return { clientAddressHeader: raw.toLowerCase() };
+}
+
 function isLogLevel(value: string): value is LogLevel {
   return (LOG_LEVELS as readonly string[]).includes(value);
 }
@@ -126,6 +148,7 @@ export function loadConfig(): Config {
     rateLimit: {
       max: positiveIntegerEnv("RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT.max),
       windowMs: positiveIntegerEnv("RATE_LIMIT_WINDOW_MS", DEFAULT_RATE_LIMIT.windowMs),
+      ...optionalClientAddressHeader(),
     },
     publicOrigin: parsePublicOrigin(requireEnv("PUBLIC_ORIGIN")),
   };

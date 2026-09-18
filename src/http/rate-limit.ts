@@ -29,10 +29,14 @@ const NO_COUNTER_HEADERS = {
  * The limit is server-wide rather than per-route because every route either
  * reaches the database already or will. It is kept in process memory, so it
  * holds per instance: scaling out multiplies it.
+ *
+ * The client address is the socket's, or with `clientAddressHeader` that
+ * header's value when a request carries it. Only the limit reads it, so
+ * Fastify's `trustProxy` stays off and `request.ip` is always the socket's.
  */
 export function registerRateLimit(
   app: FastifyInstance,
-  { max, windowMs }: RateLimit,
+  { max, windowMs, clientAddressHeader }: RateLimit,
   isExempt: (request: FastifyRequest) => boolean = () => false,
 ): void {
   app.register(rateLimit, {
@@ -41,6 +45,7 @@ export function registerRateLimit(
     global: false,
     max,
     timeWindow: windowMs,
+    keyGenerator: (request) => clientAddressOf(request, clientAddressHeader),
     // Neither counted nor throttled.
     allowList: (request) => isExempt(request),
     addHeadersOnExceeding: NO_COUNTER_HEADERS,
@@ -54,6 +59,11 @@ export function registerRateLimit(
   app.after(() => {
     app.addHook("onRequest", app.rateLimit());
   });
+}
+
+function clientAddressOf(request: FastifyRequest, header: string | undefined): string {
+  const value = header === undefined ? undefined : request.headers[header];
+  return typeof value === "string" && value !== "" ? value : request.ip;
 }
 
 /** Whether an error handler is looking at a request stopped by the limit. */
