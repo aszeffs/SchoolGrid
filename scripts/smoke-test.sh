@@ -63,7 +63,9 @@ SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
 
 # `localhost` rather than the loopback address. Browsers keep a `Secure` cookie
 # over plain http only on a host they treat as a secure context, and the image's
-# PUBLIC_ORIGIN must be written exactly as a browser writes its `Origin`.
+# PUBLIC_ORIGIN must be written exactly as a browser writes its `Origin`. Where
+# the browser suite reaches the first container, whose PUBLIC_ORIGIN
+# `start_image` builds the same way from its port.
 ORIGIN="http://localhost:${HOST_PORT}"
 
 workdir="$(mktemp -d)"
