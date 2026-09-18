@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { PublicOrigin } from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { forAccount } from "../http/account-route.ts";
@@ -7,6 +8,7 @@ import { isRateLimited } from "../http/rate-limit.ts";
 import { refuse } from "../http/refusal.ts";
 import { hashPassword, spendVerificationEffort, verifyPassword } from "./passwords.ts";
 import {
+  carriesSessionCookie,
   EXPIRED_SESSION_COOKIE,
   fromPublicOrigin,
   presentedSession,
@@ -173,14 +175,32 @@ export interface Authenticator {
    */
   authenticate(request: FastifyRequest): Promise<Authentication>;
   /**
-   * Ends the live session the request presents and says how it was presented,
-   * or null when it presented none that could be ended.
+   * Ends the live Session the request presents, and says what the reply owes
+   * the caller: see SessionEnding.
    */
-  endSession(request: FastifyRequest): Promise<SessionForm | null>;
+  endSession(request: FastifyRequest): Promise<SessionEnding>;
 }
 
+/**
+ * What ending a Session leaves the sign-out route to send: whether one was
+ * ended, or why none was, and the cookie to expire, if any.
+ *
+ * The two are decided separately on purpose. Whether a Session ended follows
+ * from whether one was live; whether a cookie is expired follows only from the
+ * caller's own request carrying one from the public origin. A cookie nothing
+ * is behind is still the caller's to clear.
+ */
+export type SessionEnding = {
+  /** The cookie that expires the one the request carried, or null to send none. */
+  expiringCookie: string | null;
+} & (
+  | { ended: true; failure?: never }
+  /** Why nothing was ended. Never reaches the caller (ADR-0002); logged only. */
+  | { ended: false; failure: AuthenticationFailure }
+);
+
 /** An Authenticator for SchoolGrid served at `publicOrigin`. */
-export function createAuthenticator(database: Database, publicOrigin: string): Authenticator {
+export function createAuthenticator(database: Database, publicOrigin: PublicOrigin): Authenticator {
   return {
     async authenticate(request) {
       const presented = presentedSession(request, publicOrigin);
@@ -203,10 +223,23 @@ export function createAuthenticator(database: Database, publicOrigin: string): A
 
     async endSession(request) {
       const presented = presentedSession(request, publicOrigin);
-      if (presented.failure !== undefined || presented.token === null) {
-        return null;
+      // Asked of the request directly rather than read off `presented`: the
+      // ambiguity check short-circuits before the Origin check, so an
+      // ambiguous request never reaches it, yet its cookie is still the
+      // caller's own. Expiring it only for the public origin keeps a
+      // cross-site request from having any effect on the Session (ADR-0004).
+      const expiringCookie =
+        carriesSessionCookie(request) && fromPublicOrigin(request, publicOrigin) ? EXPIRED_SESSION_COOKIE : null;
+      const refused = (failure: AuthenticationFailure): SessionEnding => ({ ended: false, failure, expiringCookie });
+      if (presented.failure !== undefined) {
+        return refused(presented.failure);
       }
-      return (await deleteSession(database, presented.token)) ? presented.form : null;
+      if (presented.token === null) {
+        return refused("unauthenticated");
+      }
+      return (await deleteSession(database, presented.token))
+        ? { ended: true, expiringCookie }
+        : refused("unauthenticated");
     },
   };
 }
@@ -263,7 +296,7 @@ interface AuthenticationOptions {
   database: Database;
   authenticator: Authenticator;
   recordAttempt: RecordAttempt;
-  publicOrigin: string;
+  publicOrigin: PublicOrigin;
 }
 
 async function authenticationRoutes(
@@ -352,17 +385,23 @@ async function authenticationRoutes(
 
   app.get(
     "/session",
-    forAccount(authenticator, async (account) => ({ account })),
+    forAccount(
+      (request) => authenticator.authenticate(request),
+      async (account) => ({ account }),
+    ),
   );
 
   app.delete("/session", async (request, reply) => {
-    const ended = await authenticator.endSession(request);
-    // Ending a session nobody holds is refused like any other request without one.
-    if (ended === null) {
-      return refuse(reply);
+    const { ended, failure, expiringCookie } = await authenticator.endSession(request);
+    // Set first, so it rides the refusal and the 204 alike: the caller asked to
+    // end their Session, and the cookie they sent goes either way.
+    if (expiringCookie !== null) {
+      reply.header("set-cookie", expiringCookie);
     }
-    if (ended === "cookie") {
-      reply.header("set-cookie", EXPIRED_SESSION_COOKIE);
+    // Ending a Session nobody holds is refused like any other request without one.
+    if (!ended) {
+      request.log.info({ reason: failure, url: request.url }, "refused");
+      return refuse(reply);
     }
     return reply.status(204).send();
   });

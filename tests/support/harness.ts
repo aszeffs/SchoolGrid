@@ -18,12 +18,12 @@ import {
   type PlatformAdministrator,
 } from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
-import type { RateLimit } from "../../src/config.ts";
+import { parsePublicOrigin, type PublicOrigin, type RateLimit } from "../../src/config.ts";
 import { loadWebApp } from "../../src/http/web-app.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
 
 /** The origin every test server is configured to be served from. */
-const PUBLIC_ORIGIN = "https://schoolgrid.test";
+const PUBLIC_ORIGIN = parsePublicOrigin("https://schoolgrid.test");
 
 /**
  * A stand-in for the built web app, served by every test server as the image
@@ -49,6 +49,23 @@ export interface TestResponse {
 export function observable({ status, headers, raw }: TestResponse) {
   const { date: _date, ...rest } = headers;
   return { status, headers: rest, headerOrder: Object.keys(rest), raw };
+}
+
+/**
+ * The same, minus the one header a caller's own request can cause on an
+ * otherwise identical refusal: sign-out expires a session cookie the caller
+ * carried from the public origin, whether or not a live Session was behind it,
+ * so a caller holding a cookie sees a `Set-Cookie` where a caller holding none
+ * sees nothing (#89). Every other byte must still match.
+ *
+ * Only for comparing responses whose callers presented different cookies. Each
+ * use pins the `Set-Cookie` itself with `setCookiesOf` alongside, so nothing
+ * about the cookie goes unasserted.
+ */
+export function observableApartFromOwnCookie(response: TestResponse) {
+  const { headers, headerOrder, ...rest } = observable(response);
+  const { "set-cookie": _cookie, ...withoutCookie } = headers;
+  return { ...rest, headers: withoutCookie, headerOrder: headerOrder.filter((name) => name !== "set-cookie") };
 }
 
 /** Every `Set-Cookie` header a response carries, attributes and all. */
@@ -77,8 +94,8 @@ export interface TestClient {
   delete(path: string, body?: unknown): Promise<TestResponse>;
   /** Sends a body exactly as given, for requests JSON serialization cannot express. */
   postRaw(path: string, payload: string, contentType: string): Promise<TestResponse>;
-  /** A client presenting this session token on every request. */
-  withSession(token: string): TestClient;
+  /** A client presenting this session token as a Bearer token on every request. */
+  withBearer(token: string): TestClient;
   /** A client sending this exact `Cookie` header on every request, as a browser would. */
   withCookie(value: string): TestClient;
   /** A client sending this exact `Origin` header on every request, as a browser would. */
@@ -163,7 +180,7 @@ export interface TestServer {
   /** Arranges an Audit record, appended exactly as the application appends one. */
   appendAuditRecord(entry: AuditEntry): Promise<void>;
   /** The origin the server is configured to be served from. */
-  publicOrigin: string;
+  publicOrigin: PublicOrigin;
   /**
    * Authenticates through the API, asking for a Bearer token, and returns a
    * client presenting it.
@@ -252,7 +269,7 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
     delete: (path, body) =>
       request("DELETE", path, body === undefined ? undefined : { json: body }),
     postRaw: (path, raw, contentType) => request("POST", path, { raw, contentType }),
-    withSession: (token) =>
+    withBearer: (token) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: `Bearer ${token}` } }),
     withCookie: (value) => buildClient(app, { ...identity, headers: { ...headers, cookie: value } }),
     withOrigin: (origin) => buildClient(app, { ...identity, headers: { ...headers, origin } }),
@@ -375,7 +392,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
         if (response.status !== 201 || typeof token !== "string") {
           throw new Error(`signIn expected a session but received status ${response.status}`);
         }
-        return client.withSession(token);
+        return client.withBearer(token);
       },
       signInWithCookie: async (credentials) => {
         const response = await client.withOrigin(PUBLIC_ORIGIN).post("/api/session", credentials);

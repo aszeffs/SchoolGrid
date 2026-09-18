@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import type { PublicOrigin } from "../config.ts";
 
 /**
  * How a request carries its session, and how a response hands one back.
@@ -61,7 +62,7 @@ const BEARER = /^bearer(?: (.*)$|(?=\s)|$)/i;
 const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
 
 /** Whether the request was sent by a page on SchoolGrid's own origin. */
-export function fromPublicOrigin(request: FastifyRequest, publicOrigin: string): boolean {
+export function fromPublicOrigin(request: FastifyRequest, publicOrigin: PublicOrigin): boolean {
   return request.headers.origin === publicOrigin;
 }
 
@@ -76,13 +77,23 @@ function sessionCookieValues(request: FastifyRequest): string[] {
   });
 }
 
+/**
+ * Whether the request carried a session cookie at all, whatever its value and
+ * whether or not a live Session is behind it. Sign-out asks this to decide
+ * whether it has a cookie of the caller's own to expire, separately from
+ * whether that cookie was usable.
+ */
+export function carriesSessionCookie(request: FastifyRequest): boolean {
+  return sessionCookieValues(request).length > 0;
+}
+
 /** A session presented in one form, with a token that could never be one presented as null. */
 function presentedIn(form: SessionForm, token: string): PresentedSession {
   return { form, token: TOKEN_PATTERN.test(token) ? token : null };
 }
 
 /** How a request presents its session, decided before anything is looked up. */
-export function presentedSession(request: FastifyRequest, publicOrigin: string): PresentedSession {
+export function presentedSession(request: FastifyRequest, publicOrigin: PublicOrigin): PresentedSession {
   const cookies = sessionCookieValues(request);
   const bearer = BEARER.exec(request.headers.authorization ?? "");
 

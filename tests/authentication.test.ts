@@ -185,8 +185,8 @@ describe("User account authentication", () => {
 
     it.each([
       ["an expired session", () => expiredSessionClient()],
-      ["an unrecognised token", async () => server().client.withSession("dGhpcyBpcyBpbnZlbnRlZA")],
-      ["a malformed token", async () => server().client.withSession("not a token!")],
+      ["an unrecognised token", async () => server().client.withBearer("dGhpcyBpcyBpbnZlbnRlZA")],
+      ["a malformed token", async () => server().client.withBearer("not a token!")],
       ["a non-bearer scheme", async () => server().client.withAuthorization("Basic YWxpY2U6cHc=")],
     ])("for %s", async (_case, arrange) => {
       const caller = await arrange();

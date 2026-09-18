@@ -5,6 +5,7 @@ import {
   type Actor,
 } from "../access/index.ts";
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
+import type { PublicOrigin } from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
@@ -44,7 +45,7 @@ function valuesOf({ person, expiresAt, revokedAt }: Invitation): AuditValues {
  * secret travels in the fragment, which a browser never sends to any server:
  * opening the link cannot write it to a request log, here or anywhere else.
  */
-function linkTo(publicOrigin: string, secret: string): string {
+function linkTo(publicOrigin: PublicOrigin, secret: string): string {
   return `${publicOrigin}/invitation#${secret}`;
 }
 
@@ -89,7 +90,7 @@ async function recordRevocation(
  * anything else about the request is looked at, and every change is recorded in
  * the transaction that makes it.
  */
-export function registerInvitationRoutes(scope: SchoolScope, database: Database, publicOrigin: string): void {
+export function registerInvitationRoutes(scope: SchoolScope, database: Database, publicOrigin: PublicOrigin): void {
   scope.get("/invitations", async (actor) => {
     const schoolId = authorizeManageInvitations(actor);
     return { invitations: (await pendingInvitationsInSchool(database, schoolId)).map(present) };
