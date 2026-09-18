@@ -1,4 +1,4 @@
-import type { Authentication, UserAccount } from "../authentication/index.ts";
+import type { Authentication, AuthenticationFailure, UserAccount } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import {
   personFor,
@@ -36,9 +36,8 @@ export type { AccessProfile, GuardianLink } from "./guardian-links.ts";
  * in http/refusal.ts.
  */
 export type RefusalReason =
-  | "unauthenticated"
-  | "cross-origin"
-  | "ambiguous-session"
+  /** The request belonged to no User account at all: see AuthenticationFailure. */
+  | AuthenticationFailure
   | "no-person-in-school"
   | "no-active-membership"
   | "no-such-route"

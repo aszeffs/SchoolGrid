@@ -2,9 +2,20 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
+import { forAccount } from "../http/account-route.ts";
 import { isRateLimited } from "../http/rate-limit.ts";
 import { refuse } from "../http/refusal.ts";
 import { hashPassword, spendVerificationEffort, verifyPassword } from "./passwords.ts";
+import {
+  EXPIRED_SESSION_COOKIE,
+  fromPublicOrigin,
+  presentedSession,
+  sessionCookie,
+  type AuthenticationFailure,
+  type SessionForm,
+} from "./presented-session.ts";
+
+export { fromPublicOrigin, type AuthenticationFailure } from "./presented-session.ts";
 
 /**
  * The Authentication module answers one question for the rest of the system:
@@ -132,21 +143,6 @@ async function deleteSession(database: Database, token: string): Promise<boolean
 }
 
 /**
- * The cookie a browser holds its session in (ADR-0004). The `__Host-` prefix
- * makes a browser keep it only if it is `Secure`, has `Path=/` and names no
- * domain, so no other host, subdomain included, can set or overwrite it.
- */
-const SESSION_COOKIE = "__Host-session";
-const SESSION_COOKIE_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
-
-function sessionCookie(token: string): string {
-  return `${SESSION_COOKIE}=${token}; ${SESSION_COOKIE_ATTRIBUTES}`;
-}
-
-/** Replaces the session cookie with one the browser discards at once. */
-const EXPIRED_SESSION_COOKIE = `${SESSION_COOKIE}=; ${SESSION_COOKIE_ATTRIBUTES}; Max-Age=0`;
-
-/**
  * Starts a session and returns it ready to set as a browser's cookie
  * (ADR-0004), for a caller elsewhere in the system that signs a browser in
  * without going through sign-in itself, such as redeeming an Invitation.
@@ -159,80 +155,10 @@ export async function startBrowserSession(
   return { cookie: sessionCookie(token), expiresAt: expiresAt.toISOString() };
 }
 
-const TOKEN_PATTERN = /^[A-Za-z0-9_-]+$/;
-
-// A browser attaches the cookie to any request a page can make it send. These
-// change nothing, so they are not what the Origin check guards.
-const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
-
-/** Whether the request was sent by a page on SchoolGrid's own origin. */
-export function fromPublicOrigin(request: FastifyRequest, publicOrigin: string): boolean {
-  return request.headers.origin === publicOrigin;
-}
-
-/** Why a request belongs to no User account. */
-export type AuthenticationFailure =
-  /** No session, or one that is malformed, unrecognised, ended, or expired. */
-  | "unauthenticated"
-  /** A change authenticated by the cookie, not sent from the public origin. */
-  | "cross-origin"
-  /** Both a cookie and a Bearer token, or the cookie more than once. */
-  | "ambiguous-session";
-
+/** The account a request belongs to, or why it belongs to none. */
 export type Authentication =
   | { account: UserAccount; failure?: never }
   | { account: null; failure: AuthenticationFailure };
-
-type SessionForm = "cookie" | "bearer";
-
-type PresentedSession =
-  | { form: SessionForm; token: string | null; failure?: never }
-  | { failure: AuthenticationFailure };
-
-/** The values of every session cookie the request carries. */
-function sessionCookieValues(request: FastifyRequest): string[] {
-  return (request.headers.cookie ?? "").split(";").flatMap((pair) => {
-    const separator = pair.indexOf("=");
-    if (separator === -1 || pair.slice(0, separator).trim() !== SESSION_COOKIE) {
-      return [];
-    }
-    return [pair.slice(separator + 1).trim()];
-  });
-}
-
-/**
- * How a request presents its session, decided before anything is looked up. A
- * token that could never be one is presented as null.
- */
-function presentedSession(request: FastifyRequest, publicOrigin: string): PresentedSession {
-  const authorization = request.headers.authorization ?? "";
-  const cookies = sessionCookieValues(request);
-  // Only the Bearer scheme is a session. Another scheme, such as a proxy's
-  // Basic credentials, is not one, and does not conflict with the cookie.
-  const bearer = /^bearer(\s|$)/i.test(authorization);
-
-  // Choosing one over the other would let whoever planted the second decide
-  // which session the request acts as, so neither is chosen (ADR-0004).
-  if (cookies.length > 1 || (cookies.length === 1 && bearer)) {
-    return { failure: "ambiguous-session" };
-  }
-  if (cookies.length === 1) {
-    // SameSite=Strict keeps the cookie off cross-site requests. This is the
-    // second defence, not a replacement for it: neither is dropped because the
-    // other exists (ADR-0004). Checked before the session is looked up, so a
-    // forged change learns nothing about the cookie it rode on.
-    if (!SAFE_METHODS.includes(request.method) && !fromPublicOrigin(request, publicOrigin)) {
-      return { failure: "cross-origin" };
-    }
-    const token = cookies[0]!;
-    return { form: "cookie", token: TOKEN_PATTERN.test(token) ? token : null };
-  }
-  if (bearer) {
-    const token = /^bearer (.*)$/i.exec(authorization)?.[1] ?? "";
-    return { form: "bearer", token: TOKEN_PATTERN.test(token) ? token : null };
-  }
-  return { failure: "unauthenticated" };
-}
 
 /**
  * Resolves requests to User accounts. A browser presents its session as a
@@ -414,7 +340,9 @@ async function authenticationRoutes(
       return started;
     });
     const expiresAt = session.expiresAt.toISOString();
-    reply.status(201).header("cache-control", "no-store");
+    // No `cache-control` of its own: every response already carries `no-store`
+    // from the security headers, and a second one here could only weaken it.
+    reply.status(201);
     if (form === "bearer") {
       return reply.send({ token: session.token, expiresAt });
     }
@@ -422,14 +350,10 @@ async function authenticationRoutes(
     return reply.header("set-cookie", sessionCookie(session.token)).send({ expiresAt });
   });
 
-  app.get("/session", async (request, reply) => {
-    const { account, failure } = await authenticator.authenticate(request);
-    if (account === null) {
-      request.log.info({ reason: failure, url: request.url }, "refused");
-      return refuse(reply);
-    }
-    return reply.status(200).send({ account });
-  });
+  app.get(
+    "/session",
+    forAccount(authenticator, async (account) => ({ account })),
+  );
 
   app.delete("/session", async (request, reply) => {
     const ended = await authenticator.endSession(request);
