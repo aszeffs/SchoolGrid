@@ -100,6 +100,14 @@ USER nonroot
 
 ENV NODE_ENV=production
 
+# The commit this image was built from, served at /api/build-info. The container
+# workflow passes it; a build without it leaves it empty, which the service
+# reads as unknown. Declared last, so a new commit rebuilds no layer above it.
+# The image's digest is not here and cannot be: it is a hash of the image, this
+# line included, so the deploy supplies it as IMAGE_DIGEST at runtime.
+ARG BUILD_COMMIT=""
+ENV BUILD_COMMIT=${BUILD_COMMIT}
+
 EXPOSE 3000
 
 # The distroless entrypoint is already `/nodejs/bin/node`, so this is the

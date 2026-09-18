@@ -172,3 +172,58 @@ describe("loadConfig client address header", () => {
     expect(() => loadConfig()).toThrow(/CLIENT_ADDRESS_HEADER must be an HTTP header name/);
   });
 });
+
+describe("loadConfig build info", () => {
+  const COMMIT = "0123456789abcdef0123456789abcdef01234567";
+  const DIGEST = `sha256:${"ab".repeat(32)}`;
+
+  beforeEach(() => {
+    vi.stubEnv("DATABASE_URL", "postgres://user:password@localhost:5432/schoolgrid");
+    vi.stubEnv("PUBLIC_ORIGIN", "https://schoolgrid.example");
+    vi.stubEnv("BUILD_COMMIT", undefined);
+    vi.stubEnv("IMAGE_DIGEST", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads the commit baked into the image and the digest supplied at deploy", () => {
+    vi.stubEnv("BUILD_COMMIT", COMMIT);
+    vi.stubEnv("IMAGE_DIGEST", DIGEST);
+
+    expect(loadConfig().buildInfo).toEqual({ commit: COMMIT, digest: DIGEST });
+  });
+
+  it.each([undefined, ""])("records neither when both are %j, as in local development", (value) => {
+    vi.stubEnv("BUILD_COMMIT", value);
+    vi.stubEnv("IMAGE_DIGEST", value);
+
+    expect(loadConfig().buildInfo).toEqual({});
+  });
+
+  // Each is rendered into a link and a command a visitor runs, so anything
+  // but the exact form would show them something that cannot be checked.
+  it.each([
+    ["an abbreviated SHA", "0123456"],
+    ["upper case", COMMIT.toUpperCase()],
+    ["a branch name", "main"],
+    ["a trailing newline", `${COMMIT}\n`],
+  ])("refuses to start with a commit that is %s", (_case, value) => {
+    vi.stubEnv("BUILD_COMMIT", value);
+
+    expect(() => loadConfig()).toThrow(/BUILD_COMMIT must be a full commit SHA/);
+  });
+
+  it.each([
+    ["missing its algorithm", "ab".repeat(32)],
+    ["another algorithm", `sha512:${"ab".repeat(64)}`],
+    ["too short", "sha256:abcdef"],
+    ["a tag", "latest"],
+    ["an image reference", `ghcr.io/aszeffs/schoolgrid@${DIGEST}`],
+  ])("refuses to start with a digest %s", (_case, value) => {
+    vi.stubEnv("IMAGE_DIGEST", value);
+
+    expect(() => loadConfig()).toThrow(/IMAGE_DIGEST must be a sha256 image digest/);
+  });
+});

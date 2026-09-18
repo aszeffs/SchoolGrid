@@ -55,6 +55,11 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+          # The same commit again, where the running service can read it and
+          # serve it at /api/build-info. A label is metadata only a registry
+          # client sees; this is what a visitor to the site sees.
+          build-args: |
+            BUILD_COMMIT=${{ github.sha }}
           # Dependency installs dominate the build, and they only change when
           # the lockfile does. The cache is scoped to the repository by the
           # Actions cache service, so a fork's build cannot poison it.
@@ -160,8 +165,13 @@ jobs:
         # finds no tests, so a suite that stopped being collected cannot pass.
         # The image keeps its default rate limit, so a page that spends a
         # browser's allowance fails here rather than for a user.
+        #
+        # SCHOOLGRID_EXPECTED_COMMIT is what the browser suite requires the
+        # "How this was built" page to show, so an image that lost its commit
+        # between the build arg and the page fails here.
         env:
           CI: "true"
+          SCHOOLGRID_EXPECTED_COMMIT: ${{ github.sha }}
         run: scripts/smoke-test.sh "schoolgrid:${{ github.sha }}" npx playwright test
 
       - name: Upload the browser report

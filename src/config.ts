@@ -36,6 +36,22 @@ export interface Config extends Partial<MigrationConfig> {
    * `Origin` header: a change made with a cookie session must come from here.
    */
   publicOrigin: PublicOrigin;
+  buildInfo: BuildInfo;
+}
+
+/**
+ * What the running service was built from, as far as it knows. Either may be
+ * absent, as both are in local development. Neither is School-scoped: both are
+ * public, and served to anyone who asks.
+ */
+export interface BuildInfo {
+  /** The full SHA of the commit the image was built from, baked in at build. */
+  commit?: string;
+  /**
+   * The digest of the image this service runs from. It cannot live inside the
+   * image it identifies, so the deploy supplies it at runtime.
+   */
+  digest?: string;
 }
 
 /** A variable's value, treating one set to nothing as not set at all. */
@@ -106,6 +122,30 @@ function optionalClientAddressHeader(): Pick<RateLimit, "clientAddressHeader"> {
   return { clientAddressHeader: raw.toLowerCase() };
 }
 
+// A full SHA-1 or SHA-256 commit name, as git writes it.
+const COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const IMAGE_DIGEST = /^sha256:[0-9a-f]{64}$/;
+
+/**
+ * The build info the environment gives. Each value is rendered into a link and
+ * a command a visitor runs, so one in any other form fails startup rather than
+ * showing them something that cannot be checked.
+ */
+function loadBuildInfo(): BuildInfo {
+  const commit = optionalEnv("BUILD_COMMIT");
+  if (commit !== undefined && !COMMIT_SHA.test(commit)) {
+    throw new Error(`BUILD_COMMIT must be a full commit SHA in lower case, received: ${JSON.stringify(commit)}`);
+  }
+  const digest = optionalEnv("IMAGE_DIGEST");
+  if (digest !== undefined && !IMAGE_DIGEST.test(digest)) {
+    throw new Error(`IMAGE_DIGEST must be a sha256 image digest, received: ${JSON.stringify(digest)}`);
+  }
+  return {
+    ...(commit === undefined ? {} : { commit }),
+    ...(digest === undefined ? {} : { digest }),
+  };
+}
+
 function isLogLevel(value: string): value is LogLevel {
   return (LOG_LEVELS as readonly string[]).includes(value);
 }
@@ -151,5 +191,6 @@ export function loadConfig(): Config {
       ...optionalClientAddressHeader(),
     },
     publicOrigin: parsePublicOrigin(requireEnv("PUBLIC_ORIGIN")),
+    buildInfo: loadBuildInfo(),
   };
 }

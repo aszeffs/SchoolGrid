@@ -18,7 +18,7 @@ import {
   type PlatformAdministrator,
 } from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
-import { parsePublicOrigin, type PublicOrigin, type RateLimit } from "../../src/config.ts";
+import { parsePublicOrigin, type BuildInfo, type PublicOrigin, type RateLimit } from "../../src/config.ts";
 import { loadWebApp } from "../../src/http/web-app.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
 
@@ -305,6 +305,8 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
 export interface TestServerOptions {
   /** Replaces the default limit so a test can exceed it in a few requests. */
   rateLimit?: RateLimit;
+  /** What the server says it was built from. Unless given, it knows nothing. */
+  buildInfo?: BuildInfo;
   /**
    * Adds routes to the built server before it starts, for a test of what the
    * server does to any route's response, whatever the route does itself.
@@ -327,7 +329,7 @@ export interface TestServerOptions {
  * framing); if those ever need asserting, they need a listening server, not a
  * second seam through the application.
  */
-export function useTestServer({ rateLimit, addRoutes }: TestServerOptions = {}): () => TestServer {
+export function useTestServer({ rateLimit, buildInfo, addRoutes }: TestServerOptions = {}): () => TestServer {
   let context: TestServer;
   let app: FastifyInstance;
   let pool: Database;
@@ -351,6 +353,7 @@ export function useTestServer({ rateLimit, addRoutes }: TestServerOptions = {}):
       publicOrigin: PUBLIC_ORIGIN,
       webApp: await loadWebApp(WEB_APP_FIXTURE),
       ...(rateLimit === undefined ? {} : { rateLimit }),
+      ...(buildInfo === undefined ? {} : { buildInfo }),
       onRoute: (route) => routes.push(route),
     });
     addRoutes?.(app);
