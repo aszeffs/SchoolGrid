@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cookieSentBackFor,
   observable,
+  observableApartFromOwnCookie,
   setCookiesOf,
   useTestServer,
   type Method,
@@ -15,6 +16,9 @@ const PAT = { username: "pat", password: "the platform's own staple" };
 
 /** Written out here rather than imported, so a renamed cookie fails this test. */
 const SESSION_COOKIE = "__Host-session";
+
+/** Written out too, so a changed attribute fails rather than following the source. */
+const EXPIRED_SESSION_COOKIE = `${SESSION_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`;
 
 /** A body every route that takes one rejects, once the caller has been permitted to send it. */
 const UNEXPECTED_BODY = { "not-a-field": true };
@@ -326,7 +330,12 @@ describe("Browser sessions", () => {
       const end = await both.delete("/api/session");
 
       expect(observable(identify)).toEqual(observable(await server().client.get("/api/session")));
-      expect(observable(end)).toEqual(observable(await server().client.delete("/api/session")));
+      // Sign-out expires the cookie this caller itself sent, so that one header
+      // differs from a caller who sent none; the refusal is otherwise identical.
+      expect(observableApartFromOwnCookie(end)).toEqual(
+        observableApartFromOwnCookie(await server().client.delete("/api/session")),
+      );
+      expect(setCookiesOf(end)).toEqual([EXPIRED_SESSION_COOKIE]);
       expect((await cookie.get("/api/session")).status).toBe(200);
     });
 
@@ -402,8 +411,13 @@ describe("Browser sessions", () => {
     ])("for %s", async (_case, arrange) => {
       const bob = await server().createAccount({ username: "bob", password: "yet another staple, longer" });
       const { school } = await server().provisionSchool({ name: "Northside", administrator: bob });
-      const caller = server().client.withCookie(await arrange()).withOrigin(server().publicOrigin);
+      const cookie = await arrange();
+      const caller = server().client.withCookie(cookie).withOrigin(server().publicOrigin);
       const anonymous = server().client.withOrigin(server().publicOrigin);
+      // Sign-out expires a session cookie the caller carried, whether or not a
+      // live Session was behind it (#89). A cookie under any other name is not
+      // one, so it leaves the response untouched.
+      const carriesSessionCookie = cookie.includes(`${SESSION_COOKIE}=`);
 
       for (const [method, path] of [
         ["GET", "/api/session"],
@@ -414,7 +428,13 @@ describe("Browser sessions", () => {
         const presented = await caller.request(method, path);
         const without = await anonymous.request(method, path);
         expect(without.status, `${method} ${path}`).toBe(404);
-        expect(observable(presented), `${method} ${path}`).toEqual(observable(without));
+        expect(observableApartFromOwnCookie(presented), `${method} ${path}`).toEqual(
+          observableApartFromOwnCookie(without),
+        );
+        expect(setCookiesOf(presented), `${method} ${path}`).toEqual(
+          method === "DELETE" && carriesSessionCookie ? [EXPIRED_SESSION_COOKIE] : [],
+        );
+        expect(setCookiesOf(without), `${method} ${path}`).toEqual([]);
       }
     });
   });
@@ -424,6 +444,11 @@ describe("Browser sessions", () => {
       await server().createAccount(ALICE);
       const alice = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
       return { alice, response: await alice.delete("/api/session") };
+    }
+
+    /** Signs an existing Alice in as a browser does, returning the `Cookie` header it sends back. */
+    async function signedInCookieFor(): Promise<string> {
+      return cookieSentBackFor(await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE));
     }
 
     it("ends the session and expires the cookie", async () => {
@@ -449,9 +474,12 @@ describe("Browser sessions", () => {
       const anonymous = server().client.withOrigin(server().publicOrigin);
 
       expect(observable(await alice.get("/api/session"))).toEqual(observable(await anonymous.get("/api/session")));
-      expect(observable(await alice.delete("/api/session"))).toEqual(
-        observable(await anonymous.delete("/api/session")),
+      const replayed = await alice.delete("/api/session");
+      expect(observableApartFromOwnCookie(replayed)).toEqual(
+        observableApartFromOwnCookie(await anonymous.delete("/api/session")),
       );
+      // The Session is long gone, but the cookie is still the caller's own to clear.
+      expect(setCookiesOf(replayed)).toEqual([EXPIRED_SESSION_COOKIE]);
     });
 
     it("sets no cookie when a Bearer session signs out", async () => {
@@ -462,6 +490,110 @@ describe("Browser sessions", () => {
 
       expect(response.status).toBe(204);
       expect(setCookiesOf(response)).toEqual([]);
+    });
+
+    it("expires the cookie with the name, path and attributes sign-in set it with", async () => {
+      await server().createAccount(ALICE);
+      const signedIn = await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE);
+      const set = parseSetCookie(setCookiesOf(signedIn)[0]!);
+
+      const alice = server().client.withCookie(cookieSentBackFor(signedIn)).withOrigin(server().publicOrigin);
+      const expired = parseSetCookie(setCookiesOf(await alice.delete("/api/session"))[0]!);
+
+      // Any difference in name, path or attributes and the browser keeps the
+      // old cookie alongside the new one instead of replacing it.
+      expect(expired.name).toBe(set.name);
+      expect(expired.attributes).toEqual({ ...set.attributes, "max-age": "0" });
+      expect(expired.value).toBe("");
+    });
+
+    describe("a cookie with no live Session behind it", () => {
+      it.each([
+        ["a well-formed token nothing is behind", async () => `${SESSION_COOKIE}=dGhpcyBpcyBpbnZlbnRlZA`],
+        ["a value that could never be a token", async () => `${SESSION_COOKIE}=not a token!`],
+        [
+          "two session cookies at once",
+          async () => {
+            const first = await signedInCookieFor();
+            const second = await signedInCookieFor();
+            return `${first}; ${second}`;
+          },
+        ],
+      ])("is refused, and expires the cookie the request carried, for %s", async (_case, arrange) => {
+        await server().createAccount(ALICE);
+        const caller = server().client.withCookie(await arrange()).withOrigin(server().publicOrigin);
+
+        const response = await caller.delete("/api/session");
+
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ status: "refused" });
+        expect(setCookiesOf(response)).toEqual([EXPIRED_SESSION_COOKIE]);
+      });
+
+      it("is refused, and expires the cookie, for a cookie alongside a Bearer token", async () => {
+        await server().createAccount(ALICE);
+        const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
+        const bearer = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
+        const both = cookie.withSession((bearer.body as { token: string }).token);
+
+        const response = await both.delete("/api/session");
+
+        expect(response.status).toBe(404);
+        expect(setCookiesOf(response)).toEqual([EXPIRED_SESSION_COOKIE]);
+      });
+
+      it("still reports ambiguous-session as the reason it was refused", async () => {
+        const world = await arrange();
+        const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
+        const bearer = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
+        const both = cookie.withSession((bearer.body as { token: string }).token);
+
+        await both.delete("/api/session");
+        await both.inSchool(world.school.id).get("/persons");
+
+        const trail = (await world.alice.bearer.inSchool(world.school.id).get("/audit-records")).body as {
+          auditRecords: unknown[];
+        };
+        // Expiring the caller's own cookie does not make the request any less
+        // ambiguous: choosing between two presented sessions is what ADR-0004
+        // refuses to do, so that stays the reported reason.
+        expect(trail.auditRecords).toContainEqual(
+          expect.objectContaining({ action: "access.refused", reason: "ambiguous-session" }),
+        );
+      });
+    });
+
+    it("expires no cookie for a sign-out that carried none", async () => {
+      const anonymous = server().client.withOrigin(server().publicOrigin);
+
+      const response = await anonymous.delete("/api/session");
+
+      expect(response.status).toBe(404);
+      expect(setCookiesOf(response)).toEqual([]);
+    });
+
+    it.each([
+      ["another origin", "https://attacker.test"],
+      ["no origin at all", undefined],
+    ])("expires no cookie for a sign-out from %s", async (_case, origin) => {
+      await server().createAccount(ALICE);
+      const cookie = await signedInCookieFor();
+      const caller =
+        origin === undefined
+          ? server().client.withCookie(cookie)
+          : server().client.withCookie(cookie).withOrigin(origin);
+
+      const response = await caller.delete("/api/session");
+
+      // Letting another origin expire the cookie would give a cross-site
+      // request an effect on the Session, which is exactly what ADR-0004's
+      // Origin check exists to prevent. SameSite=Strict is the first defence
+      // there, not a reason to drop this one.
+      expect(response.status).toBe(404);
+      expect(setCookiesOf(response)).toEqual([]);
+      // The Session it named is untouched, and still signs out from its own origin.
+      const ended = await server().client.withCookie(cookie).withOrigin(server().publicOrigin).delete("/api/session");
+      expect(ended.status).toBe(204);
     });
   });
 });

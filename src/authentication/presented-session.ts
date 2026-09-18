@@ -76,6 +76,16 @@ function sessionCookieValues(request: FastifyRequest): string[] {
   });
 }
 
+/**
+ * Whether the request carried a session cookie at all, whatever its value and
+ * whether or not a live Session is behind it. Sign-out asks this to decide
+ * whether it has a cookie of the caller's own to expire, separately from
+ * whether that cookie was usable.
+ */
+export function carriesSessionCookie(request: FastifyRequest): boolean {
+  return sessionCookieValues(request).length > 0;
+}
+
 /** A session presented in one form, with a token that could never be one presented as null. */
 function presentedIn(form: SessionForm, token: string): PresentedSession {
   return { form, token: TOKEN_PATTERN.test(token) ? token : null };

@@ -7,6 +7,7 @@ import { isRateLimited } from "../http/rate-limit.ts";
 import { refuse } from "../http/refusal.ts";
 import { hashPassword, spendVerificationEffort, verifyPassword } from "./passwords.ts";
 import {
+  carriesSessionCookie,
   EXPIRED_SESSION_COOKIE,
   fromPublicOrigin,
   presentedSession,
@@ -173,11 +174,29 @@ export interface Authenticator {
    */
   authenticate(request: FastifyRequest): Promise<Authentication>;
   /**
-   * Ends the live session the request presents and says how it was presented,
-   * or null when it presented none that could be ended.
+   * Ends the live session the request presents, and says what the reply owes
+   * the caller: see SessionEnding.
    */
-  endSession(request: FastifyRequest): Promise<SessionForm | null>;
+  endSession(request: FastifyRequest): Promise<SessionEnding>;
 }
+
+/**
+ * What ending a session leaves the sign-out route to send: the form of the
+ * Session ended, or why none was, and the cookie to expire, if any.
+ *
+ * The two are decided separately on purpose. Whether a Session ended follows
+ * from whether one was live; whether a cookie is expired follows only from the
+ * caller's own request carrying one from the public origin. A cookie nothing
+ * is behind is still the caller's to clear.
+ */
+export type SessionEnding = {
+  /** The form the ended Session was presented in, or null when none was ended. */
+  ended: SessionForm | null;
+  /** Why nothing was ended. Never reaches the caller (ADR-0002); logged only. */
+  failure?: AuthenticationFailure;
+  /** The cookie that expires the one the request carried, or null to send none. */
+  expiringCookie: string | null;
+};
 
 /** An Authenticator for SchoolGrid served at `publicOrigin`. */
 export function createAuthenticator(database: Database, publicOrigin: string): Authenticator {
@@ -203,10 +222,22 @@ export function createAuthenticator(database: Database, publicOrigin: string): A
 
     async endSession(request) {
       const presented = presentedSession(request, publicOrigin);
-      if (presented.failure !== undefined || presented.token === null) {
-        return null;
+      // Asked of the request directly rather than read off `presented`: the
+      // ambiguity check short-circuits before the Origin check, so an
+      // ambiguous request never reaches it, yet its cookie is still the
+      // caller's own. Expiring it only for the public origin keeps a
+      // cross-site request from having any effect on the Session (ADR-0004).
+      const expiringCookie =
+        carriesSessionCookie(request) && fromPublicOrigin(request, publicOrigin) ? EXPIRED_SESSION_COOKIE : null;
+      if (presented.failure !== undefined) {
+        return { ended: null, failure: presented.failure, expiringCookie };
       }
-      return (await deleteSession(database, presented.token)) ? presented.form : null;
+      if (presented.token === null) {
+        return { ended: null, failure: "unauthenticated", expiringCookie };
+      }
+      return (await deleteSession(database, presented.token))
+        ? { ended: presented.form, expiringCookie }
+        : { ended: null, failure: "unauthenticated", expiringCookie };
     },
   };
 }
@@ -359,13 +390,16 @@ async function authenticationRoutes(
   );
 
   app.delete("/session", async (request, reply) => {
-    const ended = await authenticator.endSession(request);
+    const { ended, failure, expiringCookie } = await authenticator.endSession(request);
+    // Set first, so it rides the refusal and the 204 alike: the caller asked to
+    // end their Session, and the cookie they sent goes either way.
+    if (expiringCookie !== null) {
+      reply.header("set-cookie", expiringCookie);
+    }
     // Ending a session nobody holds is refused like any other request without one.
     if (ended === null) {
+      request.log.info({ reason: failure, url: request.url }, "refused");
       return refuse(reply);
-    }
-    if (ended === "cookie") {
-      reply.header("set-cookie", EXPIRED_SESSION_COOKIE);
     }
     return reply.status(204).send();
   });

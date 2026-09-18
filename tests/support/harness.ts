@@ -51,6 +51,23 @@ export function observable({ status, headers, raw }: TestResponse) {
   return { status, headers: rest, headerOrder: Object.keys(rest), raw };
 }
 
+/**
+ * The same, minus the one header a caller's own request can cause on an
+ * otherwise identical refusal: sign-out expires a session cookie the caller
+ * carried from the public origin, whether or not a live Session was behind it,
+ * so a caller holding a cookie sees a `Set-Cookie` where a caller holding none
+ * sees nothing (#89). Every other byte must still match.
+ *
+ * Only for comparing responses whose callers presented different cookies. Each
+ * use pins the `Set-Cookie` itself with `setCookiesOf` alongside, so nothing
+ * about the cookie goes unasserted.
+ */
+export function observableApartFromOwnCookie(response: TestResponse) {
+  const { headers, headerOrder, ...rest } = observable(response);
+  const { "set-cookie": _cookie, ...withoutCookie } = headers;
+  return { ...rest, headers: withoutCookie, headerOrder: headerOrder.filter((name) => name !== "set-cookie") };
+}
+
 /** Every `Set-Cookie` header a response carries, attributes and all. */
 export function setCookiesOf(response: TestResponse): string[] {
   return [response.headers["set-cookie"] ?? []].flat();
