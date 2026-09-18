@@ -373,8 +373,8 @@ async function authenticationRoutes(
       return started;
     });
     const expiresAt = session.expiresAt.toISOString();
-    // No `cache-control` of its own: every response already carries `no-store`
-    // from the security headers, and a second one here could only weaken it.
+    // No `cache-control` of its own: every response under `/api` already carries
+    // `no-store` from the security headers, and a second one here could only weaken it.
     reply.status(201);
     if (form === "bearer") {
       return reply.send({ token: session.token, expiresAt });
