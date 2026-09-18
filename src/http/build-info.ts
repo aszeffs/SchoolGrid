@@ -9,10 +9,6 @@ import type { BuildInfo } from "../config.ts";
  * any School. A value the service was not given is left out, never filled in,
  * so a caller cannot mistake a placeholder for something to verify.
  */
-export function registerBuildInfoRoute(api: FastifyInstance, { commit, digest }: BuildInfo): void {
-  const body = {
-    ...(commit === undefined ? {} : { commit }),
-    ...(digest === undefined ? {} : { digest }),
-  };
-  api.get("/build-info", async (_request, reply) => reply.status(200).send(body));
+export function registerBuildInfoRoute(api: FastifyInstance, buildInfo: BuildInfo): void {
+  api.get("/build-info", async (_request, reply) => reply.status(200).send(buildInfo));
 }

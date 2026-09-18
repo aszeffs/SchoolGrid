@@ -67,8 +67,8 @@ export function HowThisWasBuilt() {
             GitHub Actions builds one container image and never rebuilds it: those same bytes are scanned for known
             vulnerabilities, started against a real database, and driven in a browser. Only an image that passes
             all of it is published, and it is signed with a record of the workflow and commit that built it.
-            Before it is deployed, that signature is checked again, and the image is deployed by its digest, a
-            hash of its contents, so what runs here is exactly what was checked.
+            An image's digest is a hash of its contents, so the digest below names exactly those bytes, and the
+            command further down lets you check that signature against them yourself.
           </p>
 
           <h2>What this site is running</h2>
