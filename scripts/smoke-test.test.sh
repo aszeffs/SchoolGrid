@@ -37,9 +37,25 @@ mkdir -p "$workdir/bin"
 cat > "$workdir/bin/docker" <<'DOUBLE'
 #!/usr/bin/env bash
 set -euo pipefail
+last="${*: -1}"
+
+# The subject starts the image more than once, with and without the schema
+# owner's credentials, and each container behaves as the image would given what
+# it was handed. A container given MIGRATION_DATABASE_URL migrates; one without
+# it checks the record the psql double keeps, and refuses to start when a
+# migration has gone missing from it.
+owner() { [ -e "$STATE/$1.owner" ]; }
+exited() { [ -e "$STATE/$1.exited" ]; }
+
 case "$1" in
   create)
-    echo "double-container-id"
+    count=$(( $(cat "$STATE/created" 2>/dev/null || echo 0) + 1 ))
+    echo "$count" > "$STATE/created"
+    id="double-container-${count}"
+    for arg in "$@"; do
+      case "$arg" in MIGRATION_DATABASE_URL=*) touch "$STATE/${id}.owner" ;; esac
+    done
+    echo "$id"
     ;;
   start)
     # What Docker does when the runtime cannot exec the CMD at all: the
@@ -48,17 +64,42 @@ case "$1" in
       echo 'Error response from daemon: failed to create task: exec: "dist/index.js": no such file or directory' >&2
       exit 125
     fi
-    echo started > "$STATE/started"
-    if [ "$SCENARIO" = "broken-entrypoint" ]; then
-      echo exited > "$STATE/exited"
+    if owner "$last"; then
+      echo started > "$STATE/started"
+      if [ "$SCENARIO" = "broken-entrypoint" ]; then touch "$STATE/${last}.exited"; fi
+    elif [ -e "$STATE/record-deleted" ]; then
+      if [ "$SCENARIO" != "ownerless-serves-unmigrated" ]; then touch "$STATE/${last}.exited"; fi
+    elif [ "$SCENARIO" = "ownerless-refuses-migrated" ]; then
+      touch "$STATE/${last}.exited"
     fi
-    echo "double-container-id"
+    echo "$last"
     ;;
   inspect)
-    if [ -e "$STATE/exited" ]; then echo false; else echo true; fi
+    case "$*" in
+      *Running*) if exited "$last"; then echo false; else echo true; fi ;;
+      *ExitCode*)
+        if exited "$last" && [ "$SCENARIO" != "ownerless-exits-zero" ]; then echo 1; else echo 0; fi
+        ;;
+      *) echo "double: unexpected docker $*" >&2; exit 64 ;;
+    esac
     ;;
   logs)
-    if [ "$SCENARIO" = "broken-entrypoint" ]; then
+    if ! owner "$last"; then
+      if exited "$last"; then
+        if [ "$SCENARIO" = "ownerless-silent-refusal" ]; then
+          echo '{"level":60,"msg":"failed to start"}'
+        else
+          echo "{\"level\":60,\"err\":{\"message\":\"The database is missing migration(s) $(cat "$STATE/record-deleted" 2>/dev/null)\"},\"msg\":\"failed to start\"}"
+        fi
+      else
+        if [ "$SCENARIO" = "ownerless-migrates" ]; then
+          echo '{"level":30,"msg":"applied migrations","applied":["0001_initial.sql"]}'
+        else
+          echo '{"level":30,"msg":"not migrating without MIGRATION_DATABASE_URL: every migration is already applied"}'
+        fi
+        echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
+      fi
+    elif [ "$SCENARIO" = "broken-entrypoint" ]; then
       echo "exec /nodejs/bin/node: no such file or directory"
     elif [ "$SCENARIO" = "silent-migration" ]; then
       echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
@@ -75,13 +116,16 @@ case "$1" in
       echo '{"level":30,"msg":"Server listening at http://0.0.0.0:3000"}'
     fi
     ;;
-  rm) echo removed > "$STATE/removed" ;;
+  rm)
+    echo removed > "$STATE/removed"
+    touch "$STATE/${last}.removed"
+    ;;
   *) echo "double: unexpected docker $*" >&2; exit 64 ;;
 esac
 DOUBLE
 
-# Answers the two queries the subject asks, and answers them differently
-# before and after the container has been started.
+# Answers the queries the subject asks, and answers them differently before and
+# after the container has been started.
 cat > "$workdir/bin/psql" <<'DOUBLE'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -102,6 +146,20 @@ if [ "$SCENARIO" = "dirty-database" ]; then migrated=true; fi
 
 case "$command" in
   *"CREATE ROLE"*)
+    ;;
+  # Taking the latest migration out of the record, and putting it back.
+  *DELETE*schema_migrations*)
+    if [ "$SCENARIO" = "empty-record" ]; then exit 0; fi
+    echo "0011_migration_record_readable.sql" > "$STATE/record-deleted"
+    echo "0011_migration_record_readable.sql|0123abcd"
+    ;;
+  *INSERT*schema_migrations*)
+    case "$command" in
+      *"'0011_migration_record_readable.sql', '0123abcd'"*) ;;
+      *) echo "double: restored something else: ${command}" >&2; exit 64 ;;
+    esac
+    rm -f "$STATE/record-deleted"
+    touch "$STATE/record-restored"
     ;;
   *count*)
     if [ "$migrated" = true ]; then echo 1; else echo 0; fi
@@ -225,6 +283,20 @@ expect_removed() {
   fi
 }
 
+# Asserts that a case put back the migration record it took out, so the browser
+# suite run afterwards meets the database the image migrated.
+expect_restored() {
+  local description="$1"
+  local state="$workdir/state/$description"
+  if [ -e "$state/record-restored" ] && [ ! -e "$state/record-deleted" ]; then
+    echo "ok: ${description} (migration record restored)"
+  else
+    echo "FAIL: ${description}" >&2
+    echo "  the migration taken out of the record was never put back" >&2
+    failures=$((failures + 1))
+  fi
+}
+
 # --- cases ------------------------------------------------------------------
 
 # A command to run against the image once it has passed, as the browser suite
@@ -278,6 +350,34 @@ expect "a container that never reports applying migrations fails" silent-migrati
 # SIGPIPE into a failed pipeline, and the check would report a migration that
 # the log plainly contains as missing. Seen intermittently in CI on #49.
 expect "a container that logged a lot after migrating still passes" chatty-container 0 "the smoke test passed" "never reported applying migrations"
+
+# Without the schema owner's credentials, as production runs it, the image must
+# serve a database that is already migrated, and say it did not migrate it.
+expect "without owner credentials the image serves a migrated database" healthy 0 \
+  "serves a migrated database without migrating it"
+expect "an image that will not serve a migrated database without owner credentials fails" \
+  ownerless-refuses-migrated 1 "started without MIGRATION_DATABASE_URL is no longer running"
+expect "an image that migrates without owner credentials fails" ownerless-migrates 1 \
+  "never reported starting without migrating"
+
+# And it must refuse a database missing a migration: exit non-zero, and name
+# what is missing, since that line is all a failed deploy has to go on.
+expect "without owner credentials the image refuses a database missing a migration" healthy 0 \
+  "refused a database missing 0011_migration_record_readable.sql"
+expect_restored "without owner credentials the image refuses a database missing a migration"
+expect "an image that serves a database missing a migration fails" ownerless-serves-unmigrated 1 \
+  "kept running against a database missing 0011_migration_record_readable.sql"
+# A failing case must not leave the record short: the run is over, but the
+# header promises the database comes back as the image left it.
+expect_restored "an image that serves a database missing a migration fails"
+expect "an image that refuses but exits zero fails" ownerless-exits-zero 1 "exited 0"
+expect "an image that refuses without saying why fails" ownerless-silent-refusal 1 \
+  "never named 0011_migration_record_readable.sql"
+
+# With nothing taken out of the record, every check after it would pass against
+# a database missing nothing, and a grep for an empty name matches any log.
+expect "a record with nothing to take out fails rather than passing vacuously" empty-record 1 \
+  "took no migration out of the record"
 
 # If the database cannot be reached at all, that is the harness being broken
 # rather than the image, and it has to say so instead of reporting a clean run.

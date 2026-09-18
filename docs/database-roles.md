@@ -4,8 +4,19 @@ SchoolGrid connects to Postgres with two separate logins, and never uses one in 
 
 | Variable | Role | Used for |
 | --- | --- | --- |
-| `MIGRATION_DATABASE_URL` | The schema owner | Applying migrations at startup (or with `npm run migrate`). The connection is closed before the service answers any request. |
+| `MIGRATION_DATABASE_URL` | The schema owner | Applying migrations at startup (or with `npm run migrate`). The connection is closed before the service answers any request. Optional for the service; see below. |
 | `DATABASE_URL` | A login that is a member of `schoolgrid_app` and nothing else | Every request the service serves. |
+
+## When the service needs the owner's credentials
+
+Only when it is expected to migrate the database itself.
+
+- **Set `MIGRATION_DATABASE_URL`** for local development and the container smoke test. The service applies any pending migrations as the owner, closes that connection, then serves as `DATABASE_URL`.
+- **Leave it unset** wherever the service should hold nothing but the application's role, as in production. The service does not migrate. It reads the record of applied migrations as `DATABASE_URL` and checks that every migration in the image is recorded with a matching checksum. If one is missing, it logs which and exits non-zero. Migrate first, as the owner, with `npm run migrate` or `node dist/db/migrate-cli.js` from the image.
+
+Refusing to start is deliberate. A service that could "just migrate" would have to hold credentials that grants do not bind, which is what the rest of this page exists to prevent.
+
+`schoolgrid_app` can read `public.schema_migrations` (migration `0011`) and nothing more: the record decides whether the service starts, so the role it checks must not be able to rewrite it.
 
 ## Why two
 

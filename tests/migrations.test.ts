@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "../src/db/migrate.ts";
+import { assertMigrated, migrate } from "../src/db/migrate.ts";
 import { useTestServer } from "./support/harness.ts";
 
 describe("migrations", () => {
@@ -27,6 +27,68 @@ describe("migrations", () => {
     );
 
     await expect(migrate(server().ownerDatabase)).rejects.toThrow(/contents have changed/);
+  });
+
+  // How the service starts without the schema owner's credentials: it cannot
+  // migrate, so it checks, as the application's role, that someone else did.
+  describe("checking without migrating", () => {
+    const LATEST = "0011_migration_record_readable.sql";
+
+    it("passes, as the application's role, against a fully migrated database", async () => {
+      await expect(assertMigrated(server().database)).resolves.toBeUndefined();
+    });
+
+    it("names the migration the database is missing", async () => {
+      await server().ownerDatabase.query("DELETE FROM public.schema_migrations WHERE name = $1", [LATEST]);
+
+      await expect(assertMigrated(server().database)).rejects.toThrow(`missing migration(s) ${LATEST}`);
+    });
+
+    it("names every migration of a database that was never migrated", async () => {
+      await server().ownerDatabase.query("DROP TABLE public.schema_migrations");
+
+      await expect(assertMigrated(server().database)).rejects.toThrow(/missing migration\(s\) 0001_initial\.sql, .*0011/);
+    });
+
+    // A database migrated before 0011 has a record its application role cannot
+    // read, which is the first deploy of this check. It is missing 0011, and
+    // must say so rather than fail on the permission.
+    it("names the migration that makes the record readable when the role cannot read it", async () => {
+      await server().ownerDatabase.query("REVOKE SELECT ON public.schema_migrations FROM schoolgrid_app");
+      await server().ownerDatabase.query("DELETE FROM public.schema_migrations WHERE name = $1", [LATEST]);
+
+      await expect(assertMigrated(server().database)).rejects.toThrow(`missing migration(s) ${LATEST}`);
+    });
+
+    it("refuses when an applied migration's contents have changed", async () => {
+      await server().ownerDatabase.query(
+        "UPDATE public.schema_migrations SET checksum = 'tampered' WHERE name = '0001_initial.sql'",
+      );
+
+      await expect(assertMigrated(server().database)).rejects.toThrow(/0001_initial\.sql .*contents have changed/);
+    });
+
+    it("applies nothing", async () => {
+      await server().ownerDatabase.query("DELETE FROM public.schema_migrations WHERE name = $1", [LATEST]);
+
+      await expect(assertMigrated(server().database)).rejects.toThrow(LATEST);
+
+      const { rows } = await server().ownerDatabase.query(
+        "SELECT 1 FROM public.schema_migrations WHERE name = $1",
+        [LATEST],
+      );
+      expect(rows).toEqual([]);
+    });
+
+    // The record is read to decide whether to start, so it must not be
+    // something the application's role could rewrite to make that decision.
+    it.each([
+      ["INSERT", "INSERT INTO public.schema_migrations (name, checksum) VALUES ('9999_forged.sql', 'x')"],
+      ["UPDATE", "UPDATE public.schema_migrations SET checksum = 'x'"],
+      ["DELETE", "DELETE FROM public.schema_migrations"],
+    ])("leaves the application's role unable to %s the migration record", async (_, sql) => {
+      await expect(server().database.query(sql)).rejects.toThrow(/permission denied/);
+    });
   });
 
   describe("normalising usernames", () => {

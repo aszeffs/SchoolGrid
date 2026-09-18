@@ -18,7 +18,7 @@ export interface RateLimit {
 
 export const DEFAULT_RATE_LIMIT: RateLimit = { max: 100, windowMs: 60_000 };
 
-export interface Config extends MigrationConfig {
+export interface Config extends Partial<MigrationConfig> {
   /** The application's own least-privilege role. See docs/database-roles.md. */
   databaseUrl: string;
   port: number;
@@ -31,9 +31,15 @@ export interface Config extends MigrationConfig {
   publicOrigin: PublicOrigin;
 }
 
-function requireEnv(name: string): string {
+/** A variable's value, treating one set to nothing as not set at all. */
+function optionalEnv(name: string): string | undefined {
   const value = process.env[name];
-  if (value === undefined || value === "") {
+  return value === "" ? undefined : value;
+}
+
+function requireEnv(name: string): string {
+  const value = optionalEnv(name);
+  if (value === undefined) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
@@ -91,6 +97,16 @@ export function loadMigrationConfig(): MigrationConfig {
   return { migrationDatabaseUrl: requireEnv("MIGRATION_DATABASE_URL") };
 }
 
+/**
+ * The migration connection when one is given. Without it the service does not
+ * migrate on startup, and only checks that someone else already has: that is
+ * how production runs, holding the application's role alone.
+ */
+function optionalMigrationConfig(): Partial<MigrationConfig> {
+  const migrationDatabaseUrl = optionalEnv("MIGRATION_DATABASE_URL");
+  return migrationDatabaseUrl === undefined ? {} : { migrationDatabaseUrl };
+}
+
 export function loadConfig(): Config {
   const port = Number(process.env["PORT"] ?? 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -104,7 +120,7 @@ export function loadConfig(): Config {
 
   return {
     databaseUrl: requireEnv("DATABASE_URL"),
-    ...loadMigrationConfig(),
+    ...optionalMigrationConfig(),
     port,
     logLevel,
     rateLimit: {

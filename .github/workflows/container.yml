@@ -150,6 +150,9 @@ jobs:
         # No migrate step before this, anywhere in the job. The script proves
         # the container migrated on startup by finding the database empty first;
         # migrating here would make that proof pass whatever the image does.
+        # It then starts the image without the owner's credentials, as
+        # production does: it must serve the migrated database, and refuse one
+        # missing a migration.
         #
         # The browser suite runs against the same container once it has passed,
         # so it drives the image that would ship, never a development server.

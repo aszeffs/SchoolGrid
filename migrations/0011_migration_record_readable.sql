@@ -1,0 +1,11 @@
+-- The application's role may read the record of applied migrations, and do
+-- nothing else with it.
+--
+-- A service started without the schema owner's credentials does not migrate.
+-- It reads this record to check that someone else did, and refuses to start if
+-- any migration in its image is missing (see `assertMigrated`). That is how
+-- production runs: holding the application's role alone.
+--
+-- Read only. The record decides whether the service starts, so the role it
+-- guards must not be able to write the answer it is checked against.
+GRANT SELECT ON public.schema_migrations TO schoolgrid_app;
