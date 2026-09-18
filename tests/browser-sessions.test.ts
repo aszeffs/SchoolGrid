@@ -447,7 +447,7 @@ describe("Browser sessions", () => {
     }
 
     /** Signs an existing Alice in as a browser does, returning the `Cookie` header it sends back. */
-    async function signedInCookieFor(): Promise<string> {
+    async function signedInCookie(): Promise<string> {
       return cookieSentBackFor(await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE));
     }
 
@@ -514,8 +514,8 @@ describe("Browser sessions", () => {
         [
           "two session cookies at once",
           async () => {
-            const first = await signedInCookieFor();
-            const second = await signedInCookieFor();
+            const first = await signedInCookie();
+            const second = await signedInCookie();
             return `${first}; ${second}`;
           },
         ],
@@ -542,24 +542,26 @@ describe("Browser sessions", () => {
         expect(setCookiesOf(response)).toEqual([EXPIRED_SESSION_COOKIE]);
       });
 
-      it("still reports ambiguous-session as the reason it was refused", async () => {
-        const world = await arrange();
-        const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
+      // Sign-out names no School, so its refusal has no trail to be recorded
+      // in and its reason reaches the log alone (ADR-0002): `ambiguous-session`
+      // itself is pinned where it is observable, on the School-scoped route
+      // above. What is observable here is that expiring the cookie is decided
+      // without disturbing the check order — an ambiguous request is still
+      // judged ambiguous before the Origin check it never reaches, so a
+      // cross-origin one is refused with no cookie like any other.
+      it("expires no cookie when the ambiguous sign-out came from another origin", async () => {
+        await server().createAccount(ALICE);
+        const cookie = await signedInCookie();
         const bearer = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
-        const both = cookie.withSession((bearer.body as { token: string }).token);
+        const both = server()
+          .client.withCookie(cookie)
+          .withSession((bearer.body as { token: string }).token)
+          .withOrigin("https://attacker.test");
 
-        await both.delete("/api/session");
-        await both.inSchool(world.school.id).get("/persons");
+        const response = await both.delete("/api/session");
 
-        const trail = (await world.alice.bearer.inSchool(world.school.id).get("/audit-records")).body as {
-          auditRecords: unknown[];
-        };
-        // Expiring the caller's own cookie does not make the request any less
-        // ambiguous: choosing between two presented sessions is what ADR-0004
-        // refuses to do, so that stays the reported reason.
-        expect(trail.auditRecords).toContainEqual(
-          expect.objectContaining({ action: "access.refused", reason: "ambiguous-session" }),
-        );
+        expect(response.status).toBe(404);
+        expect(setCookiesOf(response)).toEqual([]);
       });
     });
 
@@ -577,7 +579,7 @@ describe("Browser sessions", () => {
       ["no origin at all", undefined],
     ])("expires no cookie for a sign-out from %s", async (_case, origin) => {
       await server().createAccount(ALICE);
-      const cookie = await signedInCookieFor();
+      const cookie = await signedInCookie();
       const caller =
         origin === undefined
           ? server().client.withCookie(cookie)

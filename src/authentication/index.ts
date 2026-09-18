@@ -174,15 +174,15 @@ export interface Authenticator {
    */
   authenticate(request: FastifyRequest): Promise<Authentication>;
   /**
-   * Ends the live session the request presents, and says what the reply owes
+   * Ends the live Session the request presents, and says what the reply owes
    * the caller: see SessionEnding.
    */
   endSession(request: FastifyRequest): Promise<SessionEnding>;
 }
 
 /**
- * What ending a session leaves the sign-out route to send: the form of the
- * Session ended, or why none was, and the cookie to expire, if any.
+ * What ending a Session leaves the sign-out route to send: whether one was
+ * ended, or why none was, and the cookie to expire, if any.
  *
  * The two are decided separately on purpose. Whether a Session ended follows
  * from whether one was live; whether a cookie is expired follows only from the
@@ -190,13 +190,13 @@ export interface Authenticator {
  * is behind is still the caller's to clear.
  */
 export type SessionEnding = {
-  /** The form the ended Session was presented in, or null when none was ended. */
-  ended: SessionForm | null;
-  /** Why nothing was ended. Never reaches the caller (ADR-0002); logged only. */
-  failure?: AuthenticationFailure;
   /** The cookie that expires the one the request carried, or null to send none. */
   expiringCookie: string | null;
-};
+} & (
+  | { ended: true; failure?: never }
+  /** Why nothing was ended. Never reaches the caller (ADR-0002); logged only. */
+  | { ended: false; failure: AuthenticationFailure }
+);
 
 /** An Authenticator for SchoolGrid served at `publicOrigin`. */
 export function createAuthenticator(database: Database, publicOrigin: string): Authenticator {
@@ -229,15 +229,16 @@ export function createAuthenticator(database: Database, publicOrigin: string): A
       // cross-site request from having any effect on the Session (ADR-0004).
       const expiringCookie =
         carriesSessionCookie(request) && fromPublicOrigin(request, publicOrigin) ? EXPIRED_SESSION_COOKIE : null;
+      const refused = (failure: AuthenticationFailure): SessionEnding => ({ ended: false, failure, expiringCookie });
       if (presented.failure !== undefined) {
-        return { ended: null, failure: presented.failure, expiringCookie };
+        return refused(presented.failure);
       }
       if (presented.token === null) {
-        return { ended: null, failure: "unauthenticated", expiringCookie };
+        return refused("unauthenticated");
       }
       return (await deleteSession(database, presented.token))
-        ? { ended: presented.form, expiringCookie }
-        : { ended: null, failure: "unauthenticated", expiringCookie };
+        ? { ended: true, expiringCookie }
+        : refused("unauthenticated");
     },
   };
 }
@@ -396,8 +397,8 @@ async function authenticationRoutes(
     if (expiringCookie !== null) {
       reply.header("set-cookie", expiringCookie);
     }
-    // Ending a session nobody holds is refused like any other request without one.
-    if (ended === null) {
+    // Ending a Session nobody holds is refused like any other request without one.
+    if (!ended) {
       request.log.info({ reason: failure, url: request.url }, "refused");
       return refuse(reply);
     }
