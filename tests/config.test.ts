@@ -19,10 +19,28 @@ describe("loadConfig database connections", () => {
     });
   });
 
-  it.each(["DATABASE_URL", "MIGRATION_DATABASE_URL"])("refuses to start without %s", (name) => {
-    vi.stubEnv(name, undefined);
+  it("refuses to start without DATABASE_URL", () => {
+    vi.stubEnv("DATABASE_URL", undefined);
 
-    expect(() => loadConfig()).toThrow(`Missing required environment variable: ${name}`);
+    expect(() => loadConfig()).toThrow("Missing required environment variable: DATABASE_URL");
+  });
+
+  // Production holds only the application's role, and does not migrate.
+  it.each([undefined, ""])("starts without the migration connection when MIGRATION_DATABASE_URL is %j", (value) => {
+    vi.stubEnv("MIGRATION_DATABASE_URL", value);
+
+    const config = loadConfig();
+
+    expect(config.databaseUrl).toBe("postgres://runtime:password@localhost:5432/schoolgrid");
+    expect(config).not.toHaveProperty("migrationDatabaseUrl");
+  });
+
+  it("refuses to migrate without MIGRATION_DATABASE_URL", () => {
+    vi.stubEnv("MIGRATION_DATABASE_URL", undefined);
+
+    expect(() => loadMigrationConfig()).toThrow(
+      "Missing required environment variable: MIGRATION_DATABASE_URL",
+    );
   });
 
   it("migrates with the migration connection alone", () => {
