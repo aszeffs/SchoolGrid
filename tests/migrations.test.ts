@@ -130,6 +130,17 @@ describe("migrations", () => {
       );
     });
 
+    // A deploy migrates before the new image replaces the old one, so for a
+    // while the old image serves a database recorded ahead of it. Every
+    // migration stays compatible with the code one deploy behind it (#92).
+    it("passes a database that has applied migrations this image does not know", async () => {
+      await server().ownerDatabase.query(
+        "INSERT INTO public.schema_migrations (name, checksum) VALUES ('9999_from_a_newer_image.sql', 'x')",
+      );
+
+      await expect(assertMigrated(server().database)).resolves.toBeUndefined();
+    });
+
     it("applies nothing", async () => {
       await server().ownerDatabase.query(
         "DELETE FROM public.schema_migrations WHERE name = $1",
@@ -154,6 +165,7 @@ describe("migrations", () => {
       ],
       ["UPDATE", "UPDATE public.schema_migrations SET checksum = 'x'"],
       ["DELETE", "DELETE FROM public.schema_migrations"],
+      ["TRUNCATE", "TRUNCATE public.schema_migrations"],
     ])(
       "leaves the application's role unable to %s the migration record",
       async (_, sql) => {

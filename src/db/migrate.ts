@@ -46,6 +46,9 @@ interface Comparison {
  * has applied. The same comparison decides what `migrate` runs and whether a
  * service that cannot migrate may start, so the two never disagree about what
  * "fully migrated" means.
+ *
+ * Recorded migrations this image does not know are ignored, not refused: the
+ * previous image keeps serving a database a deploy has already migrated past it.
  */
 function compareWithRecord(
   migrations: Migration[],
@@ -159,7 +162,7 @@ export async function migrate(db: Database): Promise<MigrationResult> {
 /** The migration that lets the application's role read the record at all. */
 const RECORD_READABLE = "0011_migration_record_readable.sql";
 
-function missingMigrations(names: string): Error {
+function missingMigrationsError(names: string): Error {
   return new Error(
     `The database is missing migration(s) ${names}. ` +
       `Without MIGRATION_DATABASE_URL the service does not migrate; ` +
@@ -192,7 +195,7 @@ export async function assertMigrated(db: Queryable): Promise<void> {
   // that migration at least is missing. Saying so beats a permission error
   // that sends whoever reads the log looking at the wrong grant.
   if (exists && readable !== true) {
-    throw missingMigrations(`${RECORD_READABLE} and any after it`);
+    throw missingMigrationsError(`${RECORD_READABLE} and any after it`);
   }
 
   // A database nothing ever migrated has no record at all, and is missing
@@ -201,7 +204,7 @@ export async function assertMigrated(db: Queryable): Promise<void> {
 
   const { pending } = compareWithRecord(migrations, recorded);
   if (pending.length > 0) {
-    throw missingMigrations(
+    throw missingMigrationsError(
       pending.map((migration) => migration.name).join(", "),
     );
   }
