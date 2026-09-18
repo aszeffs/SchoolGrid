@@ -5,7 +5,9 @@ import path from "node:path";
 import type { Database } from "./pool.ts";
 import type { Queryable } from "./transaction.ts";
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("../../migrations", import.meta.url));
+const MIGRATIONS_DIR = fileURLToPath(
+  new URL("../../migrations", import.meta.url),
+);
 
 interface Migration {
   name: string;
@@ -20,7 +22,11 @@ async function readMigrations(): Promise<Migration[]> {
   return Promise.all(
     names.map(async (name) => {
       const sql = await readFile(path.join(MIGRATIONS_DIR, name), "utf8");
-      return { name, sql, checksum: createHash("sha256").update(sql).digest("hex") };
+      return {
+        name,
+        sql,
+        checksum: createHash("sha256").update(sql).digest("hex"),
+      };
     }),
   );
 }
@@ -41,7 +47,10 @@ interface Comparison {
  * service that cannot migrate may start, so the two never disagree about what
  * "fully migrated" means.
  */
-function compareWithRecord(migrations: Migration[], recorded: Map<string, string>): Comparison {
+function compareWithRecord(
+  migrations: Migration[],
+  recorded: Map<string, string>,
+): Comparison {
   const comparison: Comparison = { pending: [], alreadyApplied: [] };
 
   for (const migration of migrations) {
@@ -74,7 +83,36 @@ async function readRecord(db: Queryable): Promise<Map<string, string>> {
   return new Map(rows.map((row) => [row.name, row.checksum]));
 }
 
+/**
+ * The oldest PostgreSQL major version the migrations run on. Migration 0009
+ * needs `casefold()` and the `pg_unicode_fast` collation, both new in 18.
+ */
+const MINIMUM_POSTGRES_MAJOR = 18;
+
+/**
+ * Refuses a server too old for the migrations, before anything is applied.
+ * Each migration commits on its own, so finding out at 0009 would leave the
+ * database half-migrated, failing on a missing function that says nothing
+ * about the version.
+ */
+async function assertServerVersion(db: Queryable): Promise<void> {
+  const { rows } = await db.query<{ version: number }>(
+    "SELECT current_setting('server_version_num')::int AS version",
+  );
+  const { version } = rows[0]!;
+
+  // `server_version_num` encodes 17.6 as 170006.
+  if (version < MINIMUM_POSTGRES_MAJOR * 10000) {
+    throw new Error(
+      `SchoolGrid needs PostgreSQL ${MINIMUM_POSTGRES_MAJOR} or newer; ` +
+        `this server reports version ${version}. Nothing was migrated.`,
+    );
+  }
+}
+
 export async function migrate(db: Database): Promise<MigrationResult> {
+  await assertServerVersion(db);
+
   const migrations = await readMigrations();
 
   await db.query(`
@@ -85,7 +123,10 @@ export async function migrate(db: Database): Promise<MigrationResult> {
     )
   `);
 
-  const { pending, alreadyApplied } = compareWithRecord(migrations, await readRecord(db));
+  const { pending, alreadyApplied } = compareWithRecord(
+    migrations,
+    await readRecord(db),
+  );
   const result: MigrationResult = { applied: [], alreadyApplied };
 
   for (const migration of pending) {
@@ -93,17 +134,20 @@ export async function migrate(db: Database): Promise<MigrationResult> {
     try {
       await client.query("BEGIN");
       await client.query(migration.sql);
-      await client.query("INSERT INTO public.schema_migrations (name, checksum) VALUES ($1, $2)", [
-        migration.name,
-        migration.checksum,
-      ]);
+      await client.query(
+        "INSERT INTO public.schema_migrations (name, checksum) VALUES ($1, $2)",
+        [migration.name, migration.checksum],
+      );
       await client.query("COMMIT");
       result.applied.push(migration.name);
     } catch (error) {
       await client.query("ROLLBACK");
-      throw new Error(`Migration ${migration.name} failed: ${(error as Error).message}`, {
-        cause: error,
-      });
+      throw new Error(
+        `Migration ${migration.name} failed: ${(error as Error).message}`,
+        {
+          cause: error,
+        },
+      );
     } finally {
       client.release();
     }
@@ -133,7 +177,10 @@ function missingMigrations(names: string): Error {
 export async function assertMigrated(db: Queryable): Promise<void> {
   const migrations = await readMigrations();
 
-  const { rows } = await db.query<{ exists: boolean; readable: boolean | null }>(
+  const { rows } = await db.query<{
+    exists: boolean;
+    readable: boolean | null;
+  }>(
     `SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists,
             CASE WHEN to_regclass('public.schema_migrations') IS NOT NULL
                  THEN has_table_privilege('public.schema_migrations', 'SELECT')
@@ -154,6 +201,8 @@ export async function assertMigrated(db: Queryable): Promise<void> {
 
   const { pending } = compareWithRecord(migrations, recorded);
   if (pending.length > 0) {
-    throw missingMigrations(pending.map((migration) => migration.name).join(", "));
+    throw missingMigrations(
+      pending.map((migration) => migration.name).join(", "),
+    );
   }
 }

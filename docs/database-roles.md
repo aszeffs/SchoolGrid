@@ -28,6 +28,8 @@ A trigger also rejects updates, deletes and truncates on the table for every rol
 
 ## Setting up a database
 
+The server must be PostgreSQL 18 or newer. Migration `0009` normalises usernames with `casefold()` and the builtin `pg_unicode_fast` collation, both new in 18. Against an older server, `migrate` refuses before applying anything and names the version it found.
+
 Roles belong to the Postgres cluster, not to one database. Create them once, as a user allowed to create roles, before the service first starts:
 
 ```sql
