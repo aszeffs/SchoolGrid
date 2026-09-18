@@ -10,6 +10,7 @@ import {
   type UserAccount,
 } from "../authentication/index.ts";
 import { appendAuditRecord, recordRefusal } from "../audit/index.ts";
+import type { PublicOrigin } from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { refuse } from "../http/refusal.ts";
@@ -140,7 +141,7 @@ export function registerInvitationRedemptionRoutes(
   app: FastifyInstance,
   database: Database,
   authenticator: Authenticator,
-  publicOrigin: string,
+  publicOrigin: PublicOrigin,
 ): void {
   // Reveals only a School's name and a Person's display name, and nothing
   // else about either: not their identifiers, and nothing about the

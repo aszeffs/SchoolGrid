@@ -28,7 +28,7 @@ export interface Config extends MigrationConfig {
    * The origin browsers reach SchoolGrid at, as a browser writes it in an
    * `Origin` header: a change made with a cookie session must come from here.
    */
-  publicOrigin: string;
+  publicOrigin: PublicOrigin;
 }
 
 function requireEnv(name: string): string {
@@ -52,14 +52,16 @@ function positiveIntegerEnv(name: string, fallback: number): number {
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
 /**
- * An origin and nothing more, normalised as a browser serialises it. Anything
- * else could never equal the `Origin` a browser sends, so every change made
- * with a cookie would be refused.
+ * An origin and nothing more, normalised as a browser serialises it, which
+ * `parsePublicOrigin` alone makes. Anything else could never equal the
+ * `Origin` a browser sends, so every change made with a cookie would be refused.
  */
-function originEnv(name: string): string {
-  const raw = requireEnv(name);
+export type PublicOrigin = string & { readonly __brand: "PublicOrigin" };
+
+/** Parses the origin browsers reach SchoolGrid at, or throws if it is not one a browser could send. */
+export function parsePublicOrigin(raw: string): PublicOrigin {
   const invalid = () =>
-    new Error(`${name} must be an https origin, or http on localhost, with no path, received: ${raw}`);
+    new Error(`PUBLIC_ORIGIN must be an https origin, or http on localhost, with no path, received: ${raw}`);
   let url: URL;
   try {
     url = new URL(raw);
@@ -73,7 +75,7 @@ function originEnv(name: string): string {
   if (!secure || !onlyAnOrigin) {
     throw invalid();
   }
-  return url.origin;
+  return url.origin as PublicOrigin;
 }
 
 function isLogLevel(value: string): value is LogLevel {
@@ -109,6 +111,6 @@ export function loadConfig(): Config {
       max: positiveIntegerEnv("RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT.max),
       windowMs: positiveIntegerEnv("RATE_LIMIT_WINDOW_MS", DEFAULT_RATE_LIMIT.windowMs),
     },
-    publicOrigin: originEnv("PUBLIC_ORIGIN"),
+    publicOrigin: parsePublicOrigin(requireEnv("PUBLIC_ORIGIN")),
   };
 }

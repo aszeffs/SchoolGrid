@@ -107,7 +107,7 @@ describe("Browser sessions", () => {
       expect(setCookiesOf(response)).toEqual([]);
       const { token } = response.body as { token: string };
       expect(response.body).toEqual({ token: expect.any(String), expiresAt: expect.any(String) });
-      expect((await server().client.withSession(token).get("/api/session")).status).toBe(200);
+      expect((await server().client.withBearer(token).get("/api/session")).status).toBe(200);
     });
 
     it.each([["an unknown kind", "jwt"], ["a non-string", true]])(
@@ -324,7 +324,7 @@ describe("Browser sessions", () => {
       await server().createAccount(ALICE);
       const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
       const bearerResponse = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
-      const both = cookie.withSession((bearerResponse.body as { token: string }).token);
+      const both = cookie.withBearer((bearerResponse.body as { token: string }).token);
 
       const identify = await both.get("/api/session");
       const end = await both.delete("/api/session");
@@ -343,7 +343,7 @@ describe("Browser sessions", () => {
       const world = await arrange();
       const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
       const bearerResponse = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
-      const both = cookie.withSession((bearerResponse.body as { token: string }).token);
+      const both = cookie.withBearer((bearerResponse.body as { token: string }).token);
 
       await both.inSchool(world.school.id).get("/persons");
 
@@ -534,7 +534,7 @@ describe("Browser sessions", () => {
         await server().createAccount(ALICE);
         const cookie = (await server().signInWithCookie(ALICE)).withOrigin(server().publicOrigin);
         const bearer = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
-        const both = cookie.withSession((bearer.body as { token: string }).token);
+        const both = cookie.withBearer((bearer.body as { token: string }).token);
 
         const response = await both.delete("/api/session");
 
@@ -555,7 +555,7 @@ describe("Browser sessions", () => {
         const bearer = await server().client.post("/api/session", { ...ALICE, session: "bearer" });
         const both = server()
           .client.withCookie(cookie)
-          .withSession((bearer.body as { token: string }).token)
+          .withBearer((bearer.body as { token: string }).token)
           .withOrigin("https://attacker.test");
 
         const response = await both.delete("/api/session");

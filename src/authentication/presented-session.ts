@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import type { PublicOrigin } from "../config.ts";
 
 /**
  * How a request carries its session, and how a response hands one back.
@@ -61,7 +62,7 @@ const BEARER = /^bearer(?: (.*)$|(?=\s)|$)/i;
 const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
 
 /** Whether the request was sent by a page on SchoolGrid's own origin. */
-export function fromPublicOrigin(request: FastifyRequest, publicOrigin: string): boolean {
+export function fromPublicOrigin(request: FastifyRequest, publicOrigin: PublicOrigin): boolean {
   return request.headers.origin === publicOrigin;
 }
 
@@ -92,7 +93,7 @@ function presentedIn(form: SessionForm, token: string): PresentedSession {
 }
 
 /** How a request presents its session, decided before anything is looked up. */
-export function presentedSession(request: FastifyRequest, publicOrigin: string): PresentedSession {
+export function presentedSession(request: FastifyRequest, publicOrigin: PublicOrigin): PresentedSession {
   const cookies = sessionCookieValues(request);
   const bearer = BEARER.exec(request.headers.authorization ?? "");
 

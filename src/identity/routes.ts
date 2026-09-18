@@ -8,6 +8,7 @@ import {
 } from "../access/index.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
+import type { PublicOrigin } from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction } from "../db/transaction.ts";
 import { forAccount } from "../http/account-route.ts";
@@ -43,7 +44,7 @@ export function registerIdentityRoutes(
   app: FastifyInstance,
   database: Database,
   authenticator: Authenticator,
-  publicOrigin: string,
+  publicOrigin: PublicOrigin,
 ): void {
   // Not School-scoped: it answers which Schools a caller may choose to act in.
   // A School the account does not reach, or reaches only through memberships

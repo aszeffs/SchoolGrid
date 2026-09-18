@@ -1,5 +1,5 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
-import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
+import { DEFAULT_RATE_LIMIT, type LogLevel, type PublicOrigin, type RateLimit } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
@@ -19,7 +19,7 @@ export interface ServerOptions {
   logLevel?: LogLevel;
   rateLimit?: RateLimit;
   /** The origin browsers reach the server at. See `Config.publicOrigin`. */
-  publicOrigin: string;
+  publicOrigin: PublicOrigin;
   /**
    * The web app, served on every path outside `/api`. Without it, those paths
    * are refused like any other path no route matches.

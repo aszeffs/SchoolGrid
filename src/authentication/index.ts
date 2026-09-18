@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { PublicOrigin } from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { forAccount } from "../http/account-route.ts";
@@ -199,7 +200,7 @@ export type SessionEnding = {
 );
 
 /** An Authenticator for SchoolGrid served at `publicOrigin`. */
-export function createAuthenticator(database: Database, publicOrigin: string): Authenticator {
+export function createAuthenticator(database: Database, publicOrigin: PublicOrigin): Authenticator {
   return {
     async authenticate(request) {
       const presented = presentedSession(request, publicOrigin);
@@ -295,7 +296,7 @@ interface AuthenticationOptions {
   database: Database;
   authenticator: Authenticator;
   recordAttempt: RecordAttempt;
-  publicOrigin: string;
+  publicOrigin: PublicOrigin;
 }
 
 async function authenticationRoutes(
