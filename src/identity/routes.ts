@@ -10,7 +10,7 @@ import { appendAuditRecord } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction } from "../db/transaction.ts";
-import { refuse } from "../http/refusal.ts";
+import { forAccount } from "../http/account-route.ts";
 import { boundedText, fieldsOf } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
 import { registerInvitationRedemptionRoutes } from "./invitation-redemption-routes.ts";
@@ -48,14 +48,12 @@ export function registerIdentityRoutes(
   // Not School-scoped: it answers which Schools a caller may choose to act in.
   // A School the account does not reach, or reaches only through memberships
   // that are not in force, is simply not listed.
-  app.get("/schools", async (request, reply) => {
-    const { account, failure } = await authenticator.authenticate(request);
-    if (account === null) {
-      request.log.info({ reason: failure, url: request.url }, "refused");
-      return refuse(reply);
-    }
-    return reply.status(200).send({ schools: await reachableSchools(database, account) });
-  });
+  app.get(
+    "/schools",
+    forAccount(authenticator, async (account) => ({
+      schools: await reachableSchools(database, account),
+    })),
+  );
 
   // Not School-scoped either: the caller is known by the secret they hold,
   // not by a Person in any School.
