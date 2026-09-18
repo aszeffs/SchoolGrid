@@ -352,7 +352,10 @@ async function authenticationRoutes(
 
   app.get(
     "/session",
-    forAccount(authenticator, async (account) => ({ account })),
+    forAccount(
+      (request) => authenticator.authenticate(request),
+      async (account) => ({ account }),
+    ),
   );
 
   app.delete("/session", async (request, reply) => {

@@ -50,9 +50,10 @@ export function registerIdentityRoutes(
   // that are not in force, is simply not listed.
   app.get(
     "/schools",
-    forAccount(authenticator, async (account) => ({
-      schools: await reachableSchools(database, account),
-    })),
+    forAccount(
+      (request) => authenticator.authenticate(request),
+      async (account) => ({ schools: await reachableSchools(database, account) }),
+    ),
   );
 
   // Not School-scoped either: the caller is known by the secret they hold,
