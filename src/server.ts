@@ -9,8 +9,8 @@ import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
-import { registerSecurityHeaders, setSecurityHeaders } from "./http/security-headers.ts";
-import { serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
+import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } from "./http/security-headers.ts";
+import { cacheControlFor, serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
 
@@ -46,6 +46,7 @@ export function buildServer({
   onRoute,
 }: ServerOptions): FastifyInstance {
   const authenticator = createAuthenticator(database, publicOrigin);
+  const cacheControlOf: CacheControlFor = (request) => cacheControlFor(webApp, request);
 
   const app = Fastify({
     logger: logLevel === "silent" ? false : { level: logLevel },
@@ -55,7 +56,7 @@ export function buildServer({
     // for a path that matches a route with a parameter, so that answer would
     // confirm the route exists. It is a refusal like an unmatched route.
     frameworkErrors: (_error, request, reply) =>
-      refuseUnrouted(database, authenticator, request, setSecurityHeaders(reply), "malformed-url"),
+      refuseUnrouted(database, authenticator, request, setSecurityHeaders(reply, cacheControlOf), "malformed-url"),
   });
 
   // First, so no route is registered before it is listening.
@@ -68,7 +69,7 @@ export function buildServer({
   }
 
   // Before the rate limit, so a throttled request has them too.
-  registerSecurityHeaders(app);
+  registerSecurityHeaders(app, cacheControlOf);
 
   // The web app's page and assets are served from memory and reach nothing a
   // flood could exhaust, while one page load fetches several of them. Counted,

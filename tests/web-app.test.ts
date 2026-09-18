@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { observable, useTestServer, type TestClient } from "./support/harness.ts";
+import {
+  observable,
+  observableApartFromCacheControl,
+  useTestServer,
+  type TestClient,
+} from "./support/harness.ts";
 
 const ALICE = { username: "alice", password: "correct horse battery staple" };
 
@@ -68,12 +73,17 @@ describe("the web app", () => {
       expect(observable(head).headers).toEqual(observable(get).headers);
     });
 
+    // Outside /api a refusal is revalidated like the app's page rather than
+    // never stored, which its path alone decides; every other byte matches.
     it("is refused for a method other than GET or HEAD", async () => {
       const refusal = await server().client.get("/api/no-such-route");
 
       for (const method of ["POST", "PUT", "PATCH", "DELETE"] as const) {
         const response = await navigating(server().client).request(method, "/schools", {});
-        expect(observable(response), method).toEqual(observable(refusal));
+        expect(observableApartFromCacheControl(response), method).toEqual(
+          observableApartFromCacheControl(refusal),
+        );
+        expect(response.headers["cache-control"], method).toBe("no-cache");
       }
     });
   });
@@ -102,7 +112,11 @@ describe("the web app", () => {
         "/web-app.test.ts",
         "/",
       ]) {
-        expect(observable(await server().client.get(path)), path).toEqual(observable(refusal));
+        const response = await server().client.get(path);
+        expect(observableApartFromCacheControl(response), path).toEqual(
+          observableApartFromCacheControl(refusal),
+        );
+        expect(response.headers["cache-control"], path).toBe("no-cache");
       }
     });
   });

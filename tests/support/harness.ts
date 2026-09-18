@@ -68,6 +68,24 @@ export function observableApartFromOwnCookie(response: TestResponse) {
   return { ...rest, headers: withoutCookie, headerOrder: headerOrder.filter((name) => name !== "set-cookie") };
 }
 
+/**
+ * The same, minus `cache-control`, which is decided by the request's path
+ * alone: a refusal outside `/api` carries `no-cache` where one under it carries
+ * `no-store`. Every other byte of the two must still match.
+ *
+ * Only for comparing responses to paths on either side of `/api`. Each use pins
+ * the `cache-control` itself alongside, so it never goes unasserted.
+ */
+export function observableApartFromCacheControl(response: TestResponse) {
+  const { headers, headerOrder, ...rest } = observable(response);
+  const { "cache-control": _cacheControl, ...withoutCacheControl } = headers;
+  return {
+    ...rest,
+    headers: withoutCacheControl,
+    headerOrder: headerOrder.filter((name) => name !== "cache-control"),
+  };
+}
+
 /** Every `Set-Cookie` header a response carries, attributes and all. */
 export function setCookiesOf(response: TestResponse): string[] {
   return [response.headers["set-cookie"] ?? []].flat();
@@ -284,6 +302,11 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
 export interface TestServerOptions {
   /** Replaces the default limit so a test can exceed it in a few requests. */
   rateLimit?: RateLimit;
+  /**
+   * Adds routes to the built server before it starts, for a test of what the
+   * server does to any route's response, whatever the route does itself.
+   */
+  addRoutes?: (app: FastifyInstance) => void;
 }
 
 /**
@@ -301,7 +324,7 @@ export interface TestServerOptions {
  * framing); if those ever need asserting, they need a listening server, not a
  * second seam through the application.
  */
-export function useTestServer({ rateLimit }: TestServerOptions = {}): () => TestServer {
+export function useTestServer({ rateLimit, addRoutes }: TestServerOptions = {}): () => TestServer {
   let context: TestServer;
   let app: FastifyInstance;
   let pool: Database;
@@ -327,6 +350,7 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       ...(rateLimit === undefined ? {} : { rateLimit }),
       onRoute: (route) => routes.push(route),
     });
+    addRoutes?.(app);
     await app.ready();
 
     const client = buildClient(app);

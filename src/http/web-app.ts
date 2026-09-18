@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { API_PREFIX } from "./api.ts";
+import { IMMUTABLE, type CacheControl } from "./security-headers.ts";
 
 /**
  * The built web app, held in memory. It is read once at startup, so serving it
@@ -11,14 +12,16 @@ import { API_PREFIX } from "./api.ts";
  */
 export interface WebApp {
   /** The page every navigation outside `/api` is answered with. */
-  index: Buffer;
-  /** Every other servable file, by the exact path it is requested at. */
+  index: Asset;
+  /** Every servable file, by the exact path it is requested at. */
   assets: ReadonlyMap<string, Asset>;
 }
 
 interface Asset {
   body: Buffer;
   contentType: string;
+  /** How long a browser may keep it, decided once as the build is read. */
+  cacheControl: CacheControl;
 }
 
 /**
@@ -38,6 +41,13 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 
 const INDEX = "/index.html";
 
+/**
+ * Where the build puts the files it fingerprints: Vite names each one after a
+ * hash of its contents. Everything else in the build, such as `index.html` and
+ * a file copied from `public/`, keeps its name from one deploy to the next.
+ */
+const FINGERPRINTED = "/assets/";
+
 /** Reads a build from `directory`. Fails if it holds no `index.html`. */
 export async function loadWebApp(directory: URL): Promise<WebApp> {
   const root = fileURLToPath(directory);
@@ -49,13 +59,14 @@ export async function loadWebApp(directory: URL): Promise<WebApp> {
     }
     const file = path.join(entry.parentPath, entry.name);
     const requestPath = `/${path.relative(root, file).split(path.sep).join("/")}`;
-    assets.set(requestPath, { body: await readFile(file), contentType });
+    const cacheControl = requestPath.startsWith(FINGERPRINTED) ? IMMUTABLE : "no-cache";
+    assets.set(requestPath, { body: await readFile(file), contentType, cacheControl });
   }
   const index = assets.get(INDEX);
   if (index === undefined) {
     throw new Error(`The web app at ${root} has no index.html`);
   }
-  return { index: index.body, assets };
+  return { index, assets };
 }
 
 /**
@@ -81,15 +92,38 @@ export function webAppFileFor(webApp: WebApp, request: FastifyRequest): Asset | 
     request.routeOptions.url !== undefined ||
     (request.method !== "GET" && request.method !== "HEAD") ||
     requestPath === null ||
-    requestPath === API_PREFIX ||
-    requestPath.startsWith(`${API_PREFIX}/`)
+    isUnderApi(requestPath)
   ) {
     return null;
   }
   if (acceptsHtml(request)) {
-    return { body: webApp.index, contentType: CONTENT_TYPES[".html"]! };
+    return webApp.index;
   }
   return webApp.assets.get(requestPath) ?? null;
+}
+
+/**
+ * The `cache-control` a response to the request carries, whatever answers it.
+ *
+ * Under `/api`, judged on the decoded path as `webAppFileFor` judges it, it is
+ * always `no-store`. So it is for a path that does not decode: only ever
+ * refused, it cannot be placed on either side. Outside `/api`, a file the web
+ * app answers with carries its own, and anything else, a refusal included,
+ * carries `no-cache` like the app's page. A refusal's therefore depends on its
+ * path alone, never on which files exist (ADR-0002). Only a file served with
+ * a 200, which the public build already tells apart, carries anything else.
+ */
+export function cacheControlFor(webApp: WebApp | undefined, request: FastifyRequest): CacheControl {
+  const requestPath = decodedPath(request);
+  if (requestPath === null || isUnderApi(requestPath)) {
+    return "no-store";
+  }
+  return (webApp === undefined ? null : webAppFileFor(webApp, request))?.cacheControl ?? "no-cache";
+}
+
+/** Whether a decoded path is under `/api`. */
+function isUnderApi(requestPath: string): boolean {
+  return requestPath === API_PREFIX || requestPath.startsWith(`${API_PREFIX}/`);
 }
 
 /**
