@@ -115,4 +115,7 @@ export const api = {
   inspectInvitation: (secret: string) =>
     request<InvitationInspection>("POST", "/invitations/inspect", { secret }),
   redeemInvitation,
+  /** Redeems as whichever account the browser's session belongs to. */
+  redeemInvitationSignedIn: (secret: string) =>
+    request<undefined>("POST", "/invitations/redeem-signed-in", { secret }),
 };

@@ -209,6 +209,107 @@ test("an invited Person redeems the link with a new account and lands signed in"
   }
 });
 
+/** Signed in as the School Administrator, adds a Person to a School and returns their Invitation link. */
+async function inviteNewPerson(page: Page, school: string, displayName: string): Promise<string> {
+  await page.goto("/");
+  await schoolsList(page).getByRole("link", { name: school }).click();
+  await page.getByLabel("Display name").fill(displayName);
+  await page.getByRole("button", { name: "Add Person" }).click();
+  await page.getByRole("button", { name: `Invite ${displayName}` }).click();
+  return page.getByLabel("Invitation link").inputValue();
+}
+
+async function redeemWithExistingAccount(page: Page, { username, password }: { username: string; password: string }) {
+  await page.getByRole("button", { name: "I already have an account" }).click();
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in and redeem" }).click();
+}
+
+test("a person with an account at one School redeems an Invitation into a second by signing in", async ({
+  page,
+  context,
+}) => {
+  const { schoolAdministrator, schools } = seeded();
+  const suffix = randomUUID().slice(0, 8);
+  const credentials = { username: `morgan-${suffix}`, password: "a staple that reaches two Schools" };
+
+  await signIn(page, schoolAdministrator);
+  await expect(schoolsList(page)).not.toHaveCount(0);
+  const first = await inviteNewPerson(page, schools[0]!, `Morgan ${suffix}`);
+  const second = await inviteNewPerson(page, schools[1]!, `Morgan at ${schools[1]!} ${suffix}`);
+
+  const invitee = await context.browser()!.newContext();
+  try {
+    const inviteePage = await invitee.newPage();
+    await inviteePage.goto(first);
+    await inviteePage.getByLabel("Username").fill(credentials.username);
+    await inviteePage.getByLabel("Password").fill(credentials.password);
+    await inviteePage.getByRole("button", { name: "Redeem Invitation" }).click();
+    await expect(inviteePage).toHaveURL("/");
+    await inviteePage.getByRole("button", { name: "Sign out" }).click();
+    await expect(inviteePage).toHaveURL("/sign-in");
+
+    await inviteePage.goto(second);
+    await expect(inviteePage.getByRole("heading", { name: `Join ${schools[1]!}` })).toBeVisible();
+    await redeemWithExistingAccount(inviteePage, credentials);
+
+    await expect(inviteePage).toHaveURL("/");
+    await expect(inviteePage.getByText(`Signed in as ${credentials.username}`)).toBeVisible();
+  } finally {
+    await invitee.close();
+  }
+
+  // Both Persons are now claimed, each in its own School.
+  for (const [school, displayName] of [
+    [schools[0]!, `Morgan ${suffix}`],
+    [schools[1]!, `Morgan at ${schools[1]!} ${suffix}`],
+  ] as const) {
+    await page.goto("/");
+    await schoolsList(page).getByRole("link", { name: school }).click();
+    const persons = page.getByRole("list", { name: "Persons" }).getByRole("listitem");
+    await expect(persons.filter({ hasText: displayName })).toHaveCount(1);
+    await expect(persons.filter({ hasText: displayName })).not.toContainText("Unclaimed");
+  }
+});
+
+test("an account that already has a Person in the School sees the generic state, and the link still works", async ({
+  page,
+  context,
+}) => {
+  const { schoolAdministrator, schools } = seeded();
+  const suffix = randomUUID().slice(0, 8);
+
+  await signIn(page, schoolAdministrator);
+  await expect(schoolsList(page)).not.toHaveCount(0);
+  const link = await inviteNewPerson(page, schools[0]!, `Taylor ${suffix}`);
+
+  const duplicate = await context.browser()!.newContext();
+  try {
+    const duplicatePage = await duplicate.newPage();
+    await duplicatePage.goto(link);
+    // The School Administrator already resolves to a Person in every seeded School.
+    await redeemWithExistingAccount(duplicatePage, schoolAdministrator);
+    await expect(duplicatePage.getByRole("heading", { name: "Not available" })).toBeVisible();
+  } finally {
+    await duplicate.close();
+  }
+
+  const invitee = await context.browser()!.newContext();
+  try {
+    const inviteePage = await invitee.newPage();
+    await inviteePage.goto(link);
+    await expect(inviteePage.getByRole("heading", { name: `Join ${schools[0]!}` })).toBeVisible();
+    const username = `taylor-${suffix}`;
+    await inviteePage.getByLabel("Username").fill(username);
+    await inviteePage.getByLabel("Password").fill("the link still worked for me");
+    await inviteePage.getByRole("button", { name: "Redeem Invitation" }).click();
+    await expect(inviteePage.getByText(`Signed in as ${username}`)).toBeVisible();
+  } finally {
+    await invitee.close();
+  }
+});
+
 test("a stale Invitation link shows the one generic state", async ({ page, context }) => {
   const { schoolAdministrator, schools } = seeded();
   const displayName = `Riley ${randomUUID().slice(0, 8)}`;

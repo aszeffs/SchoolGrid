@@ -225,6 +225,7 @@ describe("Platform Administrator", () => {
           "HEAD /api/schools",
           "POST /api/invitations/inspect",
           "POST /api/invitations/redeem",
+          "POST /api/invitations/redeem-signed-in",
           "POST /api/platform/schools",
         ].sort(),
       );

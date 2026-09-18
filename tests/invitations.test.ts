@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { UserAccount } from "../src/authentication/index.ts";
+import type { Person } from "../src/identity/index.ts";
 import {
   cookieSentBackFor,
   observable,
@@ -65,6 +66,8 @@ describe("Invitations", () => {
     samAccount: UserAccount;
     /** Bob: Westbrook's School Administrator, with no Person at Northside. */
     bob: TestClient;
+    bobAccount: UserAccount;
+    riley: Person;
     /** Pat: a Platform Administrator, whose account also resolves to a Northside School Administrator. */
     pat: TestClient;
     /** Riley and Casey: unclaimed Persons at Northside. */
@@ -119,6 +122,8 @@ describe("Invitations", () => {
       fran: await inNorthside(FRAN),
       samAccount,
       bob: await inNorthside(BOB),
+      bobAccount: bob,
+      riley,
       pat: await inNorthside(PAT),
       rileyId: riley.id,
       caseyId: casey.id,
@@ -702,6 +707,245 @@ describe("Invitations", () => {
         expect(observable(refused)).toEqual(observable(await inspect(UNKNOWN_SECRET)));
         expect(await pending(world)).toHaveLength(1);
       });
+    });
+  });
+
+  describe("redeeming with the signed-in account", () => {
+    const UNKNOWN_SECRET = "an-unknown-secret-that-matches-nothing-at-all";
+    const PATH = "/api/invitations/redeem-signed-in";
+
+    /** Bob as a browser on the public origin: Westbrook's School Administrator, with no Person at Northside. */
+    const bobInBrowser = async () => (await server().signInWithCookie(BOB)).withOrigin(server().publicOrigin);
+    const redeemAs = (client: TestClient, secret: string) => client.post(PATH, { secret });
+
+    const personsOf = async (account: UserAccount) =>
+      (
+        await server().ownerDatabase.query<{ id: string; schoolId: string }>(
+          `SELECT id, school_id AS "schoolId" FROM app.person WHERE user_account_id = $1`,
+          [account.id],
+        )
+      ).rows;
+
+    const refusalsFor = async (world: World, invitationId: string) =>
+      (await trail(world))
+        .filter(({ action, target }) => action === "access.refused" && target.id === invitationId)
+        .map(({ reason }) => reason);
+
+    it("attaches the Person to the account, marks the Invitation redeemed, and audits it", async () => {
+      const world = await arrange();
+      const { invitation, link } = await issue(world.alice, world.rileyId);
+      const bob = await bobInBrowser();
+
+      const redeemed = await redeemAs(bob, secretOf(link));
+
+      expect(redeemed.status).toBe(204);
+      expect(setCookiesOf(redeemed)).toEqual([]);
+      const persons = await personsOf(world.bobAccount);
+      expect(persons).toHaveLength(2);
+      expect(persons).toContainEqual({ id: world.rileyId, schoolId: world.northsideId });
+      expect(persons).toContainEqual({ id: expect.any(String), schoolId: world.westbrookId });
+      expect(await pending(world)).toEqual([]);
+      const [record] = await trail(world);
+      expect(record).toEqual({
+        id: expect.any(String),
+        occurredAt: expect.any(String),
+        actorPersonId: world.rileyId,
+        actorPlatformAdministratorId: null,
+        action: "invitation.redeemed",
+        target: { type: "invitation", id: invitation.id },
+        reason: null,
+        before: null,
+        after: { userAccountId: world.bobAccount.id },
+      });
+    });
+
+    it("accepts a Bearer session, which needs no Origin", async () => {
+      const world = await arrange();
+      const { link } = await issue(world.alice, world.rileyId);
+
+      const redeemed = await redeemAs(await server().signIn(BOB), secretOf(link));
+
+      expect(redeemed.status).toBe(204);
+      expect(await pending(world)).toEqual([]);
+    });
+
+    it("lets one login reach both Schools once granted, leaving the two Persons unrelated", async () => {
+      const world = await arrange();
+      const { link } = await issue(world.alice, world.rileyId);
+      const bob = await bobInBrowser();
+      await redeemAs(bob, secretOf(link));
+      await server().grantMembership({ person: world.riley, role: "faculty" });
+
+      const listed = await bob.get("/api/schools");
+
+      expect(listed.status).toBe(200);
+      expect((listed.body as { schools: { name: string }[] }).schools.map(({ name }) => name).sort()).toEqual([
+        "Northside",
+        "Westbrook",
+      ]);
+      // Acting in Westbrook, Bob's Person there reaches nothing of Riley's at Northside.
+      const acrossSchools = await bob.inSchool(world.westbrookId).get(`/persons/${world.rileyId}`);
+      expect(observable(acrossSchools)).toEqual(observable(await standardRefusal(world)));
+      const westbrookPerson = (await personsOf(world.bobAccount)).find(({ schoolId }) => schoolId === world.westbrookId);
+      const fromNorthside = await bob.inSchool(world.northsideId).get(`/persons/${westbrookPerson!.id}`);
+      expect(observable(fromNorthside)).toEqual(observable(await standardRefusal(world)));
+    });
+
+    describe("an account that already resolves to a Person in the Invitation's School", () => {
+      it("is refused exactly as an unknown secret, leaving the Invitation pending and auditing why", async () => {
+        const world = await arrange();
+        const { invitation, link } = await issue(world.alice, world.rileyId);
+        const sam = (await server().signInWithCookie(SAM)).withOrigin(server().publicOrigin);
+
+        const refused = await redeemAs(sam, secretOf(link));
+
+        expect(observable(refused)).toEqual(observable(await redeemAs(sam, UNKNOWN_SECRET)));
+        expect(await pending(world)).toEqual([invitation]);
+        expect(await personsOf(world.samAccount)).toHaveLength(1);
+        expect(await refusalsFor(world, invitation.id)).toEqual(["duplicate-person"]);
+      });
+
+      it("leaves the link working for another account", async () => {
+        const world = await arrange();
+        const { link } = await issue(world.alice, world.rileyId);
+        const sam = (await server().signInWithCookie(SAM)).withOrigin(server().publicOrigin);
+        await redeemAs(sam, secretOf(link));
+
+        const redeemed = await redeemAs(await bobInBrowser(), secretOf(link));
+
+        expect(redeemed.status).toBe(204);
+        expect(await pending(world)).toEqual([]);
+      });
+    });
+
+    describe("a secret that is not a pending Invitation", () => {
+      const cases: [string, (world: World) => Promise<string>][] = [
+        ["unknown", async () => UNKNOWN_SECRET],
+        [
+          "expired",
+          async (w) => {
+            const { link, invitation } = await issue(w.alice, w.rileyId);
+            await server().expireInvitation(invitation.id);
+            return secretOf(link);
+          },
+        ],
+        [
+          "revoked",
+          async (w) => {
+            const { link, invitation } = await issue(w.alice, w.rileyId);
+            await w.alice.delete(`/invitations/${invitation.id}`);
+            return secretOf(link);
+          },
+        ],
+        [
+          "already redeemed",
+          async (w) => {
+            const { link } = await issue(w.alice, w.rileyId);
+            await redeemAs(await server().signIn(BOB), secretOf(link));
+            return secretOf(link);
+          },
+        ],
+        ["malformed", async () => ""],
+      ];
+
+      it.each(cases)("is refused when %s, byte-identically to one that matches nothing", async (_case, makeSecret) => {
+        const world = await arrange();
+        const secret = await makeSecret(world);
+        const bob = await bobInBrowser();
+
+        const refused = await redeemAs(bob, secret);
+
+        expect(observable(refused)).toEqual(observable(await redeemAs(bob, UNKNOWN_SECRET)));
+        expect(observable(refused)).toEqual(
+          observable(await server().client.post("/api/invitations/inspect", { secret: UNKNOWN_SECRET })),
+        );
+      });
+
+      it("audits the true reason once a secret has matched an Invitation, and records nothing for one that matches nothing", async () => {
+        const world = await arrange();
+        const { link, invitation } = await issue(world.alice, world.rileyId);
+        await world.alice.delete(`/invitations/${invitation.id}`);
+        const before = (await trail(world)).length;
+
+        await redeemAs(await server().signIn(BOB), secretOf(link));
+        await redeemAs(await server().signIn(BOB), UNKNOWN_SECRET);
+
+        const recorded = (await trail(world)).slice(0, -before);
+        expect(recorded.map(({ action, reason, target }) => [action, reason, target])).toEqual([
+          ["access.refused", "revoked", { type: "invitation", id: invitation.id }],
+        ]);
+      });
+    });
+
+    describe("a caller without a usable session", () => {
+      const callers: [string, () => Promise<TestClient>, string][] = [
+        ["no session", async () => server().client.withOrigin(server().publicOrigin), "unauthenticated"],
+        [
+          "a stale session",
+          async () => {
+            const bob = await bobInBrowser();
+            expect((await bob.delete("/api/session")).status).toBe(204);
+            return bob;
+          },
+          "unauthenticated",
+        ],
+        ["a cookie session sent without the public Origin", async () => server().signInWithCookie(BOB), "cross-origin"],
+        [
+          "a cookie session sent from another Origin",
+          async () => (await server().signInWithCookie(BOB)).withOrigin("https://attacker.test"),
+          "cross-origin",
+        ],
+      ];
+
+      it.each(callers)("is refused with %s, leaving the Invitation pending and auditing why", async (_case, caller, reason) => {
+        const world = await arrange();
+        const { invitation, link } = await issue(world.alice, world.rileyId);
+        const client = await caller();
+
+        const refused = await redeemAs(client, secretOf(link));
+
+        expect(observable(refused)).toEqual(observable(await redeemAs(await server().signIn(BOB), UNKNOWN_SECRET)));
+        expect(await pending(world)).toEqual([invitation]);
+        expect(await personsOf(world.bobAccount)).toHaveLength(1);
+        expect(await refusalsFor(world, invitation.id)).toEqual([reason]);
+      });
+    });
+
+    it("attaches at most one Person in a School when one account redeems two of its Invitations at once", async () => {
+      const world = await arrange();
+      const riley = await issue(world.alice, world.rileyId);
+      const casey = await issue(world.alice, world.caseyId);
+      const bob = await bobInBrowser();
+
+      const redeemed = await Promise.all([redeemAs(bob, secretOf(riley.link)), redeemAs(bob, secretOf(casey.link))]);
+
+      expect(redeemed.map(({ status }) => status).sort()).toEqual([204, 404]);
+      const refused = redeemed.find(({ status }) => status === 404)!;
+      expect(observable(refused)).toEqual(observable(await redeemAs(bob, UNKNOWN_SECRET)));
+      expect((await personsOf(world.bobAccount)).filter(({ schoolId }) => schoolId === world.northsideId)).toHaveLength(1);
+      expect(await pending(world)).toHaveLength(1);
+      const refusals = [
+        ...(await refusalsFor(world, riley.invitation.id)),
+        ...(await refusalsFor(world, casey.invitation.id)),
+      ];
+      expect(refusals).toEqual(["duplicate-person"]);
+    });
+
+    it("produces exactly one attachment when two accounts race to redeem one Invitation", async () => {
+      const world = await arrange();
+      const { link } = await issue(world.alice, world.rileyId);
+      const wrenAccount = await server().createAccount({ username: "wren", password: "a westbrook staple, long" });
+      await server().createPerson({ schoolId: world.westbrookId, displayName: "Wren's twin", account: wrenAccount });
+      const wren = await server().signIn({ username: "wren", password: "a westbrook staple, long" });
+
+      const redeemed = await Promise.all([redeemAs(await server().signIn(BOB), secretOf(link)), redeemAs(wren, secretOf(link))]);
+
+      expect(redeemed.map(({ status }) => status).sort()).toEqual([204, 404]);
+      const { rows } = await server().ownerDatabase.query<{ user_account_id: string }>(
+        "SELECT user_account_id FROM app.person WHERE id = $1",
+        [world.rileyId],
+      );
+      expect([world.bobAccount.id, wrenAccount.id]).toContain(rows[0]!.user_account_id);
     });
   });
 
