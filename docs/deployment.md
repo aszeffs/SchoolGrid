@@ -123,7 +123,9 @@ gh secret set VERCEL_TOKEN --env production --repo "$REPO"
 
 ## Deploying
 
-Deploys come only from the container workflow on `main`, after the image's provenance is verified. The job writes two files, neither of them committed:
+Deploys come only from the container workflow's `deploy` job on `main`, which calls [`scripts/deploy.sh`](../scripts/deploy.sh). It verifies the digest's provenance, migrates as the owner with that image, deploys, and waits for health, each step only if the one before succeeded. It deploys nothing if a newer commit has reached `main` since, so a slow older run cannot roll production back. The job runs in the `production` concurrency group, one deploy at a time; the nightly reset the spec plans will share it.
+
+The script writes two files into a temporary directory outside the repository and deploys from there, so nothing else is uploaded and neither is committed:
 
 `Dockerfile.vercel`, one line naming the verified digest, never a tag:
 

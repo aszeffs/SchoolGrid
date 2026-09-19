@@ -38,3 +38,9 @@ Thumbs.db
 # Browser tests
 playwright-report/
 test-results/
+
+# Written by scripts/deploy.sh into a temporary directory, never here. Ignored
+# in case the runbook is followed by hand from the repository.
+Dockerfile.vercel
+vercel.json
+.vercel/
