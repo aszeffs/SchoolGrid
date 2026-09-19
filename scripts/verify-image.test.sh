@@ -187,6 +187,13 @@ mkdir -p "$websource/app/web/src"
 touch "$websource/app/web/src/main.tsx" "$websource/app/web/package.json"
 expect "web sources beside the build are caught" "$websource" "nonroot" 1 "outside the web build: /app/web/package.json"
 
+# The demo seed publishes its passwords, so an image holding it could be run
+# anywhere with accounts anyone can sign in to. A `COPY . .` would bring it in.
+seeded="$(fixture seeded)"
+mkdir -p "$seeded/app/demo"
+touch "$seeded/app/demo/seed.sql"
+expect "the demo seed in the runtime image is caught" "$seeded" "nonroot" 1 "contains a demo seed"
+
 expect "an empty User is caught" "$correct" "" 1 "runs as root"
 expect "User=root:root is caught" "$correct" "root:root" 1 "runs as root"
 

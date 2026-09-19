@@ -130,14 +130,31 @@ cat > "$workdir/bin/psql" <<'DOUBLE'
 #!/usr/bin/env bash
 set -euo pipefail
 command=""
+file=""
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   if [ "${args[$i]}" = "--command" ]; then command="${args[$((i + 1))]}"; fi
+  if [ "${args[$i]}" = "--file" ]; then file="${args[$((i + 1))]}"; fi
 done
 
 if [ "$SCENARIO" = "database-down" ] || { [ "$SCENARIO" = "database-lost" ] && [ -e "$STATE/started" ]; }; then
   echo "psql: error: connection refused" >&2
   exit 2
+fi
+
+# Running the demo's seed. It must be the repository's, and it fails when a
+# case says the database refuses it.
+if [ -n "$file" ]; then
+  if [ "$(basename "$file")" != "seed.sql" ] || [ ! -f "$file" ]; then
+    echo "double: seeded from something else: ${file}" >&2
+    exit 64
+  fi
+  if [ "$SCENARIO" = "seed-fails" ]; then
+    echo 'psql:demo/seed.sql:27: ERROR:  duplicate key value violates unique constraint "school_pkey"' >&2
+    exit 3
+  fi
+  touch "$STATE/seeded"
+  exit 0
 fi
 
 migrated=false
@@ -393,6 +410,19 @@ then_command=(bash -c 'echo "then saw ${SCHOOLGRID_ORIGIN} and ${SCHOOLGRID_DATA
 expect "a command given after the image runs against the passing image" healthy 0 \
   "then saw http://localhost:3000 and postgres://schoolgrid_runtime:schoolgrid_runtime@127.0.0.1:5432/schoolgrid"
 expect_removed "a command given after the image runs against the passing image"
+
+# The browser suite tries each role on the demo, so the demo is seeded and
+# served before the command runs, and the command is told where.
+then_command=(bash -c 'test -e "$STATE/seeded" && echo "then saw the demo at ${SCHOOLGRID_DEMO_ORIGIN}"')
+expect "a command given after the image runs against a seeded demo" healthy 0 \
+  "then saw the demo at http://localhost:3001"
+expect "the demo is served with DEMO_MODE on" healthy 0 "with DEMO_MODE on"
+
+# A seed the database refuses leaves no demo to try, and must say why.
+then_command=(true)
+expect "a seed that fails fails the smoke test" seed-fails 1 "could not seed the demo" \
+  "the command run against the image passed"
+expect "a seed that fails surfaces the database's error" seed-fails 1 "duplicate key value"
 
 # The browser suite failing must fail the job, not print and pass.
 then_command=(false)

@@ -88,6 +88,10 @@ assert_absent() {
 
 assert_absent "shell" 'sh|bash|dash|ash|zsh|ksh|busybox'
 assert_absent "package manager" 'apt|apt-get|aptitude|dpkg|apk|yum|dnf|rpm|microdnf|npm|npx|pnpm|yarn'
+# The public demo's seed creates accounts whose passwords are published. It is
+# run against the demo database from the repository, and never belongs in an
+# image any deployment could run: .dockerignore keeps it out of the context.
+assert_absent "demo seed" 'seed\.sql'
 
 # A check that can only ever pass is not a check. The runtime image must still
 # contain the interpreter, so finding it proves the export and the patterns
