@@ -37,6 +37,12 @@ export interface Config extends Partial<MigrationConfig> {
    */
   publicOrigin: PublicOrigin;
   buildInfo: BuildInfo;
+  /**
+   * Whether this is the public demo, which publishes a sign-in for each School
+   * role. Only the demo database, seeded with invented data, may run with it:
+   * anywhere else it offers sign-ins to accounts that should not exist.
+   */
+  demoMode: boolean;
 }
 
 /**
@@ -146,6 +152,18 @@ function loadBuildInfo(): BuildInfo {
   };
 }
 
+/** Whether the public demo is on. Anything but an exact `true` or `false` fails startup. */
+function demoModeEnv(): boolean {
+  const raw = optionalEnv("DEMO_MODE");
+  if (raw === undefined || raw === "false") {
+    return false;
+  }
+  if (raw === "true") {
+    return true;
+  }
+  throw new Error(`DEMO_MODE must be true or false, received: ${JSON.stringify(raw)}`);
+}
+
 function isLogLevel(value: string): value is LogLevel {
   return (LOG_LEVELS as readonly string[]).includes(value);
 }
@@ -192,5 +210,6 @@ export function loadConfig(): Config {
     },
     publicOrigin: parsePublicOrigin(requireEnv("PUBLIC_ORIGIN")),
     buildInfo: loadBuildInfo(),
+    demoMode: demoModeEnv(),
   };
 }

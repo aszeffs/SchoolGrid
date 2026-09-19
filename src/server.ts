@@ -8,6 +8,7 @@ import type { Database } from "./db/pool.ts";
 import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
 import { registerBuildInfoRoute } from "./http/build-info.ts";
+import { registerDemoRoute } from "./http/demo.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } from "./http/security-headers.ts";
@@ -23,6 +24,8 @@ export interface ServerOptions {
   publicOrigin: PublicOrigin;
   /** What the server was built from, served to anyone. Unless given, it knows nothing. */
   buildInfo?: BuildInfo;
+  /** Whether to publish the demo's sign-ins. See `Config.demoMode`. Off unless given. */
+  demoMode?: boolean;
   /**
    * The web app, served on every path outside `/api`. Without it, those paths
    * are refused like any other path no route matches.
@@ -46,6 +49,7 @@ export function buildServer({
   rateLimit = DEFAULT_RATE_LIMIT,
   publicOrigin,
   buildInfo = {},
+  demoMode = false,
   webApp,
   onRoute,
 }: ServerOptions): FastifyInstance {
@@ -128,6 +132,7 @@ export function buildServer({
       });
 
       registerBuildInfoRoute(api, buildInfo);
+      registerDemoRoute(api, demoMode);
 
       registerAuthenticationRoutes(api, {
         database,

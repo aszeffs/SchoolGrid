@@ -307,6 +307,8 @@ export interface TestServerOptions {
   rateLimit?: RateLimit;
   /** What the server says it was built from. Unless given, it knows nothing. */
   buildInfo?: BuildInfo;
+  /** Whether the server publishes the demo's sign-ins. Unless given, it does not. */
+  demoMode?: boolean;
   /**
    * Adds routes to the built server before it starts, for a test of what the
    * server does to any route's response, whatever the route does itself.
@@ -329,7 +331,7 @@ export interface TestServerOptions {
  * framing); if those ever need asserting, they need a listening server, not a
  * second seam through the application.
  */
-export function useTestServer({ rateLimit, buildInfo, addRoutes }: TestServerOptions = {}): () => TestServer {
+export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: TestServerOptions = {}): () => TestServer {
   let context: TestServer;
   let app: FastifyInstance;
   let pool: Database;
@@ -354,6 +356,7 @@ export function useTestServer({ rateLimit, buildInfo, addRoutes }: TestServerOpt
       webApp: await loadWebApp(WEB_APP_FIXTURE),
       ...(rateLimit === undefined ? {} : { rateLimit }),
       ...(buildInfo === undefined ? {} : { buildInfo }),
+      ...(demoMode === undefined ? {} : { demoMode }),
       onRoute: (route) => routes.push(route),
     });
     addRoutes?.(app);
