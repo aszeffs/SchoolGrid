@@ -68,6 +68,26 @@ pre {
   color: var(--muted);
 }
 
+.demo {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--muted);
+}
+
+.demo ul {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.demo li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+}
+
 .persons {
   padding: 0;
   list-style: none;

@@ -1,10 +1,19 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
-import { api } from "./api.ts";
+import { api, type DemoAccount } from "./api.ts";
 import { navigate } from "./navigation.ts";
+
+/** Each School role as the demo's panel names it. */
+const ROLE_NAMES: Record<DemoAccount["role"], string> = {
+  school_administrator: "School Administrator",
+  faculty: "Faculty",
+  student: "Student",
+  guardian: "Guardian",
+};
 
 export function SignIn() {
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [demoAccounts, setDemoAccounts] = useState<DemoAccount[]>([]);
 
   // Someone already signed in has nothing to do here.
   useEffect(() => {
@@ -19,20 +28,38 @@ export function SignIn() {
     };
   }, []);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setSubmitting(true);
-    const result = await api.signIn({
-      username: String(form.get("username") ?? ""),
-      password: String(form.get("password") ?? ""),
+  // Only the public demo publishes any. Anywhere else, and if the request
+  // fails, there are none, and the page is the plain sign-in form.
+  useEffect(() => {
+    let current = true;
+    void api.demo().then((demo) => {
+      if (current && demo.ok) {
+        setDemoAccounts(demo.body.accounts);
+      }
     });
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  const signIn = async (credentials: { username: string; password: string }) => {
+    setSubmitting(true);
+    const result = await api.signIn(credentials);
     setSubmitting(false);
     if (result.ok) {
       navigate("/", { replace: true });
     } else {
       setFailed(true);
     }
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void signIn({
+      username: String(form.get("username") ?? ""),
+      password: String(form.get("password") ?? ""),
+    });
   };
 
   const howThisWasBuilt = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -67,6 +94,30 @@ export function SignIn() {
           Sign in
         </button>
       </form>
+      {demoAccounts.length > 0 && (
+        <section className="demo" aria-labelledby="try-a-role">
+          <h2 id="try-a-role">Try a role</h2>
+          <p className="muted">
+            This is a demo holding invented data only. Anyone can change it, and it resets every night.
+          </p>
+          <ul>
+            {demoAccounts.map((account) => (
+              <li key={account.role}>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void signIn({ username: account.username, password: account.password })}
+                >
+                  Sign in as {ROLE_NAMES[account.role]}
+                </button>
+                <span className="muted">
+                  {account.username} / {account.password}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <p className="muted">
         <a href="/how-this-was-built" onClick={howThisWasBuilt}>
           How this was built
