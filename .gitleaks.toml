@@ -6,17 +6,17 @@ useDefault = true
 # purpose: the demo's sign-in page shows them so that anyone can try each School
 # role. They reach only the invented demo School, which is reset every night.
 #
-# Scoped to those exact values and nothing else. Not to the files that hold
-# them: a global allowlist naming paths skips those files whole, whatever its
-# condition, so a real secret committed beside the demo's would go unreported.
-# A new demo account, or a changed password, has to be added here by hand,
-# visibly in review.
-[[allowlists]]
+# Scoped to those exact values and nothing else. Not to the lines that hold
+# them, so a real secret beside one is still reported, and not to the files: an
+# allowlist naming paths skips those files whole, whatever its condition. A new
+# demo account, or a changed password, has to be added here by hand, visibly in
+# review.
+#
+# The single `[allowlist]` table rather than `[[allowlists]]`, which the
+# gitleaks the secret-scan action installs (8.24.3) does not read.
+[allowlist]
 description = "The public demo's published sign-ins (see demo/seed.sql)"
-# Matched against the whole line, so the allowance holds whichever part of the
-# line a rule happens to report as the secret.
-regexTarget = "line"
 regexes = [
-  '''try-schoolgrid-(administrator|faculty|student|guardian)''',
-  '''scrypt\$32768\$8\$3\$(pNkqEqsy24NeQYwhqRDJ0w==\$BL26vwqBZFmCK8sRQaNDuGO4pEgg0hMeKLsk7jupNnA=|jfZRPeT0DRxS\+1BHYQ1RSw==\$iwDF3bDbPjqYddXK2W6O98sV1EODy3LsRzt9M0cw1Xs=|iBWThcqwc\+RklBjxpNGgGA==\$oh59FsTPN\+7YsOKypcx1XLmsttpkaBocFGsYp8J40RM=|T44i/8qSGyb2do\+VmN8HgQ==\$y67Bkj6xKQ8qMwXBs\+Yw4ahpIh4IT\+Gew4/\+bSMmYPM=)''',
+  '''^try-schoolgrid-(administrator|faculty|student|guardian)$''',
+  '''^scrypt\$32768\$8\$3\$(pNkqEqsy24NeQYwhqRDJ0w==\$BL26vwqBZFmCK8sRQaNDuGO4pEgg0hMeKLsk7jupNnA=|jfZRPeT0DRxS\+1BHYQ1RSw==\$iwDF3bDbPjqYddXK2W6O98sV1EODy3LsRzt9M0cw1Xs=|iBWThcqwc\+RklBjxpNGgGA==\$oh59FsTPN\+7YsOKypcx1XLmsttpkaBocFGsYp8J40RM=|T44i/8qSGyb2do\+VmN8HgQ==\$y67Bkj6xKQ8qMwXBs\+Yw4ahpIh4IT\+Gew4/\+bSMmYPM=)$''',
 ]
