@@ -198,7 +198,7 @@ APPLIED_MIGRATIONS="SELECT count(*) FROM public.schema_migrations"
 start_image() {
   local into="$1"
   local port="$2"
-  local credentials="${3:-}"
+  local mode="${3:-}"
   local args=(
     --add-host "${CONTAINER_POSTGRES_HOST}:host-gateway"
     --publish "127.0.0.1:${port}:3000"
@@ -206,9 +206,9 @@ start_image() {
     --env "PUBLIC_ORIGIN=http://localhost:${port}"
     --env "RATE_LIMIT_MAX=${SMOKE_RATE_LIMIT_MAX:-1000}"
   )
-  if [ "$credentials" = "with-owner" ]; then
+  if [ "$mode" = "with-owner" ]; then
     args+=(--env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}")
-  elif [ "$credentials" = "demo" ]; then
+  elif [ "$mode" = "demo" ]; then
     args+=(--env "DEMO_MODE=true")
   fi
 
@@ -467,7 +467,11 @@ if [ "$#" -gt 0 ]; then
 
   # As the maintainer seeds the demo: as the schema owner, stopping at the
   # first error, into the database the image has migrated.
-  if ! PGPASSWORD="$POSTGRES_PASSWORD" psql     --no-psqlrc --quiet --set ON_ERROR_STOP=1     --host "$POSTGRES_HOST" --port "$POSTGRES_PORT"     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB"     --file "$DEMO_SEED" >/dev/null 2>"$workdir/psql.err"; then
+  if ! PGPASSWORD="$POSTGRES_PASSWORD" psql \
+    --no-psqlrc --quiet --set ON_ERROR_STOP=1 \
+    --host "$POSTGRES_HOST" --port "$POSTGRES_PORT" \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    --file "$DEMO_SEED" >/dev/null 2>"$workdir/psql.err"; then
     fail "could not seed the demo from ${DEMO_SEED}"
     cat "$workdir/psql.err" >&2
     exit 1
@@ -478,7 +482,8 @@ if [ "$#" -gt 0 ]; then
   await_healthy "$demo" "$OWNERLESS_HOST_PORT" "the container started with DEMO_MODE on"
   pass "with DEMO_MODE on, ${IMAGE} serves the demo at ${DEMO_ORIGIN}"
 
-  if ! SCHOOLGRID_ORIGIN="$ORIGIN"     SCHOOLGRID_DEMO_ORIGIN="$DEMO_ORIGIN" \
+  if ! SCHOOLGRID_ORIGIN="$ORIGIN" \
+    SCHOOLGRID_DEMO_ORIGIN="$DEMO_ORIGIN" \
     SCHOOLGRID_DATABASE_URL="postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     "$@"; then
     fail "the command run against the image failed: $*"
