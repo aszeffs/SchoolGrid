@@ -37,6 +37,7 @@ To run the service itself you need PostgreSQL 18 or newer (see [docs/database-ro
 | `CONTEXT.md` | The domain glossary. The authority on vocabulary — use its terms, avoid the ones it lists under `_Avoid_`. |
 | `docs/adr/` | Architecture decision records. Read the ones covering an area before changing it. |
 | `docs/agents/` | Conventions for agents working in this repo. |
+| `docs/deployment.md` | The one-time setup of the public demo on Vercel and Neon. |
 | `.scratch/<feature>/` | Specs and implementation tickets, one directory per feature. |
 | `migrations/` | Plain SQL, applied in filename order. Never edit an applied migration; add a new one. |
 
