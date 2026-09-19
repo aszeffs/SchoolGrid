@@ -6,8 +6,8 @@
 # these current so pinning does not decay into shipping something ancient.
 
 # ---- the build toolchain ---------------------------------------------------
-# Named once so the two stages that use it share a digest. Written twice, a
-# Dependabot bump would have to change both and could change one.
+# Named once so the stages that use it share a digest. Written more than once,
+# a Dependabot bump would have to change each copy and could miss one.
 #
 # The Node major here must match the distroless runtime below. Compiled output
 # and installed dependencies built on one major and run on another work until a
@@ -23,25 +23,51 @@ WORKDIR /app
 
 # Manifests first, source second. Dependencies change far less often than
 # code, so this ordering lets an unchanged lockfile reuse the install layer
-# instead of reinstalling on every commit.
+# instead of reinstalling on every commit. `--workspaces=false` installs the
+# service's own dependencies and nothing of the web app's, which its stage
+# below installs for itself.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --workspaces=false
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build
+RUN npm run build:service
+
+# ---- web build -------------------------------------------------------------
+# The web app, bundled into static files that the service serves. A stage of
+# its own, so a change to the page and a change to the service invalidate
+# different layers, and nothing from here reaches the runtime image except
+# `web/dist`.
+FROM node-base AS web-build
+
+WORKDIR /app
+
+# The workspace's dependencies alone, resolved from the one root lockfile, and
+# none of the service's. The web manifest is part of the lockfile's tree, so
+# `npm ci` refuses to install without it.
+COPY package.json package-lock.json ./
+COPY web/package.json ./web/
+RUN npm ci --workspace=@schoolgrid/web --include-workspace-root=false
+
+COPY web ./web
+RUN npm run build --workspace=@schoolgrid/web
 
 # ---- production dependencies -----------------------------------------------
 # A second install rather than pruning the first. `npm ci --omit=dev` resolves
 # strictly from the lockfile and never sees a dev dependency at all, so the
 # tree that ships is derived from the manifest rather than from whatever
 # survived a prune.
+#
+# The web workspace is left out. Everything it is built from is a dev
+# dependency, since the bundle already holds what the page runs, and
+# `--workspaces=false` keeps npm from linking the workspace itself into
+# `node_modules`, where it would point at sources this image does not have.
 FROM node-base AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --workspaces=false
 
 # ---- runtime ---------------------------------------------------------------
 # Distroless: no shell, no package manager, nothing to pivot with. The
@@ -54,6 +80,9 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# The build output alone, never the workspace: served from memory, resolved
+# relative to the compiled entrypoint, which puts it here.
+COPY --from=web-build /app/web/dist ./web/dist
 # Resolved at runtime relative to the compiled migrate module, which puts them
 # here. The entrypoint applies them on start, so an image without this
 # directory boots and then fails at the first query.
@@ -70,6 +99,14 @@ COPY package.json ./
 USER nonroot
 
 ENV NODE_ENV=production
+
+# The commit this image was built from, served at /api/build-info. The container
+# workflow passes it; a build without it leaves it empty, which the service
+# reads as unknown. Declared last, so a new commit rebuilds no layer above it.
+# The image's digest is not here and cannot be: it is a hash of the image, this
+# line included, so the deploy supplies it as IMAGE_DIGEST at runtime.
+ARG BUILD_COMMIT=""
+ENV BUILD_COMMIT=${BUILD_COMMIT}
 
 EXPOSE 3000
 

@@ -1,0 +1,136 @@
+/**
+ * The API, reached on the page's own origin.
+ *
+ * The session is the cookie the browser holds, which page script cannot read
+ * (ADR-0004). Nothing here asks for, reads or stores a token: the browser sends
+ * the cookie with every same-origin request by itself, and an `Origin` with
+ * every change, which is what the server checks the cookie against.
+ */
+
+export type ApiResult<T> = { ok: true; body: T } | { ok: false };
+
+/** A response that was sent and read, or null for a network failure. */
+interface Sent {
+  status: number;
+  body: unknown;
+}
+
+/** The one place a request is actually sent, so every call shares its parsing and its failure handling. */
+async function send(method: string, path: string, body?: unknown): Promise<Sent | null> {
+  try {
+    const response = await fetch(`/api${path}`, {
+      method,
+      ...(body === undefined
+        ? {}
+        : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    });
+    return { status: response.status, body: response.status === 204 ? undefined : await response.json() };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sends a request and says only whether it was answered. A refusal, a throttled
+ * request, a server error and a network failure are all `ok: false`: the app
+ * has one state for all of them, and never explains a refusal the API
+ * deliberately did not explain (ADR-0002).
+ */
+async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
+  const sent = await send(method, path, body);
+  if (sent === null || sent.status < 200 || sent.status >= 300) {
+    return { ok: false };
+  }
+  return { ok: true, body: sent.body as T };
+}
+
+export interface School {
+  id: string;
+  name: string;
+}
+
+export interface ListedPerson {
+  id: string;
+  displayName: string;
+  /** Whether a User account is attached. Sent only to a School Administrator. */
+  claimed?: boolean;
+}
+
+/** A pending Invitation. Its secret is never among what is listed. */
+export interface Invitation {
+  id: string;
+  person: { id: string; displayName: string };
+  issuedAt: string;
+  expiresAt: string;
+}
+
+/** What the running site was built from. Either is absent when the server does not know it. */
+export interface BuildInfo {
+  commit?: string;
+  digest?: string;
+}
+
+/** A sign-in the public demo publishes. Every other deployment publishes none. */
+export interface DemoAccount {
+  role: "school_administrator" | "faculty" | "student" | "guardian";
+  username: string;
+  password: string;
+}
+
+/** A path within one School. */
+const inSchool = (schoolId: string, path: string) => `/schools/${encodeURIComponent(schoolId)}${path}`;
+
+/** What an Invitation's secret names, and nothing else about it (ADR-0002). */
+export interface InvitationInspection {
+  school: { name: string };
+  person: { displayName: string };
+}
+
+/**
+ * Redeeming an Invitation has one field-level message beyond the generic
+ * refusal: a taken username, reachable only once the secret itself is
+ * accepted. `request`'s `ApiResult` cannot express that third outcome, so
+ * this reads the status `send` returns instead, rather than collapsing it.
+ */
+async function redeemInvitation(credentials: {
+  secret: string;
+  username: string;
+  password: string;
+}): Promise<{ status: "redeemed" } | { status: "username_unavailable" } | { status: "refused" }> {
+  const sent = await send("POST", "/invitations/redeem", credentials);
+  if (sent?.status === 201) {
+    return { status: "redeemed" };
+  }
+  if (sent?.status === 409) {
+    return { status: "username_unavailable" };
+  }
+  return { status: "refused" };
+}
+
+export const api = {
+  buildInfo: () => request<BuildInfo>("GET", "/build-info"),
+  demo: () => request<{ accounts: DemoAccount[] }>("GET", "/demo"),
+  signIn: (credentials: { username: string; password: string }) =>
+    request<{ expiresAt: string }>("POST", "/session", credentials),
+  session: () => request<{ account: { id: string; username: string } }>("GET", "/session"),
+  signOut: () => request<undefined>("DELETE", "/session"),
+  schools: () => request<{ schools: School[] }>("GET", "/schools"),
+  persons: (schoolId: string) => request<{ persons: ListedPerson[] }>("GET", inSchool(schoolId, "/persons")),
+  createPerson: (schoolId: string, person: { displayName: string }) =>
+    request<{ person: ListedPerson }>("POST", inSchool(schoolId, "/persons"), person),
+  invitations: (schoolId: string) => request<{ invitations: Invitation[] }>("GET", inSchool(schoolId, "/invitations")),
+  /** The one response that carries the Invitation's link. It cannot be asked for again. */
+  issueInvitation: (schoolId: string, personId: string) =>
+    request<{ invitation: Invitation; link: string }>("POST", inSchool(schoolId, "/invitations"), { personId }),
+  revokeInvitation: (schoolId: string, invitationId: string) =>
+    request<{ invitation: Invitation }>(
+      "DELETE",
+      inSchool(schoolId, `/invitations/${encodeURIComponent(invitationId)}`),
+    ),
+  inspectInvitation: (secret: string) =>
+    request<InvitationInspection>("POST", "/invitations/inspect", { secret }),
+  redeemInvitation,
+  /** Redeems as whichever account the browser's session belongs to. */
+  redeemInvitationSignedIn: (secret: string) =>
+    request<undefined>("POST", "/invitations/redeem-signed-in", { secret }),
+};

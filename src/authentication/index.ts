@@ -1,10 +1,23 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { PublicOrigin } from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
+import { forAccount } from "../http/account-route.ts";
 import { isRateLimited } from "../http/rate-limit.ts";
 import { refuse } from "../http/refusal.ts";
 import { hashPassword, spendVerificationEffort, verifyPassword } from "./passwords.ts";
+import {
+  carriesSessionCookie,
+  EXPIRED_SESSION_COOKIE,
+  fromPublicOrigin,
+  presentedSession,
+  sessionCookie,
+  type AuthenticationFailure,
+  type SessionForm,
+} from "./presented-session.ts";
+
+export { fromPublicOrigin, type AuthenticationFailure } from "./presented-session.ts";
 
 /**
  * The Authentication module answers one question for the rest of the system:
@@ -50,7 +63,7 @@ function hashToken(token: string): Buffer {
 }
 
 export async function createUserAccount(
-  database: Database,
+  database: Queryable,
   { username, password }: Credentials,
 ): Promise<UserAccount> {
   const { rows } = await database.query<UserAccount>(
@@ -63,16 +76,18 @@ export async function createUserAccount(
 }
 
 /**
- * The account holding this username, matched regardless of letter case, or
- * null. For naming an account to someone permitted to name it, never for
- * deciding who a request belongs to.
+ * The account holding this username, matched regardless of letter case and of
+ * look-alike Unicode spellings (`app.username_key`), or null. For naming an
+ * account to someone permitted to name it, never for deciding who a request
+ * belongs to.
  */
 export async function findUserAccount(
   database: Queryable,
   username: string,
 ): Promise<UserAccount | null> {
   const { rows } = await database.query<UserAccount>(
-    `SELECT id, username FROM app.user_account WHERE lower(username) = lower($1)`,
+    `SELECT id, username FROM app.user_account
+     WHERE app.username_key(username) = app.username_key($1)`,
     [username],
   );
   return rows[0] ?? null;
@@ -91,7 +106,8 @@ async function verifyCredentials(
   { username, password }: Credentials,
 ): Promise<Verification> {
   const { rows } = await database.query<UserAccount & { password_hash: string }>(
-    `SELECT id, username, password_hash FROM app.user_account WHERE lower(username) = lower($1)`,
+    `SELECT id, username, password_hash FROM app.user_account
+     WHERE app.username_key(username) = app.username_key($1)`,
     [username],
   );
   const account = rows[0];
@@ -120,7 +136,7 @@ async function startSession(
 }
 
 /** Ends the live session this token names. False if there was none to end. */
-async function endSession(database: Database, token: string): Promise<boolean> {
+async function deleteSession(database: Database, token: string): Promise<boolean> {
   const { rowCount } = await database.query(
     `DELETE FROM app.user_session WHERE token_hash = $1 AND expires_at > now()`,
     [hashToken(token)],
@@ -128,36 +144,113 @@ async function endSession(database: Database, token: string): Promise<boolean> {
   return rowCount !== null && rowCount > 0;
 }
 
-function presentedToken(request: FastifyRequest): string | null {
-  const match = /^Bearer ([A-Za-z0-9_-]+)$/.exec(request.headers.authorization ?? "");
-  return match?.[1] ?? null;
+/**
+ * Starts a session and returns it ready to set as a browser's cookie
+ * (ADR-0004), for a caller elsewhere in the system that signs a browser in
+ * without going through sign-in itself, such as redeeming an Invitation.
+ */
+export async function startBrowserSession(
+  transaction: Queryable,
+  account: UserAccount,
+): Promise<{ cookie: string; expiresAt: string }> {
+  const { token, expiresAt } = await startSession(transaction, account);
+  return { cookie: sessionCookie(token), expiresAt: expiresAt.toISOString() };
+}
+
+/** The account a request belongs to, or why it belongs to none. */
+export type Authentication =
+  | { account: UserAccount; failure?: never }
+  | { account: null; failure: AuthenticationFailure };
+
+/**
+ * Resolves requests to User accounts. A browser presents its session as a
+ * cookie and every other client as a Bearer token, and every route accepts
+ * either (ADR-0004).
+ */
+export interface Authenticator {
+  /**
+   * The User account a request belongs to, or why it belongs to none. A
+   * missing, malformed, unrecognised, ended, or expired session all fail
+   * alike: a stale session must grant exactly what no session grants.
+   */
+  authenticate(request: FastifyRequest): Promise<Authentication>;
+  /**
+   * Ends the live Session the request presents, and says what the reply owes
+   * the caller: see SessionEnding.
+   */
+  endSession(request: FastifyRequest): Promise<SessionEnding>;
 }
 
 /**
- * The User account a request belongs to, or null. A missing, malformed,
- * unrecognised, ended, or expired session all yield the same null: a stale
- * session must grant exactly what no session grants.
+ * What ending a Session leaves the sign-out route to send: whether one was
+ * ended, or why none was, and the cookie to expire, if any.
+ *
+ * The two are decided separately on purpose. Whether a Session ended follows
+ * from whether one was live; whether a cookie is expired follows only from the
+ * caller's own request carrying one from the public origin. A cookie nothing
+ * is behind is still the caller's to clear.
  */
-export async function accountForRequest(
-  database: Database,
-  request: FastifyRequest,
-): Promise<UserAccount | null> {
-  const token = presentedToken(request);
-  if (token === null) {
-    return null;
-  }
+export type SessionEnding = {
+  /** The cookie that expires the one the request carried, or null to send none. */
+  expiringCookie: string | null;
+} & (
+  | { ended: true; failure?: never }
+  /** Why nothing was ended. Never reaches the caller (ADR-0002); logged only. */
+  | { ended: false; failure: AuthenticationFailure }
+);
 
-  const { rows } = await database.query<UserAccount>(
-    `SELECT account.id, account.username
-     FROM app.user_session session
-     JOIN app.user_account account ON account.id = session.user_account_id
-     WHERE session.token_hash = $1 AND session.expires_at > now()`,
-    [hashToken(token)],
-  );
-  return rows[0] ?? null;
+/** An Authenticator for SchoolGrid served at `publicOrigin`. */
+export function createAuthenticator(database: Database, publicOrigin: PublicOrigin): Authenticator {
+  return {
+    async authenticate(request) {
+      const presented = presentedSession(request, publicOrigin);
+      if (presented.failure !== undefined) {
+        return { account: null, failure: presented.failure };
+      }
+      if (presented.token === null) {
+        return { account: null, failure: "unauthenticated" };
+      }
+      const { rows } = await database.query<UserAccount>(
+        `SELECT account.id, account.username
+         FROM app.user_session session
+         JOIN app.user_account account ON account.id = session.user_account_id
+         WHERE session.token_hash = $1 AND session.expires_at > now()`,
+        [hashToken(presented.token)],
+      );
+      const account = rows[0];
+      return account === undefined ? { account: null, failure: "unauthenticated" } : { account };
+    },
+
+    async endSession(request) {
+      const presented = presentedSession(request, publicOrigin);
+      // Asked of the request directly rather than read off `presented`: the
+      // ambiguity check short-circuits before the Origin check, so an
+      // ambiguous request never reaches it, yet its cookie is still the
+      // caller's own. Expiring it only for the public origin keeps a
+      // cross-site request from having any effect on the Session (ADR-0004).
+      const expiringCookie =
+        carriesSessionCookie(request) && fromPublicOrigin(request, publicOrigin) ? EXPIRED_SESSION_COOKIE : null;
+      const refused = (failure: AuthenticationFailure): SessionEnding => ({ ended: false, failure, expiringCookie });
+      if (presented.failure !== undefined) {
+        return refused(presented.failure);
+      }
+      if (presented.token === null) {
+        return refused("unauthenticated");
+      }
+      return (await deleteSession(database, presented.token))
+        ? { ended: true, expiringCookie }
+        : refused("unauthenticated");
+    },
+  };
 }
 
-function parseCredentials(body: unknown): Credentials | null {
+/**
+ * The username and password a body carries, within sign-in's own bounds,
+ * ignoring any other field: reused wherever else credentials are taken
+ * alongside something else, such as redeeming an Invitation with a new
+ * account.
+ */
+export function parseCredentials(body: unknown): Credentials | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
@@ -175,6 +268,22 @@ function parseCredentials(body: unknown): Credentials | null {
   return { username, password };
 }
 
+/**
+ * A sign-in attempt: its credentials, and the form its session is to take. A
+ * client gets a cookie unless it explicitly asks for a Bearer token.
+ */
+function parseAttempt(body: unknown): { credentials: Credentials; form: SessionForm } | null {
+  const credentials = parseCredentials(body);
+  if (credentials === null) {
+    return null;
+  }
+  const { session } = body as Record<string, unknown>;
+  if (session !== undefined && session !== "bearer") {
+    return null;
+  }
+  return { credentials, form: session === "bearer" ? "bearer" : "cookie" };
+}
+
 function parseJsonOrNothing(body: string): unknown {
   try {
     return JSON.parse(body);
@@ -185,12 +294,14 @@ function parseJsonOrNothing(body: string): unknown {
 
 interface AuthenticationOptions {
   database: Database;
+  authenticator: Authenticator;
   recordAttempt: RecordAttempt;
+  publicOrigin: PublicOrigin;
 }
 
 async function authenticationRoutes(
   app: FastifyInstance,
-  { database, recordAttempt }: AuthenticationOptions,
+  { database, authenticator, recordAttempt, publicOrigin }: AuthenticationOptions,
 ): Promise<void> {
   async function refuseMalformedAttempt(request: FastifyRequest, reply: FastifyReply) {
     request.log.info("refused: malformed authentication attempt");
@@ -231,10 +342,11 @@ async function authenticationRoutes(
   });
 
   app.post("/session", async (request, reply) => {
-    const credentials = parseCredentials(request.body);
-    if (credentials === null) {
+    const attempt = parseAttempt(request.body);
+    if (attempt === null) {
       return refuseMalformedAttempt(request, reply);
     }
+    const { credentials, form } = attempt;
 
     const verification = await verifyCredentials(database, credentials);
     if (!verification.verified) {
@@ -245,39 +357,56 @@ async function authenticationRoutes(
     }
 
     const { account } = verification;
+    // A sign-in from another site would put the browser in the attacker's own
+    // account, so a cookie is only given to a page on the public origin. Checked
+    // after the credentials, so the attempt is recorded against the account it
+    // named, as any other failed attempt is. A Bearer token is not ambient, so
+    // it is not guarded.
+    if (form === "cookie" && !fromPublicOrigin(request, publicOrigin)) {
+      request.log.info("refused: cross-origin sign-in");
+      await recordAttempt(database, { userAccountId: account.id, succeeded: false });
+      return refuse(reply);
+    }
     const session = await withTransaction(database, async (transaction) => {
       const started = await startSession(transaction, account);
       await recordAttempt(transaction, { userAccountId: account.id, succeeded: true });
       return started;
     });
-    return reply
-      .status(201)
-      .header("cache-control", "no-store")
-      .send({ token: session.token, expiresAt: session.expiresAt.toISOString() });
+    const expiresAt = session.expiresAt.toISOString();
+    // No `cache-control` of its own: every response under `/api` already carries
+    // `no-store` from the security headers, and a second one here could only weaken it.
+    reply.status(201);
+    if (form === "bearer") {
+      return reply.send({ token: session.token, expiresAt });
+    }
+    // The token goes only where page script cannot read it (ADR-0004).
+    return reply.header("set-cookie", sessionCookie(session.token)).send({ expiresAt });
   });
 
-  app.get("/session", async (request, reply) => {
-    const account = await accountForRequest(database, request);
-    if (account === null) {
-      return refuse(reply);
-    }
-    return reply.status(200).send({ account });
-  });
+  app.get(
+    "/session",
+    forAccount(
+      (request) => authenticator.authenticate(request),
+      async (account) => ({ account }),
+    ),
+  );
 
   app.delete("/session", async (request, reply) => {
-    const token = presentedToken(request);
-    // Ending a session nobody holds is refused like any other request without one.
-    if (token === null || !(await endSession(database, token))) {
+    const { ended, failure, expiringCookie } = await authenticator.endSession(request);
+    // Set first, so it rides the refusal and the 204 alike: the caller asked to
+    // end their Session, and the cookie they sent goes either way.
+    if (expiringCookie !== null) {
+      reply.header("set-cookie", expiringCookie);
+    }
+    // Ending a Session nobody holds is refused like any other request without one.
+    if (!ended) {
+      request.log.info({ reason: failure, url: request.url }, "refused");
       return refuse(reply);
     }
     return reply.status(204).send();
   });
 }
 
-export function registerAuthenticationRoutes(
-  app: FastifyInstance,
-  database: Database,
-  recordAttempt: RecordAttempt,
-): void {
-  app.register(authenticationRoutes, { database, recordAttempt });
+export function registerAuthenticationRoutes(app: FastifyInstance, options: AuthenticationOptions): void {
+  app.register(authenticationRoutes, options);
 }

@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { resolveActor, Refused, type Actor, type RefusalReason } from "../access/index.ts";
 import { recordRefusal } from "../audit/index.ts";
-import { accountForRequest, type UserAccount } from "../authentication/index.ts";
+import type { Authentication, Authenticator } from "../authentication/index.ts";
 import type { Database } from "../db/pool.ts";
+import { API_PREFIX } from "./api.ts";
 import { refuse } from "./refusal.ts";
 
 export interface SchoolScopedRequest {
@@ -17,7 +18,7 @@ export interface SchoolScopedRequest {
 export type SchoolScopedHandler = (actor: Actor, request: SchoolScopedRequest) => Promise<unknown>;
 
 /**
- * Registers routes addressed within a School, under `/schools/:schoolId`. A
+ * Registers routes addressed within a School, under `/api/schools/:schoolId`. A
  * `post` answers 201, since it creates; every other method answers 200.
  */
 export interface SchoolScope {
@@ -28,6 +29,12 @@ export interface SchoolScope {
 }
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
+
+/**
+ * A request path addressed within a School, capturing the School. Routes are
+ * registered inside the API prefix; a request URL still carries it.
+ */
+const SCHOOL_PATH = new RegExp(`^${API_PREFIX}/schools/([^/?#]+)`);
 
 /**
  * The boundary every School-scoped request passes through.
@@ -46,6 +53,7 @@ type Method = "GET" | "POST" | "PATCH" | "DELETE";
 export function registerSchoolScope(
   app: FastifyInstance,
   database: Database,
+  authenticator: Authenticator,
   routes: (scope: SchoolScope) => void,
 ): void {
   const route = (method: Method, path: string, handler: SchoolScopedHandler) => {
@@ -55,17 +63,17 @@ export function registerSchoolScope(
       handler: async (request, reply) => {
         const params = request.params as Record<string, string>;
         const schoolId = params["schoolId"]!;
-        const account = await accountForRequest(database, request);
+        const authentication = await authenticator.authenticate(request);
         let actor: Actor | null = null;
         try {
-          actor = await resolveActor(database, account, schoolId);
+          actor = await resolveActor(database, authentication, schoolId);
           const answer = await handler(actor, { params, body: request.body });
           return reply.status(method === "POST" ? 201 : 200).send(answer);
         } catch (error) {
           if (!(error instanceof Refused)) {
             throw error;
           }
-          return refuseInSchool(database, request, reply, { schoolId, account, actor, refused: error });
+          return refuseInSchool(database, request, reply, { schoolId, authentication, actor, refused: error });
         }
       },
     });
@@ -80,32 +88,33 @@ export function registerSchoolScope(
 }
 
 /**
- * Refuses a request that no route handled. Under `/schools/:schoolId` it is a
+ * Refuses a request that no route handled. Under `/api/schools/:schoolId` it is a
  * refusal in that School like any other, so it is recorded like any other.
  * Anything outside a School is refused without a record: there is no trail to
  * hold it.
  */
 export async function refuseUnrouted(
   database: Database,
+  authenticator: Authenticator,
   request: FastifyRequest,
   reply: FastifyReply,
   reason: Extract<RefusalReason, "no-such-route" | "malformed-url">,
 ): Promise<FastifyReply> {
-  const schoolId = /^\/schools\/([^/?#]+)/.exec(request.url)?.[1];
+  const schoolId = SCHOOL_PATH.exec(request.url)?.[1];
   if (schoolId === undefined) {
     request.log.info({ reason, url: request.url }, "refused");
     return refuse(reply);
   }
-  const account = await accountForRequest(database, request);
+  const authentication = await authenticator.authenticate(request);
   let actor: Actor | null = null;
   try {
-    actor = await resolveActor(database, account, schoolId);
+    actor = await resolveActor(database, authentication, schoolId);
     throw new Refused(reason);
   } catch (error) {
     if (!(error instanceof Refused)) {
       throw error;
     }
-    return refuseInSchool(database, request, reply, { schoolId, account, actor, refused: error });
+    return refuseInSchool(database, request, reply, { schoolId, authentication, actor, refused: error });
   }
 }
 
@@ -124,10 +133,10 @@ async function refuseInSchool(
   reply: FastifyReply,
   {
     schoolId,
-    account,
+    authentication: { account },
     actor,
     refused,
-  }: { schoolId: string; account: UserAccount | null; actor: Actor | null; refused: Refused },
+  }: { schoolId: string; authentication: Authentication; actor: Actor | null; refused: Refused },
 ): Promise<FastifyReply> {
   request.log.info({ reason: refused.reason, url: request.url }, "refused");
   const caller = refused.caller;

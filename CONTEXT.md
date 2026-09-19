@@ -9,12 +9,20 @@ The ownership and authorization boundary for all academic records. Every Person,
 _Avoid_: Tenant, organization, campus
 
 **Person**:
-An individual as known to one School. A Person exists within exactly one School and holds every relationship they have with it. The same human at two Schools is two unrelated Persons.
+An individual as known to one School. A Person exists within exactly one School and holds every relationship they have with it. The same human at two Schools is two unrelated Persons. A Person need not be attached to a User account; one who never signs in, such as a young Student, is still a full Person.
 _Avoid_: User, account
 
 **User account**:
-Credentials and authentication state used to access SchoolGrid, identified by a username unique regardless of letter case. A User account holds no authorization and no academic data; it resolves to at most one Person per School and may reach more than one School.
+Credentials used to access SchoolGrid, identified by a username unique regardless of letter case and of look-alike spellings (equal after Unicode NFKC and case-folding). A User account holds no authorization and no academic data; it resolves to at most one Person per School and may reach more than one School.
 _Avoid_: Person, role
+
+**Session**:
+A User account's proven presence, held by whoever signs in until it stops being live. A Session is live or it is not; it stops by being ended, by expiring, or by never having been recognised, and a caller cannot tell those apart (see Safe denial).
+_Avoid_: Dead session, stale session, login
+
+**Invitation**:
+A School Administrator's offer that lets a human claim one Person in their School who is not yet attached to a User account. Redeeming it attaches that Person to a User account, new or existing. It grants no role; memberships, Enrollments, and Guardian links are granted separately. An Invitation is redeemable once, expires, and may be revoked by a School Administrator before redemption; the School Administrator delivers it to the human personally. A redemption by a User account that already resolves to a Person in that School is refused and leaves the Invitation redeemable.
+_Avoid_: Sign-up, registration, account creation
 
 **School membership**:
 The scoped relationship granting a Person one role and its access boundary within a School. A Person may hold several memberships in their School, each granted, narrowed, and revoked independently.

@@ -30,7 +30,9 @@ jobs:
         with:
           languages: javascript-typescript
           # The javascript-typescript extractor reads source directly, so a build
-          # would add minutes for no extra coverage.
+          # would add minutes for no extra coverage. It reads the whole checkout,
+          # so the web app in `web/` and the browser suite are analysed with the
+          # service; do not narrow it with `paths`.
           build-mode: none
           # Wider than the default suite. On a codebase this small the extra
           # noise costs nothing, and the habit is cheaper to form now than to

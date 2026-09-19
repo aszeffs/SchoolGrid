@@ -61,10 +61,11 @@ export PATH="$workdir/bin:$PATH"
 # one with a single thing broken, so a failure names the breakage.
 build_correct_image() {
   local root="$1"
-  mkdir -p "$root/nodejs/bin" "$root/app/dist/db" "$root/app/migrations" \
+  mkdir -p "$root/nodejs/bin" "$root/app/dist/db" "$root/app/migrations" "$root/app/web/dist/assets" \
            "$root/app/node_modules/fastify" "$root/app/node_modules/pg/bin" "$root/etc"
   touch "$root/nodejs/bin/node" \
         "$root/app/dist/index.js" "$root/app/dist/db/migrate.js" \
+        "$root/app/web/dist/index.html" "$root/app/web/dist/assets/index.js" \
         "$root/app/package.json" "$root/app/migrations/0001_initial.sql" \
         "$root/app/node_modules/fastify/index.js" "$root/app/node_modules/pg/index.js" \
         "$root/etc/passwd"
@@ -143,19 +144,55 @@ mkdir -p "$devdeps/app/node_modules/typescript" "$devdeps/app/node_modules/vites
 touch "$devdeps/app/node_modules/typescript/index.js" "$devdeps/app/node_modules/vitest/index.js"
 expect "dev dependencies in the runtime stage are caught" "$devdeps" "nonroot" 1 "dev dependency (typescript)"
 
+# The web app is bundled at build time, so everything it is built from is a dev
+# dependency of its workspace, the framework included. In the runtime stage it
+# is the build toolchain shipping.
+webdevdeps="$(fixture webdevdeps)"
+mkdir -p "$webdevdeps/app/node_modules/vite"
+touch "$webdevdeps/app/node_modules/vite/index.js"
+expect "the web workspace's dev dependencies in the runtime stage are caught" "$webdevdeps" "nonroot" 1 "dev dependency (vite)"
+
 # The dev dependency names are read from package.json, so a manifest yielding
 # none leaves the check with nothing to look for. That is the vacuous pass in
 # a new place, and it has to be loud rather than green.
 empty_manifest="$workdir/empty-manifest"
-mkdir -p "$empty_manifest"
+mkdir -p "$empty_manifest/web"
 echo '{ "name": "no-dev-deps", "devDependencies": {} }' > "$empty_manifest/package.json"
+echo '{ "name": "no-dev-deps-web", "devDependencies": {} }' > "$empty_manifest/web/package.json"
 export REPO_ROOT="$empty_manifest"
 expect "a manifest with no dev dependencies is caught" "$correct" "nonroot" 1 "inspecting nothing"
+unset REPO_ROOT
+
+# The same shrinking list by another route: a web workspace that moved, read as
+# a manifest with nothing in it, would leave its dev dependencies unchecked.
+no_web_manifest="$workdir/no-web-manifest"
+mkdir -p "$no_web_manifest"
+echo '{ "name": "root-only", "devDependencies": { "typescript": "*" } }' > "$no_web_manifest/package.json"
+export REPO_ROOT="$no_web_manifest"
+expect "a missing web workspace manifest is caught" "$correct" "nonroot" 1 "could not be read"
 unset REPO_ROOT
 
 nomigrations="$(fixture nomigrations)"
 rm -rf "$nomigrations/app/migrations"
 expect "a dropped COPY of migrations is caught" "$nomigrations" "nonroot" 1 "missing from the runtime image: /app/migrations/"
+
+noweb="$(fixture noweb)"
+rm -rf "$noweb/app/web"
+expect "a dropped COPY of the web build is caught" "$noweb" "nonroot" 1 "missing from the runtime image: /app/web/dist/index.html"
+
+# Only the build's output is served, but the sources beside it would still be
+# shipped, and a `COPY web` in place of `COPY web/dist` is an easy slip.
+websource="$(fixture websource)"
+mkdir -p "$websource/app/web/src"
+touch "$websource/app/web/src/main.tsx" "$websource/app/web/package.json"
+expect "web sources beside the build are caught" "$websource" "nonroot" 1 "outside the web build: /app/web/package.json"
+
+# The demo seed publishes its passwords, so an image holding it could be run
+# anywhere with accounts anyone can sign in to. A `COPY . .` would bring it in.
+seeded="$(fixture seeded)"
+mkdir -p "$seeded/app/demo"
+touch "$seeded/app/demo/seed.sql"
+expect "the demo seed in the runtime image is caught" "$seeded" "nonroot" 1 "contains a demo seed"
 
 expect "an empty User is caught" "$correct" "" 1 "runs as root"
 expect "User=root:root is caught" "$correct" "root:root" 1 "runs as root"

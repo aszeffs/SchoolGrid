@@ -125,7 +125,7 @@ describe("Audit coverage for authentication and refusals", () => {
     it("records a failed attempt in every School the account reaches, attributing it to no one", async () => {
       const world = await arrange();
 
-      const failed = await server().client.post("/session", {
+      const failed = await server().client.post("/api/session", {
         username: "ALICE",
         password: "not the password",
       });
@@ -163,7 +163,7 @@ describe("Audit coverage for authentication and refusals", () => {
     ])("records %s in no School's trail", async (_case, body) => {
       const world = await arrange();
 
-      await server().client.post("/session", body);
+      await server().client.post("/api/session", body);
 
       const alice = await server().signIn(ALICE);
       const bob = await server().signIn(BOB);
@@ -180,7 +180,7 @@ describe("Audit coverage for authentication and refusals", () => {
       await arrange();
       await server().ownerDatabase.query("REVOKE INSERT ON app.audit_record FROM schoolgrid_app");
 
-      const attempt = await server().client.post("/session", ALICE);
+      const attempt = await server().client.withOrigin(server().publicOrigin).post("/api/session", ALICE);
 
       expect(attempt.status).toBe(500);
       const { rows } = await server().ownerDatabase.query<{ sessions: number }>(
@@ -246,7 +246,7 @@ describe("Audit coverage for authentication and refusals", () => {
           reason: "unauthenticated",
           target: {
             type: "request",
-            id: `GET /schools/${world.northside.id}/persons/${world.northside.samId}`,
+            id: `GET /api/schools/${world.northside.id}/persons/${world.northside.samId}`,
           },
           after: null,
         }),
@@ -266,7 +266,7 @@ describe("Audit coverage for authentication and refusals", () => {
           actorPersonId: null,
           reason: "no-person-in-school",
           // The path only: a query string is the caller's to fill with anything.
-          target: { type: "request", id: `GET /schools/${world.eastfield.id}/persons` },
+          target: { type: "request", id: `GET /api/schools/${world.eastfield.id}/persons` },
           after: { userAccountId: world.sam.id },
         }),
       ]);
@@ -286,7 +286,7 @@ describe("Audit coverage for authentication and refusals", () => {
         expect.objectContaining({
           actorPersonId: world.northside.samId,
           reason: "no-such-route",
-          target: { type: "request", id: `GET /schools/${world.northside.id}/no-such-thing` },
+          target: { type: "request", id: `GET /api/schools/${world.northside.id}/no-such-thing` },
         }),
       );
     });
@@ -304,7 +304,7 @@ describe("Audit coverage for authentication and refusals", () => {
       expect(recorded!.reason).toBe("malformed-url");
       expect(recorded!.target.id).toHaveLength(256);
       expect(recorded!.target.id).toMatch(
-        new RegExp(`^GET /schools/${world.northside.id}/persons/x+$`),
+        new RegExp(`^GET /api/schools/${world.northside.id}/persons/x+$`),
       );
     });
 
@@ -326,7 +326,7 @@ describe("Audit coverage for authentication and refusals", () => {
       const [, recorded] = withAction(await trailOf(alice, world.northside.id), "access.refused");
       expect(recorded).toMatchObject({
         actorPersonId: world.northside.samId,
-        target: { type: "request", id: `GET /schools/${world.northside.id}${path}` },
+        target: { type: "request", id: `GET /api/schools/${world.northside.id}${path}` },
       });
     });
 
@@ -353,12 +353,12 @@ describe("Audit coverage for authentication and refusals", () => {
     const before = await trailOf(alice, world.northside.id);
 
     for (const [client, path] of [
-      [alice, "/schools"],
+      [alice, "/api/schools"],
       [alice.inSchool(world.northside.id), "/persons"],
       [alice.inSchool(world.northside.id), `/persons/${world.northside.samId}`],
       [alice.inSchool(world.northside.id), "/audit-records"],
       [sam.inSchool(world.northside.id), `/persons/${world.northside.samId}`],
-      [sam, "/session"],
+      [sam, "/api/session"],
     ] as const) {
       expect((await client.get(path)).status).toBe(200);
     }

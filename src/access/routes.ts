@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Authenticator } from "../authentication/index.ts";
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
 import type { Database } from "../db/pool.ts";
 import { transactionTime, withTransaction, type Queryable } from "../db/transaction.ts";
@@ -142,8 +143,12 @@ async function recordChange(
  * every change is recorded in the same transaction that makes it, so it does
  * not happen unrecorded.
  */
-export function registerAccessRoutes(app: FastifyInstance, database: Database): void {
-  registerSchoolScope(app, database, (scope) => {
+export function registerAccessRoutes(
+  app: FastifyInstance,
+  database: Database,
+  authenticator: Authenticator,
+): void {
+  registerSchoolScope(app, database, authenticator, (scope) => {
     scope.get("/memberships", async (actor) => {
       const schoolId = authorizeManageMemberships(actor);
       return { memberships: (await membershipsInSchool(database, schoolId)).map(present) };

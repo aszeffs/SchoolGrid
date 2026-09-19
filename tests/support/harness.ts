@@ -18,8 +18,19 @@ import {
   type PlatformAdministrator,
 } from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
-import type { RateLimit } from "../../src/config.ts";
+import { parsePublicOrigin, type BuildInfo, type PublicOrigin, type RateLimit } from "../../src/config.ts";
+import { loadWebApp } from "../../src/http/web-app.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
+
+/** The origin every test server is configured to be served from. */
+const PUBLIC_ORIGIN = parsePublicOrigin("https://schoolgrid.test");
+
+/**
+ * A stand-in for the built web app, served by every test server as the image
+ * serves the real one. Tests assert on serving, never on what the app does:
+ * that is the browser suite's seam.
+ */
+const WEB_APP_FIXTURE = new URL("./web-app/", import.meta.url);
 
 export type Method = NonNullable<InjectOptions["method"]>;
 
@@ -32,11 +43,64 @@ export interface TestResponse {
 
 /**
  * Everything a caller can observe about a response, minus the clock. Two
- * refusals ADR-0002 calls identical must compare equal through this.
+ * refusals ADR-0002 calls identical must compare equal through this. The order
+ * headers are sent in is observable too, and an object comparison ignores it.
  */
 export function observable({ status, headers, raw }: TestResponse) {
   const { date: _date, ...rest } = headers;
-  return { status, headers: rest, raw };
+  return { status, headers: rest, headerOrder: Object.keys(rest), raw };
+}
+
+/**
+ * The same, minus the one header a caller's own request can cause on an
+ * otherwise identical refusal: sign-out expires a session cookie the caller
+ * carried from the public origin, whether or not a live Session was behind it,
+ * so a caller holding a cookie sees a `Set-Cookie` where a caller holding none
+ * sees nothing (#89). Every other byte must still match.
+ *
+ * Only for comparing responses whose callers presented different cookies. Each
+ * use pins the `Set-Cookie` itself with `setCookiesOf` alongside, so nothing
+ * about the cookie goes unasserted.
+ */
+export function observableApartFromOwnCookie(response: TestResponse) {
+  const { headers, headerOrder, ...rest } = observable(response);
+  const { "set-cookie": _cookie, ...withoutCookie } = headers;
+  return { ...rest, headers: withoutCookie, headerOrder: headerOrder.filter((name) => name !== "set-cookie") };
+}
+
+/**
+ * The same, minus `cache-control`, which is decided by the request's path
+ * alone: a refusal outside `/api` carries `no-cache` where one under it carries
+ * `no-store`. Every other byte of the two must still match.
+ *
+ * Only for comparing responses to paths on either side of `/api`. Each use pins
+ * the `cache-control` itself alongside, so it never goes unasserted.
+ */
+export function observableApartFromCacheControl(response: TestResponse) {
+  const { headers, headerOrder, ...rest } = observable(response);
+  const { "cache-control": _cacheControl, ...withoutCacheControl } = headers;
+  return {
+    ...rest,
+    headers: withoutCacheControl,
+    headerOrder: headerOrder.filter((name) => name !== "cache-control"),
+  };
+}
+
+/** Every `Set-Cookie` header a response carries, attributes and all. */
+export function setCookiesOf(response: TestResponse): string[] {
+  return [response.headers["set-cookie"] ?? []].flat();
+}
+
+/**
+ * What a browser sends back for the one cookie a response set: its name and
+ * value, without the attributes.
+ */
+export function cookieSentBackFor(response: TestResponse): string {
+  const cookies = setCookiesOf(response);
+  if (cookies.length !== 1) {
+    throw new Error(`expected one cookie to be set but received ${cookies.length}`);
+  }
+  return cookies[0]!.split(";")[0]!;
 }
 
 export interface TestClient {
@@ -48,13 +112,21 @@ export interface TestClient {
   delete(path: string, body?: unknown): Promise<TestResponse>;
   /** Sends a body exactly as given, for requests JSON serialization cannot express. */
   postRaw(path: string, payload: string, contentType: string): Promise<TestResponse>;
-  /** A client presenting this session token on every request. */
-  withSession(token: string): TestClient;
+  /** A client presenting this session token as a Bearer token on every request. */
+  withBearer(token: string): TestClient;
+  /** A client sending this exact `Cookie` header on every request, as a browser would. */
+  withCookie(value: string): TestClient;
+  /** A client sending this exact `Origin` header on every request, as a browser would. */
+  withOrigin(origin: string): TestClient;
+  /** A client sending this exact `Accept` header on every request, as a browser would. */
+  withAccept(value: string): TestClient;
   /** A client sending this exact `Authorization` header on every request. */
   withAuthorization(value: string): TestClient;
+  /** A client sending this header, as a proxy in front of the server might add it. */
+  withHeader(name: string, value: string): TestClient;
   /** A client whose requests arrive from this remote address. */
   fromAddress(address: string): TestClient;
-  /** A client acting within this School: `/persons` addresses `/schools/<id>/persons`. */
+  /** A client acting within this School: `/persons` addresses `/api/schools/<id>/persons`. */
   inSchool(schoolId: string): TestClient;
 }
 
@@ -63,7 +135,7 @@ export interface TestServer {
   client: TestClient;
   /**
    * Every route the server registered, as Fastify registered it, with its
-   * parameters unfilled: `/schools/:schoolId/persons`.
+   * parameters unfilled: `/api/schools/:schoolId/persons`.
    */
   routes: readonly RegisteredRoute[];
   /**
@@ -113,10 +185,33 @@ export interface TestServer {
    * enrolling enrolls through the client instead.
    */
   enroll(student: Person): Promise<void>;
+  /**
+   * Arranges an Invitation as if it had been issued more than 7 days ago, so it
+   * has expired. Its issuing moves back with its expiry, as the database
+   * requires; nothing about it is written to say it expired.
+   */
+  expireInvitation(invitationId: string): Promise<void>;
+  /**
+   * Arranges an Invitation as redeemed by this account, with no Audit record
+   * and without attaching the Person. A test of redeeming redeems through the
+   * client instead.
+   */
+  markInvitationRedeemed(invitationId: string, account: UserAccount): Promise<void>;
   /** Arranges an Audit record, appended exactly as the application appends one. */
   appendAuditRecord(entry: AuditEntry): Promise<void>;
-  /** Authenticates through the API and returns a client carrying the session. */
+  /** The origin the server is configured to be served from. */
+  publicOrigin: PublicOrigin;
+  /**
+   * Authenticates through the API, asking for a Bearer token, and returns a
+   * client presenting it.
+   */
   signIn(credentials: Credentials): Promise<TestClient>;
+  /**
+   * Authenticates through the API as a browser on the public origin does, and
+   * returns a client sending back the cookie it was given. That client sends
+   * no `Origin`: give it one with `withOrigin`.
+   */
+  signInWithCookie(credentials: Credentials): Promise<TestClient>;
 }
 
 function connectionString(database: string): string {
@@ -194,18 +289,31 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
     delete: (path, body) =>
       request("DELETE", path, body === undefined ? undefined : { json: body }),
     postRaw: (path, raw, contentType) => request("POST", path, { raw, contentType }),
-    withSession: (token) =>
+    withBearer: (token) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: `Bearer ${token}` } }),
+    withCookie: (value) => buildClient(app, { ...identity, headers: { ...headers, cookie: value } }),
+    withOrigin: (origin) => buildClient(app, { ...identity, headers: { ...headers, origin } }),
+    withAccept: (accept) => buildClient(app, { ...identity, headers: { ...headers, accept } }),
     withAuthorization: (value) =>
       buildClient(app, { ...identity, headers: { ...headers, authorization: value } }),
+    withHeader: (name, value) => buildClient(app, { ...identity, headers: { ...headers, [name]: value } }),
     fromAddress: (address) => buildClient(app, { ...identity, remoteAddress: address }),
-    inSchool: (schoolId) => buildClient(app, { ...identity, prefix: `/schools/${schoolId}` }),
+    inSchool: (schoolId) => buildClient(app, { ...identity, prefix: `/api/schools/${schoolId}` }),
   };
 }
 
 export interface TestServerOptions {
   /** Replaces the default limit so a test can exceed it in a few requests. */
   rateLimit?: RateLimit;
+  /** What the server says it was built from. Unless given, it knows nothing. */
+  buildInfo?: BuildInfo;
+  /** Whether the server publishes the demo's sign-ins. Unless given, it does not. */
+  demoMode?: boolean;
+  /**
+   * Adds routes to the built server before it starts, for a test of what the
+   * server does to any route's response, whatever the route does itself.
+   */
+  addRoutes?: (app: FastifyInstance) => void;
 }
 
 /**
@@ -223,7 +331,7 @@ export interface TestServerOptions {
  * framing); if those ever need asserting, they need a listening server, not a
  * second seam through the application.
  */
-export function useTestServer({ rateLimit }: TestServerOptions = {}): () => TestServer {
+export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: TestServerOptions = {}): () => TestServer {
   let context: TestServer;
   let app: FastifyInstance;
   let pool: Database;
@@ -244,9 +352,14 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
     app = buildServer({
       database: pool,
       logLevel: "silent",
+      publicOrigin: PUBLIC_ORIGIN,
+      webApp: await loadWebApp(WEB_APP_FIXTURE),
       ...(rateLimit === undefined ? {} : { rateLimit }),
+      ...(buildInfo === undefined ? {} : { buildInfo }),
+      ...(demoMode === undefined ? {} : { demoMode }),
       onRoute: (route) => routes.push(route),
     });
+    addRoutes?.(app);
     await app.ready();
 
     const client = buildClient(app);
@@ -289,14 +402,37 @@ export function useTestServer({ rateLimit }: TestServerOptions = {}): () => Test
       enroll: async (student) => {
         await recordEnrollment(pool, student);
       },
+      // As the schema owner: when an Invitation was issued is not the application's to change.
+      expireInvitation: async (invitationId) => {
+        await ownerPool.query(
+          `UPDATE app.invitation
+           SET created_at = created_at - interval '8 days', expires_at = expires_at - interval '8 days'
+           WHERE id = $1`,
+          [invitationId],
+        );
+      },
+      markInvitationRedeemed: async (invitationId, account) => {
+        await pool.query(
+          `UPDATE app.invitation SET redeemed_at = now(), redeemed_by_user_account_id = $2 WHERE id = $1`,
+          [invitationId, account.id],
+        );
+      },
       appendAuditRecord: (entry) => appendAuditRecord(pool, entry),
+      publicOrigin: PUBLIC_ORIGIN,
       signIn: async (credentials) => {
-        const response = await client.post("/session", credentials);
+        const response = await client.post("/api/session", { ...credentials, session: "bearer" });
         const token = (response.body as { token?: unknown } | undefined)?.token;
         if (response.status !== 201 || typeof token !== "string") {
           throw new Error(`signIn expected a session but received status ${response.status}`);
         }
-        return client.withSession(token);
+        return client.withBearer(token);
+      },
+      signInWithCookie: async (credentials) => {
+        const response = await client.withOrigin(PUBLIC_ORIGIN).post("/api/session", credentials);
+        if (response.status !== 201) {
+          throw new Error(`signInWithCookie expected a session but received status ${response.status}`);
+        }
+        return client.withCookie(cookieSentBackFor(response));
       },
     };
   });

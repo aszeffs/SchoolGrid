@@ -1,13 +1,15 @@
-import type { UserAccount } from "../authentication/index.ts";
+import type { Authentication, AuthenticationFailure, UserAccount } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import {
   personFor,
   platformAdministratorFor,
   schoolsReachedBy,
+  type ListedPerson,
   type Person,
   type PlatformAdministrator,
   type School,
 } from "../identity/index.ts";
+import { invitationState, type Invitation, type InvitationState } from "../identity/invitations.ts";
 import { hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
 import { linkedStudentIds, type GuardianLink } from "./guardian-links.ts";
 import {
@@ -34,7 +36,8 @@ export type { AccessProfile, GuardianLink } from "./guardian-links.ts";
  * in http/refusal.ts.
  */
 export type RefusalReason =
-  | "unauthenticated"
+  /** The request belonged to no User account at all: see AuthenticationFailure. */
+  | AuthenticationFailure
   | "no-person-in-school"
   | "no-active-membership"
   | "no-such-route"
@@ -43,7 +46,13 @@ export type RefusalReason =
   | "outside-school"
   | "forbidden"
   | "not-platform-administrator"
-  | "platform-administrator";
+  | "platform-administrator"
+  | "claimed"
+  | "revoked"
+  | "redeemed"
+  | "expired"
+  /** An account redeeming an Invitation into a School where it already resolves to a Person. */
+  | "duplicate-person";
 
 /** What a refused request asked for, as the caller named it. */
 export interface RefusedTarget {
@@ -115,11 +124,11 @@ const standingOf = new WeakMap<Actor, Standing>();
  */
 export async function resolveActor(
   database: Queryable,
-  account: UserAccount | null,
+  { account, failure }: Authentication,
   schoolId: string,
 ): Promise<Actor> {
   if (account === null) {
-    throw new Refused("unauthenticated");
+    throw new Refused(failure);
   }
   const platformAdministrator = await platformAdministratorFor(database, account.id);
   if (platformAdministrator !== null) {
@@ -154,10 +163,10 @@ export interface PlatformActor {
  */
 export async function resolvePlatformActor(
   database: Queryable,
-  account: UserAccount | null,
+  { account, failure }: Authentication,
 ): Promise<PlatformActor> {
   if (account === null) {
-    throw new Refused("unauthenticated");
+    throw new Refused(failure);
   }
   const platformAdministrator = await platformAdministratorFor(database, account.id);
   if (platformAdministrator === null) {
@@ -310,8 +319,79 @@ export function authorizeReadAuditRecords(actor: Actor): string {
  * The Persons among these that the actor may read. The rest are omitted, not
  * redacted or flagged, so a listing cannot be used to count what is withheld.
  */
-export function readablePersons(actor: Actor, persons: readonly Person[]): Person[] {
+export function readablePersons<P extends Person>(actor: Actor, persons: readonly P[]): P[] {
   return persons.filter((person) => decideReadPerson(actor, person) === null);
+}
+
+/**
+ * Whether the actor may see which Persons are claimed, that is, attached to a
+ * User account. Only a School Administrator may: it tells them who still needs
+ * an Invitation. To anyone else, whether a Person can sign in is an
+ * administrative matter, so it is left out of what they are served altogether.
+ */
+export function mayReadClaimedState(actor: Actor): boolean {
+  return holds(actor, "school_administrator");
+}
+
+/**
+ * Returns the School the actor may create a Person in, and refuses otherwise.
+ * Only a School Administrator shapes who belongs to a School, and only in the
+ * School they are acting in.
+ *
+ * Asked before a request's body is read, so a caller who may not create
+ * Persons is refused whatever they sent, and never learns that a body was
+ * wrong.
+ */
+export function authorizeCreatePerson(actor: Actor): string {
+  if (!holds(actor, "school_administrator")) {
+    throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+  }
+  return actor.schoolId;
+}
+
+/**
+ * Returns the School whose Invitations the actor may issue, list, and revoke,
+ * and refuses otherwise. Only a School Administrator may, in the School they are
+ * acting in: any of them, whoever issued the Invitation. Asked before a
+ * request's body is read, as for memberships.
+ */
+export function authorizeManageInvitations(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/**
+ * Returns the Person the actor may invite, and refuses otherwise. An Invitation
+ * attaches a Person to whoever redeems it, so a Person already attached to a
+ * User account is never invited: that would hand their access to someone else.
+ */
+export function authorizeInvite(actor: Actor, personId: string, target: ListedPerson | null): ListedPerson {
+  const reason = decideManageRelationships(actor, target) ?? (target!.claimed ? "claimed" : null);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "person", id: personId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Invitation the actor may revoke, and refuses otherwise. Only a
+ * pending one can be: one already revoked, redeemed, or expired is refused like
+ * one that does not exist, with why written to the Audit record.
+ */
+export function authorizeRevokeInvitation(
+  actor: Actor,
+  invitationId: string,
+  target: Invitation | null,
+  now: Date,
+): Invitation {
+  const reason = decideManageRelationships(actor, target) ?? notPending(invitationState(target!, now));
+  if (reason !== null) {
+    throw new Refused(reason, { type: "invitation", id: invitationId });
+  }
+  return target!;
+}
+
+function notPending(state: InvitationState): RefusalReason | null {
+  return state === "pending" ? null : state;
 }
 
 /**

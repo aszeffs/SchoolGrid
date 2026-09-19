@@ -1,13 +1,18 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
-import { DEFAULT_RATE_LIMIT, type LogLevel, type RateLimit } from "./config.ts";
+import { DEFAULT_RATE_LIMIT, type BuildInfo, type LogLevel, type PublicOrigin, type RateLimit } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
-import { registerAuthenticationRoutes } from "./authentication/index.ts";
+import { createAuthenticator, registerAuthenticationRoutes } from "./authentication/index.ts";
 import type { Database } from "./db/pool.ts";
+import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
+import { registerBuildInfoRoute } from "./http/build-info.ts";
+import { registerDemoRoute } from "./http/demo.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
+import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } from "./http/security-headers.ts";
+import { cacheControlFor, serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
 
@@ -15,6 +20,17 @@ export interface ServerOptions {
   database: Database;
   logLevel?: LogLevel;
   rateLimit?: RateLimit;
+  /** The origin browsers reach the server at. See `Config.publicOrigin`. */
+  publicOrigin: PublicOrigin;
+  /** What the server was built from, served to anyone. Unless given, it knows nothing. */
+  buildInfo?: BuildInfo;
+  /** Whether to publish the demo's sign-ins. See `Config.demoMode`. Off unless given. */
+  demoMode?: boolean;
+  /**
+   * The web app, served on every path outside `/api`. Without it, those paths
+   * are refused like any other path no route matches.
+   */
+  webApp?: WebApp;
   /**
    * Told of every route as it is registered, however it is registered. For a
    * test that must cover every route there is, not only those it knew of.
@@ -31,8 +47,15 @@ export function buildServer({
   database,
   logLevel = "info",
   rateLimit = DEFAULT_RATE_LIMIT,
+  publicOrigin,
+  buildInfo = {},
+  demoMode = false,
+  webApp,
   onRoute,
 }: ServerOptions): FastifyInstance {
+  const authenticator = createAuthenticator(database, publicOrigin);
+  const cacheControlOf: CacheControlFor = (request) => cacheControlFor(webApp, request);
+
   const app = Fastify({
     logger: logLevel === "silent" ? false : { level: logLevel },
     // A URL the router cannot take apart — an identifier over its length
@@ -41,7 +64,7 @@ export function buildServer({
     // for a path that matches a route with a parameter, so that answer would
     // confirm the route exists. It is a refusal like an unmatched route.
     frameworkErrors: (_error, request, reply) =>
-      refuseUnrouted(database, request, reply, "malformed-url"),
+      refuseUnrouted(database, authenticator, request, setSecurityHeaders(reply, cacheControlOf), "malformed-url"),
   });
 
   // First, so no route is registered before it is listening.
@@ -53,12 +76,24 @@ export function buildServer({
     });
   }
 
-  registerRateLimit(app, rateLimit);
+  // Before the rate limit, so a throttled request has them too.
+  registerSecurityHeaders(app, cacheControlOf);
+
+  // The web app's page and assets are served from memory and reach nothing a
+  // flood could exhaust, while one page load fetches several of them. Counted,
+  // they would spend a browser's allowance before it made a single API call.
+  // Exempting them reveals nothing: a path is exempt when the web app answers
+  // it, which its 200 already says.
+  registerRateLimit(app, rateLimit, (request) =>
+    webApp === undefined ? false : webAppFileFor(webApp, request) !== null,
+  );
 
   acceptEveryBody(app);
 
-  app.setNotFoundHandler((request, reply) =>
-    refuseUnrouted(database, request, reply, "no-such-route"),
+  app.setNotFoundHandler(
+    (request, reply) =>
+      (webApp === undefined ? null : serveWebApp(webApp, request, reply)) ??
+      refuseUnrouted(database, authenticator, request, reply, "no-such-route"),
   );
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -81,22 +116,37 @@ export function buildServer({
     return reply.status(500).send({ status: "internal_error" });
   });
 
-  app.get("/health", async (request, reply) => {
-    try {
-      await database.query("SELECT 1");
-      return reply.status(200).send({ status: "ok", database: "reachable" });
-    } catch (error) {
-      // Why the database is unreachable is operational detail: logged, never served.
-      request.log.error({ err: error }, "health check could not reach the database");
-      return reply.status(503).send({ status: "unavailable", database: "unreachable" });
-    }
-  });
+  // Every route, under the one prefix. The refusal, error and rate-limit
+  // handling above is the root's, so it covers paths inside and outside alike.
+  app.register(
+    async (api) => {
+      api.get("/health", async (request, reply) => {
+        try {
+          await database.query("SELECT 1");
+          return reply.status(200).send({ status: "ok", database: "reachable" });
+        } catch (error) {
+          // Why the database is unreachable is operational detail: logged, never served.
+          request.log.error({ err: error }, "health check could not reach the database");
+          return reply.status(503).send({ status: "unavailable", database: "unreachable" });
+        }
+      });
 
-  registerAuthenticationRoutes(app, database, recordAuthenticationAttempt);
-  registerIdentityRoutes(app, database);
-  registerAccessRoutes(app, database);
-  registerAuditRoutes(app, database);
-  registerPlatformRoutes(app, database);
+      registerBuildInfoRoute(api, buildInfo);
+      registerDemoRoute(api, demoMode);
+
+      registerAuthenticationRoutes(api, {
+        database,
+        authenticator,
+        recordAttempt: recordAuthenticationAttempt,
+        publicOrigin,
+      });
+      registerIdentityRoutes(api, database, authenticator, publicOrigin);
+      registerAccessRoutes(api, database, authenticator);
+      registerAuditRoutes(api, database, authenticator);
+      registerPlatformRoutes(api, database, authenticator);
+    },
+    { prefix: API_PREFIX },
+  );
 
   return app;
 }

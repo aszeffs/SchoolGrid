@@ -3,8 +3,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { Database } from "./pool.ts";
+import type { Queryable } from "./transaction.ts";
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("../../migrations", import.meta.url));
+const MIGRATIONS_DIR = fileURLToPath(
+  new URL("../../migrations", import.meta.url),
+);
 
 interface Migration {
   name: string;
@@ -19,7 +22,11 @@ async function readMigrations(): Promise<Migration[]> {
   return Promise.all(
     names.map(async (name) => {
       const sql = await readFile(path.join(MIGRATIONS_DIR, name), "utf8");
-      return { name, sql, checksum: createHash("sha256").update(sql).digest("hex") };
+      return {
+        name,
+        sql,
+        checksum: createHash("sha256").update(sql).digest("hex"),
+      };
     }),
   );
 }
@@ -29,7 +36,86 @@ export interface MigrationResult {
   alreadyApplied: string[];
 }
 
+interface Comparison {
+  pending: Migration[];
+  alreadyApplied: string[];
+}
+
+/**
+ * Sets the migrations in this image against the record of what the database
+ * has applied. The same comparison decides what `migrate` runs and whether a
+ * service that cannot migrate may start, so the two never disagree about what
+ * "fully migrated" means.
+ *
+ * Recorded migrations this image does not know are ignored, not refused: the
+ * previous image keeps serving a database a deploy has already migrated past it.
+ */
+function compareWithRecord(
+  migrations: Migration[],
+  recorded: Map<string, string>,
+): Comparison {
+  const comparison: Comparison = { pending: [], alreadyApplied: [] };
+
+  for (const migration of migrations) {
+    const existing = recorded.get(migration.name);
+
+    if (existing === undefined) {
+      comparison.pending.push(migration);
+      continue;
+    }
+
+    // An applied migration whose file has since changed means the database
+    // and the repository disagree about what was run. Refuse rather than
+    // guess which one is right.
+    if (existing !== migration.checksum) {
+      throw new Error(
+        `Migration ${migration.name} was already applied but its contents have changed. ` +
+          `Add a new migration instead of editing an applied one.`,
+      );
+    }
+    comparison.alreadyApplied.push(migration.name);
+  }
+
+  return comparison;
+}
+
+async function readRecord(db: Queryable): Promise<Map<string, string>> {
+  const { rows } = await db.query<{ name: string; checksum: string }>(
+    "SELECT name, checksum FROM public.schema_migrations",
+  );
+  return new Map(rows.map((row) => [row.name, row.checksum]));
+}
+
+/**
+ * The oldest PostgreSQL major version the migrations run on. Migration 0009
+ * needs `casefold()` and the `pg_unicode_fast` collation, both new in 18.
+ */
+const MINIMUM_POSTGRES_MAJOR = 18;
+
+/**
+ * Refuses a server too old for the migrations, before anything is applied.
+ * Each migration commits on its own, so finding out at 0009 would leave the
+ * database half-migrated, failing on a missing function that says nothing
+ * about the version.
+ */
+async function assertServerVersion(db: Queryable): Promise<void> {
+  const { rows } = await db.query<{ version: number }>(
+    "SELECT current_setting('server_version_num')::int AS version",
+  );
+  const { version } = rows[0]!;
+
+  // `server_version_num` encodes 17.6 as 170006.
+  if (version < MINIMUM_POSTGRES_MAJOR * 10000) {
+    throw new Error(
+      `SchoolGrid needs PostgreSQL ${MINIMUM_POSTGRES_MAJOR} or newer; ` +
+        `this server reports version ${version}. Nothing was migrated.`,
+    );
+  }
+}
+
 export async function migrate(db: Database): Promise<MigrationResult> {
+  await assertServerVersion(db);
+
   const migrations = await readMigrations();
 
   await db.query(`
@@ -40,49 +126,86 @@ export async function migrate(db: Database): Promise<MigrationResult> {
     )
   `);
 
-  const { rows } = await db.query<{ name: string; checksum: string }>(
-    "SELECT name, checksum FROM public.schema_migrations",
+  const { pending, alreadyApplied } = compareWithRecord(
+    migrations,
+    await readRecord(db),
   );
-  const recorded = new Map(rows.map((row) => [row.name, row.checksum]));
+  const result: MigrationResult = { applied: [], alreadyApplied };
 
-  const result: MigrationResult = { applied: [], alreadyApplied: [] };
-
-  for (const migration of migrations) {
-    const existing = recorded.get(migration.name);
-
-    if (existing !== undefined) {
-      // An applied migration whose file has since changed means the database
-      // and the repository disagree about what was run. Refuse rather than
-      // guess which one is right.
-      if (existing !== migration.checksum) {
-        throw new Error(
-          `Migration ${migration.name} was already applied but its contents have changed. ` +
-            `Add a new migration instead of editing an applied one.`,
-        );
-      }
-      result.alreadyApplied.push(migration.name);
-      continue;
-    }
-
+  for (const migration of pending) {
     const client = await db.connect();
     try {
       await client.query("BEGIN");
       await client.query(migration.sql);
-      await client.query("INSERT INTO public.schema_migrations (name, checksum) VALUES ($1, $2)", [
-        migration.name,
-        migration.checksum,
-      ]);
+      await client.query(
+        "INSERT INTO public.schema_migrations (name, checksum) VALUES ($1, $2)",
+        [migration.name, migration.checksum],
+      );
       await client.query("COMMIT");
       result.applied.push(migration.name);
     } catch (error) {
       await client.query("ROLLBACK");
-      throw new Error(`Migration ${migration.name} failed: ${(error as Error).message}`, {
-        cause: error,
-      });
+      throw new Error(
+        `Migration ${migration.name} failed: ${(error as Error).message}`,
+        {
+          cause: error,
+        },
+      );
     } finally {
       client.release();
     }
   }
 
   return result;
+}
+
+/** The migration that lets the application's role read the record at all. */
+const RECORD_READABLE = "0011_migration_record_readable.sql";
+
+function missingMigrationsError(names: string): Error {
+  return new Error(
+    `The database is missing migration(s) ${names}. ` +
+      `Without MIGRATION_DATABASE_URL the service does not migrate; ` +
+      `apply them as the schema owner first (see docs/database-roles.md).`,
+  );
+}
+
+/**
+ * Refuses a database that has not applied every migration in this image,
+ * changing nothing. For a service started without the schema owner's
+ * credentials, which cannot migrate and must not serve against a schema older
+ * than its code. Reads the record as the application's role, which migration
+ * 0011 lets it do.
+ */
+export async function assertMigrated(db: Queryable): Promise<void> {
+  const migrations = await readMigrations();
+
+  const { rows } = await db.query<{
+    exists: boolean;
+    readable: boolean | null;
+  }>(
+    `SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists,
+            CASE WHEN to_regclass('public.schema_migrations') IS NOT NULL
+                 THEN has_table_privilege('public.schema_migrations', 'SELECT')
+            END AS readable`,
+  );
+  const { exists, readable } = rows[0]!;
+
+  // A record this role cannot read predates the migration that grants it, so
+  // that migration at least is missing. Saying so beats a permission error
+  // that sends whoever reads the log looking at the wrong grant.
+  if (exists && readable !== true) {
+    throw missingMigrationsError(`${RECORD_READABLE} and any after it`);
+  }
+
+  // A database nothing ever migrated has no record at all, and is missing
+  // every migration rather than broken in some other way.
+  const recorded = exists ? await readRecord(db) : new Map<string, string>();
+
+  const { pending } = compareWithRecord(migrations, recorded);
+  if (pending.length > 0) {
+    throw missingMigrationsError(
+      pending.map((migration) => migration.name).join(", "),
+    );
+  }
 }
