@@ -13,6 +13,7 @@ const app = buildServer({
   logLevel: config.logLevel,
   rateLimit: config.rateLimit,
   publicOrigin: config.publicOrigin,
+  buildInfo: config.buildInfo,
   ...(webApp === null ? {} : { webApp }),
 });
 if (webApp === null) {

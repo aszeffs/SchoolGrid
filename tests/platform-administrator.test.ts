@@ -217,6 +217,8 @@ describe("Platform Administrator", () => {
         [
           "GET /api/health",
           "HEAD /api/health",
+          "GET /api/build-info",
+          "HEAD /api/build-info",
           "POST /api/session",
           "GET /api/session",
           "HEAD /api/session",

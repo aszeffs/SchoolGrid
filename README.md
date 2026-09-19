@@ -100,6 +100,8 @@ Prefer the commit tag. `latest` tells you what is newest, not what you are runni
 
 The package is public so that anyone, not only the maintainer, can verify where an image came from. Nothing sets that by hand: the image carries an `org.opencontainers.image.source` label pointing at this repository and is pushed with the workflow's own token, so GHCR links the package to the repository and gives it the repository's public visibility. A package can still be made private from its settings, independently of the repository, and the anonymous pull job after every publish is what would catch that.
 
+The running site says which image it is: `GET /api/build-info` returns the commit the image was built from, baked in as the `BUILD_COMMIT` build argument, and the digest it was deployed as, which the deploy supplies as `IMAGE_DIGEST` because an image cannot carry its own digest. Either is left out when unknown, as both are in local development. The web app's "How this was built" page, linked from the sign-in page, shows both with the command below filled in.
+
 ### Verifying an image
 
 Every published image carries two signed attestations, stored both with GitHub and beside the image in the registry: SLSA build provenance, recording the workflow, commit and ref that built it, and an SPDX SBOM listing what is inside. They are signed through Sigstore with the build workflow's own identity, so there is no public key to fetch; the identity is what you check.

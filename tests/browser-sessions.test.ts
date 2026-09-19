@@ -190,14 +190,17 @@ describe("Browser sessions", () => {
    */
   it("is accepted by every School-scoped and platform endpoint exactly as a Bearer session is", async () => {
     const world = await arrange();
-    // Nothing here authenticates a caller: health answers anyone, sign-in makes
-    // a session rather than reading one, and sign-out ends the session it reads.
+    // Nothing here authenticates a caller: health and build info answer anyone,
+    // sign-in makes a session rather than reading one, and sign-out ends the
+    // session it reads.
     // Redeeming as the signed-in account reads a session only once the secret
     // names a pending Invitation, which this body never does: both forms are
     // asserted there instead, in tests/invitations.test.ts.
     const notAuthenticated = [
       "GET /api/health",
       "HEAD /api/health",
+      "GET /api/build-info",
+      "HEAD /api/build-info",
       "POST /api/session",
       "DELETE /api/session",
       "POST /api/invitations/inspect",

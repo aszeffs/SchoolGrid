@@ -1,5 +1,5 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
-import { DEFAULT_RATE_LIMIT, type LogLevel, type PublicOrigin, type RateLimit } from "./config.ts";
+import { DEFAULT_RATE_LIMIT, type BuildInfo, type LogLevel, type PublicOrigin, type RateLimit } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
@@ -7,6 +7,7 @@ import { createAuthenticator, registerAuthenticationRoutes } from "./authenticat
 import type { Database } from "./db/pool.ts";
 import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
+import { registerBuildInfoRoute } from "./http/build-info.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } from "./http/security-headers.ts";
@@ -20,6 +21,8 @@ export interface ServerOptions {
   rateLimit?: RateLimit;
   /** The origin browsers reach the server at. See `Config.publicOrigin`. */
   publicOrigin: PublicOrigin;
+  /** What the server was built from, served to anyone. Unless given, it knows nothing. */
+  buildInfo?: BuildInfo;
   /**
    * The web app, served on every path outside `/api`. Without it, those paths
    * are refused like any other path no route matches.
@@ -42,6 +45,7 @@ export function buildServer({
   logLevel = "info",
   rateLimit = DEFAULT_RATE_LIMIT,
   publicOrigin,
+  buildInfo = {},
   webApp,
   onRoute,
 }: ServerOptions): FastifyInstance {
@@ -122,6 +126,8 @@ export function buildServer({
           return reply.status(503).send({ status: "unavailable", database: "unreachable" });
         }
       });
+
+      registerBuildInfoRoute(api, buildInfo);
 
       registerAuthenticationRoutes(api, {
         database,

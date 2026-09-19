@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { api } from "./api.ts";
 import { navigate } from "./navigation.ts";
 
@@ -35,6 +35,11 @@ export function SignIn() {
     }
   };
 
+  const howThisWasBuilt = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    navigate("/how-this-was-built");
+  };
+
   return (
     <main className="panel">
       <h1>Sign in to SchoolGrid</h1>
@@ -62,6 +67,11 @@ export function SignIn() {
           Sign in
         </button>
       </form>
+      <p className="muted">
+        <a href="/how-this-was-built" onClick={howThisWasBuilt}>
+          How this was built
+        </a>
+      </p>
     </main>
   );
 }

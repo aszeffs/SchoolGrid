@@ -1,3 +1,4 @@
+import { HowThisWasBuilt } from "./HowThisWasBuilt.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { Persons } from "./Persons.tsx";
 import { RedeemInvitation } from "./RedeemInvitation.tsx";
@@ -33,6 +34,8 @@ export function App() {
       return <SignIn />;
     case "/invitation":
       return <RedeemInvitation />;
+    case "/how-this-was-built":
+      return <HowThisWasBuilt />;
     default:
       return <NotAvailable />;
   }
