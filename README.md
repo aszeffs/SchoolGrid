@@ -39,7 +39,7 @@ To run the service itself you need PostgreSQL 18 or newer (see [docs/database-ro
 | `docs/agents/` | Conventions for agents working in this repo. |
 | `docs/deployment.md` | The one-time setup of the public demo on Vercel and Neon. |
 | `.scratch/<feature>/` | Specs and implementation tickets, one directory per feature. |
-| `migrations/` | Plain SQL, applied in filename order. Never edit an applied migration; add a new one. |
+| `migrations/` | Plain SQL, applied in filename order. Never edit an applied migration; add a new one. Production is migrated before the new code serves, so every migration must stay compatible with the code one deploy behind it: expand first (add the column, table or permission), and contract (drop what the old code still reads) only in a later deploy. |
 
 ## Decisions worth knowing before reading the code
 

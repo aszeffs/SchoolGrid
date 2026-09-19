@@ -35,6 +35,12 @@ jobs:
         # whose tests failed in the same run.
         run: scripts/publish-image.test.sh
 
+      - name: Test the deploy script
+        # Here for the same reason as the publish script, and more so: a deploy
+        # script that ran a step out of order would first show it by migrating
+        # production for an image that never verified.
+        run: scripts/deploy.test.sh
+
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Build the image
@@ -617,3 +623,70 @@ jobs:
               echo "::endgroup::"
             done
           done
+
+  deploy:
+    name: Verify, migrate and deploy to production
+    # After the consumer-side verification has passed, and only on a merge to
+    # `main`. The script verifies the digest again itself, because this job is
+    # the one that acts on it: a check in another job is a claim this job
+    # would otherwise be trusting.
+    needs: [publish, verify-attestations]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # The only holder of the Vercel credentials and the owner's connection
+    # string, and deployable from `main` alone (docs/deployment.md, step 5). A
+    # job in a pull request run cannot name it, so no pull request, fork or
+    # branch can read those secrets.
+    environment:
+      name: production
+      url: ${{ env.PRODUCTION_URL }}
+    # Named for the nightly demo reset (#92) to share, so a reset will never
+    # drop the schema while a deploy is migrating it, or the other way round. A deploy that has
+    # started always finishes; a newer run waiting behind it replaces an older
+    # one still waiting, whose image the newer one contains.
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    # Read-only. Vercel is reached with its own token, and `attestations: read`
+    # is what the verification reads through the GitHub API.
+    permissions:
+      contents: read
+      attestations: read
+    # A backstop behind the script's own health deadline.
+    timeout-minutes: 15
+    env:
+      IMAGE: ${{ needs.publish.outputs.image }}
+      DIGEST: ${{ needs.publish.outputs.digest }}
+      # The production domain, which alone is outside Deployment Protection.
+      # Public, so not a secret.
+      PRODUCTION_URL: https://schoolgrid-phi.vercel.app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the Vercel CLI
+        # Pinned to an exact version. Its install scripts are skipped: the CLI
+        # runs without them, and they would run with the secrets one step away.
+        run: npm install --global --ignore-scripts vercel@59.23.2
+
+      - name: Verify, migrate, deploy, and wait for health
+        # The secrets are handed to this step alone, never to the job, so the
+        # install above never sees them. The head of `main` is read at deploy
+        # time, as in the publish job, so an older merge arriving last does
+        # not roll production back.
+        #
+        # An empty Docker configuration, as in `verify-published`: the image is
+        # public, and the migration pulls it with no credential to lean on.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        shell: bash
+        run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/anonymous-docker"
+          mkdir -p "$DOCKER_CONFIG"
+          head="$(git ls-remote --exit-code origin refs/heads/main | cut -f 1)"
+          scripts/deploy.sh "$IMAGE" "$DIGEST" "$GITHUB_SHA" "$head" "$GITHUB_REPOSITORY" "$PRODUCTION_URL"
