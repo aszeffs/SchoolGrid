@@ -129,6 +129,28 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.none}"
     padding: "1.5rem"
+  slip-held:
+    backgroundColor: "color-mix(in srgb, #3b2a6b 9%, var(--stock))"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "1.5rem"
+  slip-held-veil:
+    backgroundColor: "color-mix(in srgb, #3b2a6b 55%, transparent)"
+  record-head:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.none}"
+    padding: "0 1rem 0.625rem 0"
+  record-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.none}"
+    padding: "0.875rem 1rem 0.875rem 0"
+  record-row-hover:
+    backgroundColor: "{colors.wash}"
+    textColor: "{colors.ink}"
   error:
     backgroundColor: "transparent"
     textColor: "{colors.stamp}"
@@ -281,6 +303,16 @@ A sticky `<dl>` strip beside the record: a "THIS SHEET" heading in label caps, a
 
 ### Slip (signature component)
 The issued Invitation, torn off the sheet: a wash-filled block with a 2px solid ink border, 1.5rem padding, a stencil heading at 1.1rem, and inputs that reverse to the raw stock so the handed-over link reads as a fresh strip of paper.
+
+### Held slip (signature component)
+The same slip, lifted off the sheet and held over it: a native `<dialog>` opened with `showModal()`, and the only overlay in the system. It is a `min(34rem, 100vw − 2 × gutter)` block with the slip's 2px ink border and 1.5rem padding, centred, over a veil of 55% ink across the whole sheet. Its fill is the 9% wash *mixed into* the stock rather than laid over it, because a translucent slip would let the sheet read through the record it is holding.
+
+Two shapes, and no third. **Acknowledge** holds something the server will never say again — an Invitation's link above all — and refuses both Escape and a click on the veil, so it cannot be dismissed by a stray keystroke; one control closes it. **Confirm** names what an action will do before it is done, in glossary language, and Cancel holds the focus on open so the consequence is read before the key that confirms it is under the hand; cancelling sends nothing.
+
+No component library supplies it, and none can: `style-src 'self'` has no inline exception and the build fails on a `style=` attribute, which is how every kit positions its overlays (ADR-0006). The element itself brings the inert page, the focus trap and the Escape handling.
+
+### Record (signature component)
+A record with more than one thing to say about each row, where `roster` carries the sheet's flat name-and-mark line. One `<table>` carries both renditions. Above 52rem it is a table: terms struck across the head in label caps over a 1px rule, rows ruled off with faint hairlines, the last column set hard right, rows washing on hover. Below 52rem the columns stack — the head is dropped, each row becomes an entry ruled off from the next, and every value is struck under its own term in caption caps — so a record that could not hold 360px is read down instead of scrolled across. A column of controls carries its term for a screen reader only, struck but never printed.
 
 ### Facts (signature component)
 A typed two-column `max-content / 1fr` definition grid, ruled above, with terms in label caps and values in body type set to break anywhere. Used for provenance and record detail.
