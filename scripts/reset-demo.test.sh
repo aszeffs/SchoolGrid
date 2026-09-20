@@ -82,6 +82,12 @@ case "$url" in
         printf '{"accounts":[{"role":"school_administrator","username":"demo.administrator","password":"a"},{"role":"faculty","username":"demo.faculty","password":"b"},{"role":"student","username":"demo.student","password":"c"}]}\n200'
         ;;
       demo-unreachable) printf '\n000'; exit 7 ;;
+      # The same four accounts, with the fields serialised in another order and
+      # with whitespace between them, which a reader that pairs a username to
+      # the password sitting next to it would come away with none of.
+      demo-reordered)
+        printf '{ "accounts": [ { "password": "a", "username": "demo.administrator", "role": "school_administrator" }, { "password": "b", "username": "demo.faculty", "role": "faculty" }, { "password": "c", "username": "demo.student", "role": "student" }, { "password": "d", "username": "demo.guardian", "role": "guardian" } ] }\n200'
+        ;;
       *)
         printf '{"accounts":[{"role":"school_administrator","username":"demo.administrator","password":"a"},{"role":"faculty","username":"demo.faculty","password":"b"},{"role":"student","username":"demo.student","password":"c"},{"role":"guardian","username":"demo.guardian","password":"d"}]}\n200'
         ;;
@@ -125,6 +131,7 @@ for arg in "$@"; do
   case "$arg" in
     --file) kind=seed ;;
     *DROP*) kind=drop; printf '%s\n' "$arg" > "$STATE/drop-sql" ;;
+    *information_schema*) kind=remains ;;
   esac
 done
 if [ "$kind" = "seed" ]; then
@@ -140,6 +147,11 @@ echo "$kind" >> "$STATE/psql-kinds"
 case "${SCENARIO}:${kind}" in
   drop-fails:drop) echo 'ERROR:  must be owner of schema app' >&2; exit 1 ;;
   seed-fails:seed) echo 'ERROR:  duplicate key value violates unique constraint "school_pkey"' >&2; exit 1 ;;
+  # A drop that reported success and took nothing with it, which is what a
+  # DROP SCHEMA refused by something the owner does not own would look like.
+  remains-dirty:remains) printf '%s\n' "11 1" ;;
+  remains-unreadable:remains) echo 'ERROR:  permission denied for schema information_schema' >&2; exit 1 ;;
+  *:remains) printf '%s\n' "0 0" ;;
   check-fails:check) printf '%s\n' "2 17 3 1 0" ;;
   check-unreadable:check) echo 'ERROR:  relation "app.school" does not exist' >&2; exit 1 ;;
   *:check) printf '%s\n' "1 0 0 0 0" ;;
@@ -251,8 +263,8 @@ run_case "a clean reset reads, verifies, drops, migrates, seeds, then checks" ok
 expect_code 0
 expect_output "ok: the demo was reset"
 kinds="$(cat "$state/psql-kinds" 2>/dev/null | paste -sd ' ' -)"
-if [ "$kinds" != "drop seed check" ]; then
-  report "psql ran as '${kinds}', not 'drop seed check'"
+if [ "$kinds" != "drop remains seed check" ]; then
+  report "psql ran as '${kinds}', not 'drop remains seed check'"
 fi
 
 # The order is the security property. Reading the digest, verifying it, and
@@ -327,6 +339,21 @@ run_case "the drop takes the app schema and the migration record together" ok
 if ! grep -qF "DROP SCHEMA IF EXISTS app CASCADE" "$state/drop-sql"; then report "the drop did not drop the app schema"; fi
 if ! grep -qF "public.schema_migrations" "$state/drop-sql"; then report "the drop left the migration record behind"; fi
 
+# A drop that succeeded and took nothing with it is the one failure the counts
+# after the seed cannot catch, because the seed would make those counts right
+# again over the top of whatever survived.
+run_case "a drop that leaves the schema behind migrates and seeds nothing" remains-dirty
+expect_code 1
+expect_output "left something behind"
+expect_output "11 1"
+expect_no_call_to docker
+if grep -qx seed "$state/psql-kinds"; then report "the seed ran"; fi
+
+run_case "a database that cannot be inspected after the drop seeds nothing" remains-unreadable
+expect_code 1
+expect_no_call_to docker
+if grep -qx seed "$state/psql-kinds"; then report "the seed ran"; fi
+
 run_case "a failed drop migrates and seeds nothing" drop-fails
 expect_code 1
 expect_output "must be owner of schema app"
@@ -380,6 +407,15 @@ for username in demo.administrator demo.faculty demo.student demo.guardian; do
 done
 if ! grep -qF '"session":"bearer"' "$state/posted"; then report "the sign-in did not ask for a bearer session"; fi
 if grep -E '^curl ' "$state/calls" | grep -qF "password"; then report "a password appeared on a command line"; fi
+
+# Each account is read as its own object, so neither the order its fields come
+# in nor the whitespace around them can turn four accounts into none, and a
+# field added to src/http/demo.ts cannot break the reset at two in the morning.
+run_case "accounts are read whatever order their fields come in" demo-reordered
+expect_code 0
+for username in demo.administrator demo.faculty demo.student demo.guardian; do
+  if ! grep -qF "\"username\":\"${username}\"" "$state/posted"; then report "${username} never signed in"; fi
+done
 
 run_case "an account that cannot sign in fails the reset" signin-fails
 expect_code 1

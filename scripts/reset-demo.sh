@@ -196,6 +196,20 @@ DROP TABLE IF EXISTS public.schema_migrations;
 COMMIT;
 " || fail "the drop failed; the demo is unchanged"
 
+# That the schema is gone is what makes "only seeded data" true, and it is
+# stronger than any count taken after the seed: nothing can have survived a
+# schema that no longer exists. The counts below then say the seed put back
+# what it should, but this is the line that says nothing was left behind.
+remains="$(psql_owner --tuples-only --no-align --command "
+SELECT (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app')::text
+       || ' ' ||
+       (SELECT count(*) FROM pg_class WHERE oid = to_regclass('public.schema_migrations'))::text
+")" || fail "the demo could not be inspected after the drop"
+remains="$(printf '%s' "$remains" | tr -d '\r' | tr -s ' \n' ' ' | sed 's/^ *//; s/ *$//')"
+if [ "$remains" != "0 0" ]; then
+  fail "the drop left something behind: app tables and migration records were '${remains}', not '0 0'"
+fi
+
 # --- 4. migrate --------------------------------------------------------------
 
 # `-e NAME` with no value hands the container this process's value, so the
@@ -240,9 +254,11 @@ if [ "$http_status" != "200" ]; then
   fail "${PRODUCTION_URL}/api/demo answered ${http_status:-nothing} after seeding"
 fi
 
-accounts="$(printf '%s' "$http_body" \
-  | grep -o '"username"[[:space:]]*:[[:space:]]*"[^"]*"[[:space:]]*,[[:space:]]*"password"[[:space:]]*:[[:space:]]*"[^"]*"' \
-  || true)"
+# One line per account object, by splitting the array on its opening braces.
+# Each line is then read on its own, so this depends on neither the order the
+# fields are serialised in nor the two being adjacent: src/http/demo.ts is free
+# to grow a field or reorder one without this failing at two in the morning.
+accounts="$(printf '%s' "$http_body" | tr '{' '\n' | grep '"username"' || true)"
 
 # One for each School role. Fewer means the seed left an account out, or the
 # service is not in demo mode and is publishing none.

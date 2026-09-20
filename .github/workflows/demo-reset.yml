@@ -26,8 +26,11 @@ jobs:
       url: ${{ env.PRODUCTION_URL }}
     # The same group as the deploy job, so a reset never drops the schema a
     # deploy is migrating, and a deploy never migrates a schema that is dropped
-    # and not yet seeded. Neither cancels the other: a reset stopped halfway
-    # would leave the demo with no data at all.
+    # and not yet seeded. A reset that has started always finishes, which is
+    # what matters: cancelled halfway it would leave the demo with no data at
+    # all. A reset still *waiting* behind a deploy is a different thing, and
+    # GitHub does cancel that one when a newer run queues into the group. The
+    # demo then goes a night without a reset, and the next one puts it right.
     concurrency:
       group: production
       cancel-in-progress: false
@@ -45,7 +48,9 @@ jobs:
       # migrates with is the one already serving the database.
       IMAGE: ghcr.io/${{ github.repository }}
       # The production domain, which alone is outside Deployment Protection.
-      # Public, so not a secret.
+      # Public, so not a secret. The same literal as the deploy job's in
+      # container.yml, and it must stay that way: pointed at anything else,
+      # this would read one deployment's digest and drop another's database.
       PRODUCTION_URL: https://schoolgrid-phi.vercel.app
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
