@@ -114,7 +114,7 @@ components:
     textColor: "{colors.ink}"
   mark-struck:
     backgroundColor: "{colors.ink}"
-    textColor: "{colors.stock}"
+    textColor: "{colors.stock-canary}"
     typography: "{typography.caption}"
     rounded: "{rounded.none}"
     padding: "0.2rem 0.55rem"

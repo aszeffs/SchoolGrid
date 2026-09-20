@@ -147,7 +147,7 @@
       "name": "Status Mark",
       "kind": "chip",
       "refersTo": "mark-struck",
-      "description": "State printed into the record: solid ink for a settled fact, dashed outline for one still open. An empty mark disappears.",
+      "description": "State printed into the record: solid ink for a settled fact, dashed outline for one still open. An empty mark prints nothing but keeps its place.",
       "html": "<span class=\"ds-mark ds-mark-struck\">Claimed</span> <span class=\"ds-mark ds-mark-open\">Unclaimed</span>",
       "css": ".ds-mark { font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; } .ds-mark-struck { padding: 0.2rem 0.55rem; background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-mark-open { padding: calc(0.2rem - 1px) calc(0.55rem - 1px); border: 1px dashed var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); }"
     },
