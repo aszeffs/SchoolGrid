@@ -33,6 +33,10 @@ REPO="aszeffs/SchoolGrid"
 URL="https://schoolgrid.example.vercel.app"
 OWNER_URL="postgresql://owner:owner-secret@db.example/neondb"
 
+# Set on every case, so the script's own default can change without breaking a
+# case that only ever meant to check the shape of the call.
+HTTP_TIMEOUT=7
+
 # What a freshly seeded demo answers the "only seeded data" query with: one
 # School, and nothing that only a visitor or an operator could have made.
 CLEAN_COUNTS="1 0 0 0 0"
@@ -183,6 +187,7 @@ run_case() {
   output="$(
     export SCENARIO="$scenario" STATE="$state" COMMIT="$SHA" DIGEST="$DIGEST"
     export MIGRATION_DATABASE_URL="$OWNER_URL"
+    export RESET_HTTP_TIMEOUT_SECONDS="$HTTP_TIMEOUT"
     if [ -n "$unset_var" ]; then unset "$unset_var"; fi
     bash "$subject" "$IMAGE" "$REPO" "$url" 2>&1
   )" || code=$?
@@ -404,7 +409,7 @@ expect_no_calls
 
 run_case "a trailing slash on the production URL is dropped" ok "${URL}/"
 expect_code 0
-expect_call "curl --silent --max-time 15 --write-out \\n%{http_code} ${URL}/api/build-info"
+expect_call "curl --silent --max-time ${HTTP_TIMEOUT} --write-out \\n%{http_code} ${URL}/api/build-info"
 
 run_case "a missing MIGRATION_DATABASE_URL is refused before anything runs" ok "$URL" MIGRATION_DATABASE_URL
 expect_code 1

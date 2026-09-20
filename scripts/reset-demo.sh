@@ -53,6 +53,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 SEED_FILE="${repo_root}/demo/seed.sql"
 
+# Long enough for a cold start of the function and of Neon together, which #93
+# measured at about 3 seconds, and for the sign-ins below, which each cost a
+# password hash. Not retried: unlike a deploy, this runs against a service that
+# was already up, so no answer at all is a reason to leave the demo alone.
 RESET_HTTP_TIMEOUT_SECONDS="${RESET_HTTP_TIMEOUT_SECONDS:-15}"
 
 fail() {
@@ -255,6 +259,11 @@ while IFS= read -r account; do
   # The credentials go over stdin, so neither is in the process list, and a
   # bearer session, so no cookie is asked for and the public-origin check that
   # guards one does not apply to a sign-in made from here.
+  #
+  # Put into the body by interpolation, which holds because both values came
+  # from demo/seed.sql by way of src/http/demo.ts, where they are plain ASCII
+  # with no quote or backslash to escape. A password that needed escaping would
+  # make this a malformed body and fail the reset, not sign anyone in.
   fetch "${PRODUCTION_URL}/api/session" \
     --request POST \
     --header "content-type: application/json" \
