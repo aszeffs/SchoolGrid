@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { api, type BuildInfo } from "./api.ts";
 import { navigate } from "./navigation.ts";
+import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
 
 const REPOSITORY = "aszeffs/SchoolGrid";
 const IMAGE = "ghcr.io/aszeffs/schoolgrid";
@@ -61,15 +62,30 @@ export function HowThisWasBuilt() {
   };
 
   if (state.kind === "loading") {
-    return <main className="panel" aria-busy="true" />;
+    return <LoadingSheet stock="mint" name="How this was built" />;
   }
 
   const build = state.kind === "ready" ? state.build : undefined;
   const digest = build?.digest;
   const commit = build?.commit;
 
+  const legend = (
+    <>
+      <h2>This sheet</h2>
+      <p>What the running site was built from, and how to check it yourself.</p>
+      <dl>
+        <Key term="Digest">
+          A hash of an image&apos;s contents. Unlike a tag, it cannot be moved to point at something else later.
+        </Key>
+        <Key term="Attestation">
+          A signed record of the workflow and source that produced an image, checkable by anyone.
+        </Key>
+      </dl>
+    </>
+  );
+
   return (
-    <main className="panel wide">
+    <Sheet stock="mint" name="How this was built" legend={legend}>
       <h1>How this was built</h1>
       <p>
         Every change to SchoolGrid is tested before it merges. On a merge to <code>{RELEASE_BRANCH}</code>,
@@ -135,11 +151,13 @@ export function HowThisWasBuilt() {
         </>
       )}
 
-      <p>
-        <a href="/" onClick={home}>
-          Go to SchoolGrid
-        </a>
-      </p>
-    </main>
+      <div className="foot">
+        <p>
+          <a href="/" onClick={home}>
+            Go to SchoolGrid
+          </a>
+        </p>
+      </div>
+    </Sheet>
   );
 }
