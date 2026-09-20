@@ -3,6 +3,7 @@ import { api, type ApiResult, type Invitation, type ListedPerson } from "./api.t
 import { IssuedLink, PendingInvitations, type IssuedInvitation } from "./Invitations.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
 
 type State =
   | { kind: "loading" }
@@ -12,6 +13,13 @@ type State =
       persons: ListedPerson[];
       /** Pending Invitations, listed only for a School Administrator; null for anyone else. */
       invitations: Invitation[] | null;
+      /**
+       * The School this roster belongs to, for the sheet's head. An account may
+       * reach more than one School, so a roster that does not name its own is a
+       * roster the reader cannot place. Null when the listing could not be had;
+       * the head is then left off rather than guessed at.
+       */
+      schoolName: string | null;
     };
 
 type Ready = Extract<State, { kind: "ready" }>;
@@ -36,13 +44,27 @@ async function load(schoolId: string): Promise<ApiResult<Ready>> {
     return listed;
   }
   const { persons } = listed.body;
+  const schoolName = await nameOf(schoolId);
   if (!administers(persons)) {
-    return { ok: true, body: { kind: "ready", persons, invitations: null } };
+    return { ok: true, body: { kind: "ready", persons, invitations: null, schoolName } };
   }
   const invitations = await api.invitations(schoolId);
   return invitations.ok
-    ? { ok: true, body: { kind: "ready", persons, invitations: invitations.body.invitations } }
+    ? { ok: true, body: { kind: "ready", persons, invitations: invitations.body.invitations, schoolName } }
     : invitations;
+}
+
+/**
+ * The School's name, from the listing the account can already read. A failure
+ * here is not the page's failure: the roster still stands, so it is reported as
+ * an absent name rather than turned into the refusal state.
+ */
+async function nameOf(schoolId: string): Promise<string | null> {
+  const schools = await api.schools();
+  if (!schools.ok) {
+    return null;
+  }
+  return schools.body.schools.find((school) => school.id === schoolId)?.name ?? null;
 }
 
 /** Every Person in one School that the caller may read. */
@@ -130,37 +152,61 @@ export function Persons({ schoolId }: { schoolId: string }) {
 
   switch (state.kind) {
     case "loading":
-      return <main className="panel" aria-busy="true" />;
+      return <LoadingSheet stock="goldenrod" name="Persons" />;
     case "not-available":
       return <NotAvailable />;
     case "ready": {
       const administering = administers(state.persons);
+      const legend = (
+        <>
+          <h2>This sheet</h2>
+          <p>Every Person in this School that you may read.</p>
+          <dl>
+            <Key term="Person">
+              An individual as known to this School. A Person need not be attached to a User account; one who never
+              signs in is still a full Person.
+            </Key>
+            {administering && (
+              <Key term="Claimed">A Person already attached to a User account. Nothing more to do here.</Key>
+            )}
+            {administering && (
+              <Key term="Unclaimed">
+                Not yet attached. Issuing an Invitation lets one human claim this Person; you hand them the link
+                yourself.
+              </Key>
+            )}
+          </dl>
+        </>
+      );
+      const head =
+        state.schoolName === null ? undefined : <p className="sheet__school">{state.schoolName}</p>;
       return (
-        <main className="panel">
-          <p>
-            <a href="/" onClick={home}>
-              Your Schools
-            </a>
-          </p>
+        <Sheet stock="goldenrod" name="Persons" legend={legend} head={head}>
           <h1>Persons</h1>
-          <ul aria-label="Persons" className="persons">
+          <ul aria-label="Persons" className="roster">
             {state.persons.map((person) => (
               <li key={person.id}>
-                <span>{person.displayName}</span>
+                <span className="roster__name">{person.displayName}</span>
                 {person.claimed !== undefined && (
-                  <span className="actions">
-                    <span className="muted">{person.claimed ? "Claimed" : "Unclaimed"}</span>
-                    {!person.claimed && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        aria-label={`Invite ${person.displayName}`}
-                        onClick={() => invite(person)}
-                      >
-                        Invite
-                      </button>
-                    )}
-                  </span>
+                  <>
+                    <span className="roster__leader" />
+                    <span className="roster__state">
+                      <span className={person.claimed ? "mark mark--held" : "mark mark--open"}>
+                        {person.claimed ? "Claimed" : "Unclaimed"}
+                      </span>
+                      {!person.claimed && (
+                        <button
+                          type="button"
+                          className="button-quiet"
+                          disabled={busy}
+                          aria-label={`Invite ${person.displayName}`}
+                          onClick={() => invite(person)}
+                        >
+                          Invite
+                        </button>
+                      )}
+                    </span>
+                  </>
                 )}
               </li>
             ))}
@@ -181,7 +227,14 @@ export function Persons({ schoolId }: { schoolId: string }) {
               </button>
             </form>
           )}
-        </main>
+          <div className="foot">
+            <p>
+              <a href="/" onClick={home}>
+                Your Schools
+              </a>
+            </p>
+          </div>
+        </Sheet>
       );
     }
   }

@@ -1,48 +1,690 @@
-:root {
-  color-scheme: light dark;
-  --background: #f5f7fa;
-  --surface: #ffffff;
-  --text: #1b2430;
-  --muted: #5a6573;
-  --accent: #1f4e79;
-  --error: #a4262c;
-  font-family: system-ui, sans-serif;
-  line-height: 1.5;
+/*
+ * SchoolGrid is printed, not rendered: one violet ink struck onto coloured copy
+ * stock, the way a school office ran off its own sheets. The stock floods the
+ * frame; there is no card, no panel and no grey page behind it.
+ *
+ * Every rule here lives in this file. The Content Security Policy allows no
+ * inline style, and `vite.config.ts` fails the build on one, so a style
+ * attribute is not a shortcut that happens to be discouraged: it does not ship.
+ */
+
+@font-face {
+  font-family: "Courier Prime";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/courier-prime-400.woff2") format("woff2");
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #11161c;
-    --surface: #1b232c;
-    --text: #e6ebf0;
-    --muted: #9aa5b1;
-    --accent: #7fb3e0;
-    --error: #f1707a;
-  }
+@font-face {
+  font-family: "Courier Prime";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/courier-prime-400-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/courier-prime-700.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Stardos Stencil";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/stardos-stencil-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Stardos Stencil";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/stardos-stencil-700.woff2") format("woff2");
+}
+
+:root {
+  /*
+   * One ink. A spirit duplicator carried a single aniline violet, and the
+   * office's rubber stamp was the only second colour it ever saw. Both are
+   * darkened until they clear 4.5:1 on every stock below, goldenrod included.
+   */
+  --ink: #3b2a6b;
+  --ink-soft: #4f3d7a;
+  --stamp: #8e1e26;
+
+  /* The stock each sheet is run on. Overridden per sheet, never per element. */
+  --stock: #f7e7a6;
+
+  --rule: color-mix(in srgb, var(--ink) 42%, transparent);
+  --rule-faint: color-mix(in srgb, var(--ink) 18%, transparent);
+  --wash: color-mix(in srgb, var(--ink) 9%, transparent);
+  --wash-strong: color-mix(in srgb, var(--ink) 15%, transparent);
+
+  --type-strike: "Courier Prime", "Courier New", monospace;
+  --type-stencil: "Stardos Stencil", "Courier Prime", monospace;
+
+  --step: 0.5rem;
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --measure: 68ch;
+
+  /* The drum turns once, fast, and settles. Nothing else in the app eases. */
+  --pass: 560ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  color-scheme: light;
+  font-family: var(--type-strike);
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * The sheet is paper. Paper does not invert, so there is no dark rendition of
+ * this world; the stocks carry the whole range instead.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--background);
-  color: var(--text);
+  background: var(--stock);
+  color: var(--ink);
+  caret-color: var(--ink);
+  scrollbar-color: var(--ink) var(--stock);
 }
 
-.panel {
-  max-width: 28rem;
-  margin: 4rem auto;
-  padding: 2rem;
-  background: var(--surface);
-  border-radius: 0.5rem;
+::selection {
+  background: var(--ink);
+  color: var(--stock);
 }
 
-.panel.wide {
-  max-width: 44rem;
+/* ---- The sheet ------------------------------------------------------- */
+
+.sheet {
+  --stock: #f7e7a6;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--stock);
+  /*
+   * Drum wear: the ink lays down unevenly across the sheet, heavier at the
+   * left where the roller bites and washed out toward the tail.
+   */
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ink) 3%, transparent) 0 1px,
+      transparent 1px 3px
+    ),
+    linear-gradient(97deg, color-mix(in srgb, var(--ink) 5%, transparent) 0%, transparent 38%);
 }
+
+.sheet--goldenrod {
+  --stock: #f2c14e;
+}
+
+.sheet--blue {
+  --stock: #c9dae8;
+}
+
+.sheet--canary {
+  --stock: #f7e7a6;
+}
+
+.sheet--pink {
+  --stock: #edd9e4;
+}
+
+.sheet--mint {
+  --stock: #cbe0ce;
+}
+
+.sheet--buff {
+  --stock: #e8cdb5;
+}
+
+/*
+ * The staple that held the run together, struck across the corner. It lives in
+ * the gutter beside the mark, so it never crowds the head's type, and it is
+ * dropped at widths where the gutter is too narrow to hold it.
+ */
+@media (min-width: 52rem) {
+  .sheet::before {
+    content: "";
+    position: absolute;
+    top: 1.15rem;
+    left: 0.35rem;
+    width: 2.6rem;
+    height: 5px;
+    background: var(--ink);
+    transform: rotate(-45deg);
+  }
+}
+
+/*
+ * The drum pass: one wipe of ink travels down the sheet as it is run off. It
+ * is an overlay, so nothing on the page is ever hidden waiting for it, and it
+ * is the only animation in the app.
+ */
+.sheet::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--ink) 22%, transparent) 45%,
+    color-mix(in srgb, var(--ink) 4%, transparent) 60%,
+    transparent 72%
+  );
+  animation: drum-pass var(--pass) cubic-bezier(0.16, 1, 0.3, 1) 1;
+  opacity: 0;
+}
+
+@keyframes drum-pass {
+  from {
+    opacity: 1;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+.sheet__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--step) calc(var(--step) * 3);
+  padding: calc(var(--step) * 2) var(--gutter) calc(var(--step) * 1.5);
+  border-bottom: 3px double var(--ink);
+}
+
+.sheet__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(var(--step) * 2);
+}
+
+.sheet__mark {
+  margin: 0;
+  font-family: var(--type-stencil);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.sheet__no {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* Whose sheet this is, struck across the head in the record's own hand. */
+.sheet__school {
+  margin: 0;
+  font-family: var(--type-strike);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sheet__foot {
+  align-self: start;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: calc(var(--step) * 1.5) var(--gutter);
+  border-top: 3px double var(--ink);
+}
+
+.sheet__foot::before {
+  content: "";
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-right: auto;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background-image:
+    linear-gradient(to right, transparent 46%, var(--ink) 46% 54%, transparent 54%),
+    linear-gradient(to bottom, transparent 46%, var(--ink) 46% 54%, transparent 54%);
+}
+
+.sheet__foot p {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.sheet__body {
+  display: grid;
+  grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
+  gap: 0 calc(var(--gutter) * 1.2);
+  align-items: start;
+  padding: calc(var(--step) * 4) var(--gutter) calc(var(--step) * 5);
+}
+
+.sheet__body--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The legend is held level: it never scrolls away from the record it explains. */
+.legend {
+  position: sticky;
+  top: calc(var(--step) * 2);
+  padding-right: calc(var(--gutter) * 0.5);
+  border-right: 1px solid var(--rule-faint);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.legend h2 {
+  margin: 0 0 calc(var(--step) * 1.5);
+  font-family: var(--type-strike);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.legend dl {
+  display: grid;
+  gap: calc(var(--step) * 1.25) 0;
+  margin: 0;
+}
+
+.legend dt {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.legend dd {
+  margin: 0;
+}
+
+.legend p {
+  margin: 0 0 calc(var(--step) * 1.5);
+}
+
+.run {
+  max-width: 62rem;
+}
+
+/* ---- Type ------------------------------------------------------------ */
+
+h1 {
+  margin: 0 0 calc(var(--step) * 3);
+  padding-bottom: calc(var(--step) * 1.5);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--type-stencil);
+  font-size: clamp(2rem, 5.5vw, 3.25rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+h2 {
+  margin: calc(var(--step) * 6) 0 calc(var(--step) * 2);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+p {
+  max-width: var(--measure);
+}
+
+a {
+  color: var(--ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background: var(--wash-strong);
+    text-decoration-thickness: 2px;
+  }
+}
+
+code {
+  font-family: var(--type-strike);
+  overflow-wrap: anywhere;
+}
+
+p > code,
+dd > code,
+li > code {
+  padding: 0.05em 0.35em;
+  background: var(--wash);
+  border-bottom: 1px solid var(--rule);
+}
+
+pre code {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+/* The marker is part of the sheet too, not the browser's grey disc. */
+.run ul:not([class]) {
+  padding-left: 1.4em;
+  list-style: square;
+}
+
+.run ul:not([class]) li::marker {
+  color: var(--ink);
+}
+
+pre {
+  max-width: 100%;
+  margin: calc(var(--step) * 2) 0;
+  padding: calc(var(--step) * 2);
+  overflow-x: auto;
+  background: var(--wash);
+  border: 1px solid var(--rule);
+  border-left-width: 1px;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+strong {
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+
+.error {
+  margin: 0;
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.5);
+  border: 2px solid var(--stamp);
+  color: var(--stamp);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Controls: struck, not rendered ---------------------------------- */
+
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+form {
+  display: grid;
+  gap: calc(var(--step) * 2.5);
+  justify-items: start;
+  max-width: 30rem;
+  margin: calc(var(--step) * 3) 0;
+}
+
+form > label,
+form > .error {
+  justify-self: stretch;
+}
+
+label {
+  display: grid;
+  gap: calc(var(--step) * 0.75);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+input {
+  min-height: 2.75rem;
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.25);
+  background: var(--wash);
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+input:focus {
+  background: var(--wash-strong);
+  border-bottom-width: 3px;
+  outline-offset: 0;
+}
+
+button {
+  min-height: 2.75rem;
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 3);
+  background: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  color: var(--stock);
+  cursor: pointer;
+  font-family: var(--type-stencil);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out,
+    transform 90ms ease-out;
+}
+
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 82%, #000);
+  }
+
+  input:hover {
+    background: var(--wash-strong);
+  }
+
+  .button-ghost:hover:not(:disabled),
+  .button-quiet:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--stock);
+  }
+
+  .button-stamp:hover:not(:disabled) {
+    background: var(--stamp);
+    color: var(--stock);
+  }
+
+  .roster > li:hover {
+    background: var(--wash);
+  }
+}
+
+/* The stamp meets the page. */
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:focus-visible {
+  outline-color: var(--ink);
+}
+
+button:disabled {
+  background: transparent;
+  border-style: dashed;
+  color: var(--ink-soft);
+  cursor: not-allowed;
+}
+
+/* Struck through the ink rather than filled: the office's second-choice action. */
+.button-ghost {
+  background: transparent;
+  color: var(--ink);
+}
+
+.button-stamp {
+  padding-inline: calc(var(--step) * 2);
+  background: transparent;
+  border-color: var(--stamp);
+  color: var(--stamp);
+  font-size: 0.8rem;
+}
+
+.button-stamp:focus-visible {
+  outline-color: var(--stamp);
+}
+
+.sheet__head .button-quiet {
+  border-width: 1px;
+}
+
+.button-quiet {
+  min-height: 2.25rem;
+  padding: calc(var(--step) * 0.75) calc(var(--step) * 1.5);
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+/* ---- Ruled records --------------------------------------------------- */
+
+.roster {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+}
+
+h1 + .roster {
+  border-top: 0;
+}
+
+.roster > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(var(--step) * 0.75) calc(var(--step) * 2);
+  padding: calc(var(--step) * 1.75) 0;
+  border-bottom: 1px solid var(--rule-faint);
+}
+
+.roster__name {
+  font-size: 1.05rem;
+}
+
+.roster__name a {
+  text-decoration-thickness: 1px;
+}
+
+/* The dotted leader that runs a name across the sheet to its column. */
+.roster__leader {
+  flex: 1 1 4rem;
+  min-width: 2rem;
+  align-self: center;
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--rule) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+.roster__state {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--step) * 1.5);
+  margin-left: auto;
+}
+
+/* State prints itself into the record: a struck mark, never a coloured pill. */
+.mark {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mark--held {
+  padding: 0.2rem 0.55rem;
+  background: var(--ink);
+  color: var(--stock);
+}
+
+/* A status with nothing to report is not a mark waiting to be read. */
+.mark:empty {
+  display: none;
+}
+
+.mark--open {
+  padding: calc(0.2rem - 1px) calc(0.55rem - 1px);
+  border: 1px dashed var(--ink);
+  color: var(--ink);
+}
+
+.stamp-line {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.empty {
+  max-width: none;
+  padding: calc(var(--step) * 3) 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ---- Facts: a typed two-column entry --------------------------------- */
 
 .facts {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.5rem 1rem;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: calc(var(--step) * 1.5) calc(var(--step) * 3);
+  margin: calc(var(--step) * 2) 0;
+  padding-top: calc(var(--step) * 2);
+  border-top: 1px solid var(--rule);
+}
+
+.facts dt {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .facts dd {
@@ -50,101 +692,139 @@ body {
   overflow-wrap: anywhere;
 }
 
-pre {
-  overflow-x: auto;
-  padding: 1rem;
-  background: var(--background);
-  border-radius: 0.5rem;
+/* ---- The issued Invitation: a slip torn off the sheet ---------------- */
+
+.slip {
+  display: grid;
+  gap: calc(var(--step) * 1.5);
+  margin: calc(var(--step) * 4) 0;
+  padding: calc(var(--step) * 3);
+  background: var(--wash);
+  border: 2px solid var(--ink);
 }
 
-.bar {
+.slip h2 {
+  margin: 0;
+  font-family: var(--type-stencil);
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+}
+
+.slip p {
+  margin: 0;
+}
+
+.slip form,
+.slip label {
+  margin: 0;
+  max-width: none;
+}
+
+.slip input {
+  background: var(--stock);
+}
+
+.actions {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-  color: var(--muted);
+  gap: calc(var(--step) * 1.5);
 }
 
-.muted {
-  color: var(--muted);
-}
+/* ---- Try a role ------------------------------------------------------ */
 
 .demo {
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--muted);
+  margin-top: calc(var(--step) * 6);
+  padding-top: calc(var(--step) * 3);
+  border-top: 3px double var(--ink);
+}
+
+.demo h2 {
+  margin-top: 0;
 }
 
 .demo ul {
   display: grid;
-  gap: 0.5rem;
+  gap: calc(var(--step) * 1.5);
+  margin: calc(var(--step) * 3) 0 0;
   padding: 0;
   list-style: none;
+}
+
+.demo li button {
+  min-width: 24rem;
+  text-align: left;
 }
 
 .demo li {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 1rem;
+  gap: calc(var(--step) * 1) calc(var(--step) * 2);
 }
 
-.persons {
-  padding: 0;
-  list-style: none;
+.demo li span {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
 }
 
-.persons li {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.25rem 0;
+/* ---- Foot ------------------------------------------------------------ */
+
+.foot {
+  margin-top: calc(var(--step) * 6);
+  padding-top: calc(var(--step) * 2);
+  border-top: 1px solid var(--rule);
+  font-size: 0.85rem;
 }
 
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.issued {
-  display: grid;
-  gap: 0.5rem;
-  margin: 1rem 0;
-  padding: 1rem;
-  border: 1px solid var(--accent);
-  border-radius: 0.5rem;
-}
-
-.issued h2,
-.issued p {
+.foot p {
   margin: 0;
 }
 
-form {
-  display: grid;
-  gap: 1rem;
+/* ---- Narrow sheets --------------------------------------------------- */
+
+@media (max-width: 52rem) {
+  .sheet__body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--step) * 4) 0;
+  }
+
+  .legend {
+    position: static;
+    order: 2;
+    padding: calc(var(--step) * 3) 0 0;
+    border-right: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .demo li button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  form {
+    justify-items: stretch;
+  }
+
+  .legend dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roster__leader {
+    display: none;
+  }
+
+  .roster__name {
+    flex: 1 1 8rem;
+  }
 }
 
-label {
-  display: grid;
-  gap: 0.25rem;
-}
+@media (prefers-reduced-motion: reduce) {
+  .sheet::after {
+    animation: none;
+  }
 
-input,
-button {
-  font: inherit;
-  padding: 0.5rem;
-}
-
-button {
-  cursor: pointer;
-}
-
-a {
-  color: var(--accent);
-}
-
-.error {
-  color: var(--error);
-  margin: 0;
+  button {
+    transition: none;
+  }
 }

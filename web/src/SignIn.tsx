@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { api, type DemoAccount } from "./api.ts";
 import { navigate } from "./navigation.ts";
+import { Key, Sheet } from "./Sheet.tsx";
 
 /** Each School role as the demo's panel names it. */
 const ROLE_NAMES: Record<DemoAccount["role"], string> = {
@@ -67,8 +68,23 @@ export function SignIn() {
     navigate("/how-this-was-built");
   };
 
+  const legend = (
+    <>
+      <h2>This sheet</h2>
+      <p>Signing in to SchoolGrid.</p>
+      <dl>
+        <Key term="Account">
+          One User account, which may reach more than one School. It holds no role and no academic record of its own.
+        </Key>
+        <Key term="Refusals">
+          Every refused sign-in is answered the same way, whatever went wrong. Nothing here says which.
+        </Key>
+      </dl>
+    </>
+  );
+
   return (
-    <main className="panel">
+    <Sheet stock="canary" name="Sign in" legend={legend}>
       <h1>Sign in to SchoolGrid</h1>
       <form onSubmit={submit}>
         <label>
@@ -105,6 +121,7 @@ export function SignIn() {
               <li key={account.role}>
                 <button
                   type="button"
+                  className="button-ghost"
                   disabled={submitting}
                   onClick={() => void signIn({ username: account.username, password: account.password })}
                 >
@@ -118,11 +135,13 @@ export function SignIn() {
           </ul>
         </section>
       )}
-      <p className="muted">
-        <a href="/how-this-was-built" onClick={howThisWasBuilt}>
-          How this was built
-        </a>
-      </p>
-    </main>
+      <div className="foot">
+        <p className="muted">
+          <a href="/how-this-was-built" onClick={howThisWasBuilt}>
+            How this was built
+          </a>
+        </p>
+      </div>
+    </Sheet>
   );
 }

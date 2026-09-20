@@ -2,6 +2,7 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { api, type School } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
 
 function personsPath(school: School): string {
   return `/schools/${encodeURIComponent(school.id)}/persons`;
@@ -60,33 +61,55 @@ export function Schools() {
 
   switch (state.kind) {
     case "loading":
-      return <main className="panel" aria-busy="true" />;
+      return <LoadingSheet stock="blue" name="Schools" />;
     case "not-available":
       return <NotAvailable />;
-    case "ready":
+    case "ready": {
+      const legend = (
+        <>
+          <h2>This sheet</h2>
+          <p>The Schools your account reaches.</p>
+          <dl>
+            <Key term="School">
+              The boundary every record belongs to. No record is shared between Schools, and the same human at two
+              Schools is two unrelated Persons.
+            </Key>
+            <Key term="Reach">
+              Your account resolves to at most one Person per School. A School you cannot reach is not listed.
+            </Key>
+          </dl>
+        </>
+      );
+      const head = (
+        <div className="actions">
+          <span className="sheet__no">Signed in as {state.username}</span>
+          <button type="button" className="button-quiet" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
+      );
       return (
-        <main className="panel">
-          <header className="bar">
-            <span>Signed in as {state.username}</span>
-            <button type="button" onClick={signOut}>
-              Sign out
-            </button>
-          </header>
+        <Sheet stock="blue" name="Schools" legend={legend} head={head}>
           <h1>Your Schools</h1>
           {state.schools.length === 0 ? (
-            <p>Your account does not reach any School yet.</p>
+            <p className="empty">Your account does not reach any School yet.</p>
           ) : (
-            <ul aria-label="Schools">
+            <ul aria-label="Schools" className="roster">
               {state.schools.map((school) => (
                 <li key={school.id}>
-                  <a href={personsPath(school)} onClick={(event) => open(event, school)}>
-                    {school.name}
-                  </a>
+                  <span className="roster__name">
+                    <a href={personsPath(school)} onClick={(event) => open(event, school)}>
+                      {school.name}
+                    </a>
+                  </span>
+                  {/* The leader carries no text: a listed School reads as its name and nothing else. */}
+                  <span className="roster__leader" />
                 </li>
               ))}
             </ul>
           )}
-        </main>
+        </Sheet>
       );
+    }
   }
 }

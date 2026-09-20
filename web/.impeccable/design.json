@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-20T00:00:00Z",
+  "title": "Design System: SchoolGrid",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Aniline Violet",
+        "canonical": "#3b2a6b",
+        "tonalRamp": ["#140e25", "#221838", "#2e2151", "#3b2a6b", "#544180", "#7566a0", "#a79dc4", "#ded9ea"]
+      },
+      "ink-soft": {
+        "role": "primary",
+        "displayName": "Washed Violet",
+        "canonical": "#4f3d7a",
+        "tonalRamp": ["#1b1429", "#2a1f40", "#3b2c5c", "#4f3d7a", "#68548f", "#8a77aa", "#b4a8c9", "#e3ddec"]
+      },
+      "stamp": {
+        "role": "secondary",
+        "displayName": "Office Stamp Oxblood",
+        "canonical": "#8e1e26",
+        "tonalRamp": ["#2b0709", "#470d12", "#6a151b", "#8e1e26", "#ad3239", "#c55f63", "#dd9a9c", "#f2d9da"]
+      },
+      "stock-goldenrod": {
+        "role": "tertiary",
+        "displayName": "Goldenrod",
+        "canonical": "#f2c14e",
+        "tonalRamp": ["#3d2d06", "#5f470b", "#8a6712", "#b3871c", "#d3a430", "#f2c14e", "#f7d689", "#fdefcd"]
+      },
+      "stock-canary": {
+        "role": "tertiary",
+        "displayName": "Canary",
+        "canonical": "#f7e7a6",
+        "tonalRamp": ["#3b3312", "#594d1c", "#816f28", "#a89236", "#ceb54b", "#e5d073", "#f7e7a6", "#fdf6d9"]
+      },
+      "stock-blue": {
+        "role": "tertiary",
+        "displayName": "Duplicator Blue",
+        "canonical": "#c9dae8",
+        "tonalRamp": ["#14212b", "#1f3444", "#2e4c61", "#43687f", "#6a8ca2", "#9bb6c9", "#c9dae8", "#eaf2f8"]
+      },
+      "stock-pink": {
+        "role": "tertiary",
+        "displayName": "Carbon Pink",
+        "canonical": "#edd9e4",
+        "tonalRamp": ["#2a1a22", "#412834", "#5d3b4b", "#7c5566", "#a07c8a", "#c6a6b3", "#edd9e4", "#f8eef3"]
+      },
+      "stock-mint": {
+        "role": "tertiary",
+        "displayName": "Ledger Mint",
+        "canonical": "#cbe0ce",
+        "tonalRamp": ["#16231a", "#233728", "#344f3b", "#4a6b52", "#6f9078", "#9dbaa4", "#cbe0ce", "#eaf3ec"]
+      },
+      "stock-buff": {
+        "role": "tertiary",
+        "displayName": "Manila Buff",
+        "canonical": "#e8cdb5",
+        "tonalRamp": ["#2a1c10", "#402c1a", "#5d4227", "#7e5c38", "#a57e55", "#c8a37e", "#e8cdb5", "#f6ebdf"]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "color-mix(in srgb, #3b2a6b 42%, transparent)",
+        "tonalRamp": []
+      },
+      "rule-faint": {
+        "role": "neutral",
+        "displayName": "Faint Rule",
+        "canonical": "color-mix(in srgb, #3b2a6b 18%, transparent)",
+        "tonalRamp": []
+      },
+      "wash": {
+        "role": "neutral",
+        "displayName": "Wash",
+        "canonical": "color-mix(in srgb, #3b2a6b 9%, transparent)",
+        "tonalRamp": []
+      },
+      "wash-strong": {
+        "role": "neutral",
+        "displayName": "Strong Wash",
+        "canonical": "color-mix(in srgb, #3b2a6b 15%, transparent)",
+        "tonalRamp": []
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Sheet Title", "purpose": "The single h1 per sheet, stencil caps, closed by a violet hairline." },
+      "headline": { "displayName": "Struck Caps", "purpose": "The SchoolGrid wordmark and every button label; stencil marks identity and action only." },
+      "title": { "displayName": "Section Head", "purpose": "h2 inside the record, typewriter caps tracked 0.18em." },
+      "body": { "displayName": "Struck Record", "purpose": "Every record value, name, figure and paragraph; measure capped at 68ch." },
+      "label": { "displayName": "Printed Label", "purpose": "Form labels, facts terms, legend headings and terms." },
+      "caption": { "displayName": "Status Caption", "purpose": "Status marks, sheet name, foot line." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "pass", "value": "560ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "The drum pass: a fixed violet gradient wipes top to bottom once on sheet entry. The only animation in the app." },
+      { "name": "control-colour", "value": "140ms ease-out", "purpose": "Background and colour change on buttons between rest and hover." },
+      { "name": "control-press", "value": "90ms ease-out", "purpose": "The 1px downward translate on button :active — the stamp meeting the page." },
+      { "name": "reduced-motion", "value": "prefers-reduced-motion: reduce removes the drum pass and all control transitions", "purpose": "Binding under WCAG 2.2 AA." }
+    ],
+    "breakpoints": [
+      { "name": "sheet", "value": "52rem" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The sheet's committing action, set at the foot of the record where a form's action sits on paper.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Add Person</button>",
+      "css": ".ds-btn-primary { min-height: 2.75rem; padding: 0.625rem 1.5rem; background: var(--ink, #3b2a6b); border: 2px solid var(--ink, #3b2a6b); border-radius: 0; color: var(--stock, #f7e7a6); cursor: pointer; font-family: \"Stardos Stencil\", \"Courier Prime\", monospace; font-size: 0.95rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; transition: background-color 140ms ease-out, color 140ms ease-out, transform 90ms ease-out; } .ds-btn-primary:hover { background: color-mix(in srgb, var(--ink, #3b2a6b) 82%, #000); } .ds-btn-primary:focus-visible { outline: 3px solid var(--ink, #3b2a6b); outline-offset: 2px; } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The office's second-choice action: struck through the ink rather than filled. Demo roles and secondary form paths.",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\">Sign in as School Administrator</button>",
+      "css": ".ds-btn-ghost { min-height: 2.75rem; padding: 0.625rem 1.5rem; background: transparent; border: 2px solid var(--ink, #3b2a6b); border-radius: 0; color: var(--ink, #3b2a6b); cursor: pointer; font-family: \"Stardos Stencil\", \"Courier Prime\", monospace; font-size: 0.95rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; text-align: left; transition: background-color 140ms ease-out, color 140ms ease-out, transform 90ms ease-out; } .ds-btn-ghost:hover { background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-btn-ghost:focus-visible { outline: 3px solid var(--ink, #3b2a6b); outline-offset: 2px; } .ds-btn-ghost:active { transform: translateY(1px); } .ds-btn-ghost:disabled { background: transparent; border-style: dashed; color: var(--ink-soft, #4f3d7a); cursor: not-allowed; }"
+    },
+    {
+      "name": "Stamp Button",
+      "kind": "button",
+      "refersTo": "button-stamp",
+      "description": "Destructive only — revoking a pending Invitation. The single place the office's rubber stamp appears as an action.",
+      "html": "<button class=\"ds-btn-stamp\" type=\"button\">Revoke</button>",
+      "css": ".ds-btn-stamp { min-height: 2.75rem; padding: 0.625rem 1rem; background: transparent; border: 2px solid var(--stamp, #8e1e26); border-radius: 0; color: var(--stamp, #8e1e26); cursor: pointer; font-family: \"Stardos Stencil\", \"Courier Prime\", monospace; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; transition: background-color 140ms ease-out, color 140ms ease-out, transform 90ms ease-out; } .ds-btn-stamp:hover { background: var(--stamp, #8e1e26); color: var(--stock, #f7e7a6); } .ds-btn-stamp:focus-visible { outline: 3px solid var(--stamp, #8e1e26); outline-offset: 2px; } .ds-btn-stamp:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "A smaller, 1px-ruled action for the sheet head and inside a roster row (Sign out, Issue an Invitation).",
+      "html": "<button class=\"ds-btn-quiet\" type=\"button\">Sign out</button>",
+      "css": ".ds-btn-quiet { min-height: 2.25rem; padding: 0.375rem 0.75rem; background: transparent; border: 1px solid var(--ink, #3b2a6b); border-radius: 0; color: var(--ink, #3b2a6b); cursor: pointer; font-family: \"Stardos Stencil\", \"Courier Prime\", monospace; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; transition: background-color 140ms ease-out, color 140ms ease-out; } .ds-btn-quiet:hover { background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-btn-quiet:focus-visible { outline: 3px solid var(--ink, #3b2a6b); outline-offset: 2px; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A wash-filled field ruled only at the foot; the label is always visible in printed caps above it.",
+      "html": "<label class=\"ds-field\">Display name<input class=\"ds-input\" type=\"text\" value=\"Sam Achterberg\"></label>",
+      "css": ".ds-field { display: grid; gap: 0.375rem; font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink, #3b2a6b); } .ds-input { min-height: 2.75rem; padding: 0.625rem; background: color-mix(in srgb, var(--ink, #3b2a6b) 9%, transparent); border: 0; border-bottom: 2px solid var(--ink, #3b2a6b); border-radius: 0; color: var(--ink, #3b2a6b); font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 1rem; letter-spacing: normal; text-transform: none; } .ds-input:hover { background: color-mix(in srgb, var(--ink, #3b2a6b) 15%, transparent); } .ds-input:focus { background: color-mix(in srgb, var(--ink, #3b2a6b) 15%, transparent); border-bottom-width: 3px; outline: 3px solid var(--ink, #3b2a6b); outline-offset: 0; }"
+    },
+    {
+      "name": "Status Mark",
+      "kind": "chip",
+      "refersTo": "mark-held",
+      "description": "State printed into the record: solid ink for a settled fact, dashed outline for one still open. An empty mark disappears.",
+      "html": "<span class=\"ds-mark ds-mark-held\">Claimed</span> <span class=\"ds-mark ds-mark-open\">Unclaimed</span>",
+      "css": ".ds-mark { font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; } .ds-mark:empty { display: none; } .ds-mark-held { padding: 0.2rem 0.55rem; background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-mark-open { padding: calc(0.2rem - 1px) calc(0.55rem - 1px); border: 1px dashed var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); }"
+    },
+    {
+      "name": "Roster Row",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The record itself: a name, a dotted leader running it across the sheet, and its state hard right, ruled in violet hairlines.",
+      "html": "<ul class=\"ds-roster\"><li><span class=\"ds-roster-name\">Alex Lindqvist</span><span class=\"ds-roster-leader\"></span><span class=\"ds-roster-state\"><span class=\"ds-mark ds-mark-held\">Claimed</span></span></li><li><span class=\"ds-roster-name\">Jamie Lindqvist</span><span class=\"ds-roster-leader\"></span><span class=\"ds-roster-state\"><span class=\"ds-mark ds-mark-open\">Unclaimed</span></span></li></ul>",
+      "css": ".ds-roster { margin: 0; padding: 0; border-top: 1px solid color-mix(in srgb, var(--ink, #3b2a6b) 42%, transparent); list-style: none; color: var(--ink, #3b2a6b); font-family: \"Courier Prime\", \"Courier New\", monospace; } .ds-roster > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.375rem 1rem; padding: 0.875rem 0; border-bottom: 1px solid color-mix(in srgb, var(--ink, #3b2a6b) 18%, transparent); } .ds-roster > li:hover { background: color-mix(in srgb, var(--ink, #3b2a6b) 9%, transparent); } .ds-roster-name { font-size: 1.05rem; } .ds-roster-leader { flex: 1 1 4rem; min-width: 2rem; align-self: center; height: 1px; background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink, #3b2a6b) 42%, transparent) 0 2px, transparent 2px 6px); } .ds-roster-state { display: flex; align-items: center; gap: 0.75rem; margin-left: auto; } .ds-mark { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; } .ds-mark-held { padding: 0.2rem 0.55rem; background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-mark-open { padding: calc(0.2rem - 1px) calc(0.55rem - 1px); border: 1px dashed var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); }"
+    },
+    {
+      "name": "Sheet Head",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "The only chrome region: wordmark and sheet name at the left, the School's name hard right, closed by a double ink rule. There is no nav rail.",
+      "html": "<header class=\"ds-head\"><div class=\"ds-head-group\"><p class=\"ds-mark-word\">SchoolGrid</p><p class=\"ds-head-no\">Persons</p></div><p class=\"ds-head-school\">Riverbend Demo School</p></header>",
+      "css": ".ds-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem 1.5rem; padding: 1rem clamp(1.25rem, 4vw, 3rem) 0.75rem; border-bottom: 3px double var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); } .ds-head-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem; } .ds-head p { margin: 0; } .ds-mark-word { font-family: \"Stardos Stencil\", \"Courier Prime\", monospace; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; } .ds-head-no { font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.8rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft, #4f3d7a); } .ds-head-school { font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.95rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }"
+    },
+    {
+      "name": "Legend",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The sheet's own key, held level beside the record so it never scrolls away. It explains marks and never names a record; a refusal sheet carries none.",
+      "html": "<aside class=\"ds-legend\"><h2>This sheet</h2><p>Every Person in this School that you may read.</p><dl><dt>Claimed</dt><dd>A Person already attached to a User account.</dd><dt>Unclaimed</dt><dd>Not yet attached. Issuing an Invitation lets one human claim this Person.</dd></dl></aside>",
+      "css": ".ds-legend { position: sticky; top: 1rem; max-width: 17rem; padding-right: 1.25rem; border-right: 1px solid color-mix(in srgb, var(--ink, #3b2a6b) 18%, transparent); font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.82rem; line-height: 1.55; color: var(--ink-soft, #4f3d7a); } .ds-legend h2 { margin: 0 0 0.75rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink, #3b2a6b); } .ds-legend p { margin: 0 0 0.75rem; } .ds-legend dl { display: grid; gap: 0.625rem 0; margin: 0; } .ds-legend dt { font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink, #3b2a6b); } .ds-legend dd { margin: 0; }"
+    },
+    {
+      "name": "Slip",
+      "kind": "card",
+      "refersTo": "slip",
+      "description": "The issued Invitation, torn off the sheet: the one boxed thing in the system, ruled 2px in ink with its field reversed to raw stock.",
+      "html": "<section class=\"ds-slip\"><h2>Invitation issued</h2><p>Hand this link to the person yourself.</p><label class=\"ds-field\">Invitation link<input class=\"ds-slip-input\" type=\"text\" value=\"https://schoolgrid.example/redeem/8f2c\"></label></section>",
+      "css": ".ds-slip { display: grid; gap: 0.75rem; padding: 1.5rem; background: color-mix(in srgb, var(--ink, #3b2a6b) 9%, transparent); border: 2px solid var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); font-family: \"Courier Prime\", \"Courier New\", monospace; } .ds-slip h2 { margin: 0; font-family: \"Stardos Stencil\", \"Courier Prime\", monospace; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; } .ds-slip p { margin: 0; } .ds-field { display: grid; gap: 0.375rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; } .ds-slip-input { min-height: 2.75rem; padding: 0.625rem; background: var(--stock, #f7e7a6); border: 0; border-bottom: 2px solid var(--ink, #3b2a6b); border-radius: 0; color: var(--ink, #3b2a6b); font: inherit; font-size: 1rem; letter-spacing: normal; text-transform: none; } .ds-slip-input:focus { border-bottom-width: 3px; outline: 3px solid var(--ink, #3b2a6b); outline-offset: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Ditto Sheet",
+    "overview": "SchoolGrid is printed, not rendered. Every screen is one run off a spirit duplicator's drum: a single aniline violet ink struck onto coloured copy stock, with the stock flooding the entire frame edge to edge. The record is the page. There is no card, no panel, no container, and no grey page behind anything — the arrangement every school portal ships (white cards floating on grey behind a left nav rail) is the thing this world exists to refuse.\n\nDensity is a working document's, not a dashboard's: hairline-ruled rosters, a two-column head separated by a 3px double rule, a legend held level beside the record, and a foot that closes the sheet with a registration mark and the words \"End of sheet\". Chrome is limited to three devices, all of them printer's marks: the stapled corner struck across the top-left gutter, the registration target at the foot, and the drum-wear texture in the stock itself. State prints itself into the record as a struck mark rather than appearing as coloured product chrome.\n\nThe system is bound by three constraints that outrank expression, and the build honours all three. The Content Security Policy permits no inline <style>, no style= attribute, no on*= handler and no data: inlining, and vite.config.ts fails the build on any of them — every rule in this document lives in src/styles.css and nowhere else. UI copy uses CONTEXT.md domain vocabulary verbatim (School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment). WCAG 2.2 AA is binding: both inks clear 4.5:1 on all six stocks, every interactive target is at least 2.25rem tall, and focus is a 3px solid ink outline offset 2px.",
+    "keyCharacteristics": [
+      "One ink (violet) plus one stamp (oxblood red) for refusal and revocation only",
+      "Six saturated copy stocks, one per sheet, flooding the whole viewport",
+      "Typewriter strike for every record and figure; stencil caps for heads and actions",
+      "Zero shadows, zero rounded corners, zero floating panels",
+      "Violet hairlines and 3px double rules carry all structure",
+      "Exactly one animation in the app: the drum pass on sheet entry"
+    ],
+    "rules": [
+      { "name": "The One Ink Rule", "body": "Violet is the only ink. If a new surface needs to distinguish something, it distinguishes it with a rule, a wash, caps, or a struck mark — not with a new hue. Oxblood is not an accent; it may appear only on a refusal, an error, or a revocation.", "section": "colors" },
+      { "name": "The Flooded Stock Rule", "body": "The stock paints the entire frame, edge to edge, with no margin and no container. A white panel on a grey page is forbidden, and cream and grey are not stocks in this family — they are the light ground this world exists to refuse.", "section": "colors" },
+      { "name": "The One Stock Per Sheet Rule", "body": "--stock is overridden on the sheet, never on an element. Two stocks never appear in one viewport.", "section": "colors" },
+      { "name": "The Struck Record Rule", "body": "Anything that is a record — a name, a figure, a date, an identifier — is set in Courier Prime. Stencil is for the wordmark, the page's one h1, button labels and the slip's heading. A record set in stencil is a defect.", "section": "typography" },
+      { "name": "The Caps-and-Track Rule", "body": "Every type role below 0.9rem is uppercase and tracked between 0.12em and 0.22em. Small type in this world is a printed label, never shrunken prose. The one exception is input text, which is sentence-case and untracked.", "section": "typography" },
+      { "name": "The Level Legend Rule", "body": "The legend explains the sheet's own marks and never names a record. It stays sticky and visible while the record scrolls on wide sheets, and moves below the record — never away — on narrow ones.", "section": "layout" },
+      { "name": "The No Rail Rule", "body": "There is no left nav rail and no persistent global navigation. Movement between sheets happens through links struck into the record and its foot.", "section": "layout" },
+      { "name": "The No Shadow Rule", "body": "No box-shadow, no filter: drop-shadow, no hard offset shadow, ever — including as a \"brutalist\" device. Separation is a rule, a wash, or a double rule.", "section": "elevation" },
+      { "name": "The One Pass Rule", "body": "The drum pass is the only animation in the system. New surfaces inherit it by being a sheet; they do not add entrances, parallax, or scroll-triggered motion.", "section": "elevation" },
+      { "name": "The Honest Gradient Rule", "body": "Gradients exist in this world only as printing artifacts and drawn marks — drum wear, the dotted leader, the registration target, the drum pass. A gradient used to imply light, gloss or elevation is forbidden.", "section": "elevation" },
+      { "name": "The Square Corner Rule", "body": "border-radius: 0 everywhere. The registration mark's circle is the one exception, and it is a printed mark, not a container.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do flood the frame with exactly one stock per sheet, set on .sheet via --stock, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in, blue Schools, pink Redeem, mint How this was built, buff Not available).",
+      "Do keep every rule in src/styles.css: the CSP forbids inline <style>, style=, on*= and data: inlining, and the Vite build fails on any of them.",
+      "Do set records, names and figures in Courier Prime and reserve Stardos Stencil for the wordmark, the single h1, button labels and the slip heading.",
+      "Do draw structure with violet hairlines (rule, rule-faint) and 3px double rules; use washes (9% / 15%) for recessed fields.",
+      "Do print state as a struck mark — solid ink for settled, dashed outline for open — and hide the mark entirely when there is nothing to report.",
+      "Do put the primary action at the foot of the record, where a form's action sits on paper.",
+      "Do keep every interactive target at 2.75rem (2.25rem for quiet variants), with a visible 3px ink focus ring offset 2px, and keep ink and stamp above 4.5:1 on every stock.",
+      "Do use CONTEXT.md vocabulary verbatim in all UI copy — School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment."
+    ],
+    "donts": [
+      "Don't put a white or grey panel, card or container on the stock. There is no cream and no grey ground in this system.",
+      "Don't add a box-shadow of any kind, including a hard offset one; this is not a neobrutalist world and nothing in it is raised.",
+      "Don't round a corner. border-radius is 0 outside the registration mark.",
+      "Don't introduce a third colour. Oxblood is for errors, refusals and revocation only, and never for a heading or a highlight.",
+      "Don't use a gradient to imply light, gloss or depth; gradients are printing artifacts and drawn marks only.",
+      "Don't add animation. The drum pass is the system's only entrance, and reduced-motion removes it.",
+      "Don't add a left nav rail, a floating top-right action bar, or a second persistent chrome region.",
+      "Don't print a figure the app cannot source — a run number, a count, or a status the API did not give — in the same hand as its records.",
+      "Don't let a refusal sheet carry a legend, a reason, or any variation: one NotAvailable state, identical for absent, out-of-School and forbidden.",
+      "Don't add a kicker or eyebrow line above a heading. The head's sheet name is chrome in the head, not a device for the record column.",
+      "Don't use a glyph or icon font; the only marks in the world are the CSS-drawn staple and registration target."
+    ]
+  }
+}

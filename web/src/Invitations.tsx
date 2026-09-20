@@ -27,7 +27,7 @@ export function IssuedLink({ issued, onDone }: { issued: IssuedInvitation; onDon
   };
 
   return (
-    <section aria-labelledby="issued-invitation" className="issued">
+    <section aria-labelledby="issued-invitation" className="slip">
       <h2 id="issued-invitation">Invitation for {issued.invitation.person.displayName}</h2>
       <p>Hand this link to them yourself. It is shown only now, and works once.</p>
       <label>
@@ -38,10 +38,10 @@ export function IssuedLink({ issued, onDone }: { issued: IssuedInvitation; onDon
         <button type="button" onClick={copy}>
           Copy link
         </button>
-        <button type="button" onClick={onDone}>
+        <button type="button" className="button-ghost" onClick={onDone}>
           Done
         </button>
-        <span role="status" className="muted">
+        <span role="status" className={copied ? "mark mark--held" : "mark"}>
           {copied ? "Copied" : ""}
         </span>
       </div>
@@ -65,24 +65,28 @@ export function PendingInvitations({
     <section aria-labelledby="pending-invitations">
       <h2 id="pending-invitations">Pending Invitations</h2>
       {invitations.length === 0 ? (
-        <p className="muted">No Invitations are pending.</p>
+        <p className="empty">No Invitations are pending.</p>
       ) : (
-        <ul aria-label="Pending Invitations" className="persons">
+        <ul aria-label="Pending Invitations" className="roster">
           {invitations.map((invitation) => (
             <li key={invitation.id}>
-              <span>
+              <span className="roster__name">
                 {invitation.person.displayName}
                 <br />
-                <span className="muted">Expires {EXPIRY.format(new Date(invitation.expiresAt))}</span>
+                <span className="stamp-line">Expires {EXPIRY.format(new Date(invitation.expiresAt))}</span>
               </span>
-              <button
-                type="button"
-                disabled={busy}
-                aria-label={`Revoke the Invitation for ${invitation.person.displayName}`}
-                onClick={() => onRevoke(invitation)}
-              >
-                Revoke
-              </button>
+              <span className="roster__leader" />
+              <span className="roster__state">
+                <button
+                  type="button"
+                  className="button-stamp"
+                  disabled={busy}
+                  aria-label={`Revoke the Invitation for ${invitation.person.displayName}`}
+                  onClick={() => onRevoke(invitation)}
+                >
+                  Revoke
+                </button>
+              </span>
             </li>
           ))}
         </ul>

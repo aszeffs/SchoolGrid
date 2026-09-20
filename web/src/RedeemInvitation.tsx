@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
 
 // The same bound sign-in holds a password to.
 const MAX_PASSWORD_LENGTH = 1024;
@@ -124,12 +125,30 @@ export function RedeemInvitation() {
 
   switch (state.kind) {
     case "loading":
-      return <main className="panel" aria-busy="true" />;
+      return <LoadingSheet stock="pink" name="Invitation" />;
     case "not-available":
       return <NotAvailable />;
     case "ready":
       return (
-        <main className="panel">
+        <Sheet
+          stock="pink"
+          name="Invitation"
+          legend={
+            <>
+              <h2>This sheet</h2>
+              <p>Claiming the Person this Invitation names.</p>
+              <dl>
+                <Key term="Once">
+                  An Invitation is redeemable once and expires. A School Administrator may revoke it before then.
+                </Key>
+                <Key term="No role">
+                  Redeeming attaches you to this Person. It grants no role: memberships, Enrollments and Guardian
+                  links are granted separately.
+                </Key>
+              </dl>
+            </>
+          }
+        >
           <h1>Join {state.schoolName}</h1>
           <p>
             This Invitation is for <strong>{state.personDisplayName}</strong>.
@@ -160,7 +179,7 @@ export function RedeemInvitation() {
                   Redeem Invitation
                 </button>
               </form>
-              <button type="button" onClick={() => choose("existing")} disabled={submitting}>
+              <button type="button" className="button-ghost" onClick={() => choose("existing")} disabled={submitting}>
                 I already have an account
               </button>
             </>
@@ -185,12 +204,12 @@ export function RedeemInvitation() {
                   Sign in and redeem
                 </button>
               </form>
-              <button type="button" onClick={() => choose("new")} disabled={submitting}>
+              <button type="button" className="button-ghost" onClick={() => choose("new")} disabled={submitting}>
                 Create a new account instead
               </button>
             </>
           )}
-        </main>
+        </Sheet>
       );
   }
 }
