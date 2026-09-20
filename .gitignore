@@ -44,3 +44,9 @@ test-results/
 Dockerfile.vercel
 vercel.json
 .vercel/
+
+# The design run's working record. The surface files are kept — they hold the
+# direction contract DESIGN.md was derived from. The review rasters and the
+# question log are not: both regenerate from the app, and the rasters are large.
+web/.impeccable/review/
+web/.impeccable/questions/
