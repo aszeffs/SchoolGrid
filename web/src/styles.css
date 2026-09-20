@@ -58,8 +58,12 @@
   --ink-soft: #4f3d7a;
   --stamp: #8e1e26;
 
-  /* The stock each sheet is run on. Overridden per sheet, never per element. */
-  --stock: #f7e7a6;
+  /*
+   * The stock each sheet is run on. Overridden per sheet, never per element.
+   * Canary is the default run, so it is named once and reached for by name.
+   */
+  --stock-canary: #f7e7a6;
+  --stock: var(--stock-canary);
 
   --rule: color-mix(in srgb, var(--ink) 42%, transparent);
   --rule-faint: color-mix(in srgb, var(--ink) 18%, transparent);
@@ -114,7 +118,6 @@ body {
 /* ---- The sheet ------------------------------------------------------- */
 
 .sheet {
-  --stock: #f7e7a6;
   position: relative;
   display: grid;
   grid-template-rows: auto auto 1fr;
@@ -143,7 +146,7 @@ body {
 }
 
 .sheet--canary {
-  --stock: #f7e7a6;
+  --stock: var(--stock-canary);
 }
 
 .sheet--pink {
@@ -235,7 +238,12 @@ body {
   text-transform: uppercase;
 }
 
-.sheet__no {
+/*
+ * Two small lines struck in the head, tracked alike: which sheet this is
+ * (`__no`), and who it was run for (`__who`).
+ */
+.sheet__no,
+.sheet__who {
   margin: 0;
   font-size: 0.8rem;
   letter-spacing: 0.18em;
@@ -243,13 +251,11 @@ body {
   color: var(--ink-soft);
 }
 
-/* Whose sheet this is, struck across the head in the record's own hand. */
-.sheet__school {
+/* The way off this sheet, struck in the head where a long record cannot bury it. */
+.sheet__return {
   margin: 0;
-  font-family: var(--type-strike);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
@@ -322,9 +328,7 @@ body {
 }
 
 .legend dt {
-  font-weight: 700;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink);
 }
 
@@ -426,7 +430,20 @@ strong {
   font-weight: 700;
 }
 
-.muted {
+/*
+ * Every label in a record is struck the same way: bold and uppercase. How far
+ * each is tracked, and at what size, stays with the label itself.
+ */
+.legend dt,
+.facts dt,
+.mark {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Struck lighter than the record it sits beside. */
+.muted,
+.stamp-line {
   color: var(--ink-soft);
 }
 
@@ -628,24 +645,27 @@ h1 + .roster {
   margin-left: auto;
 }
 
-/* State prints itself into the record: a struck mark, never a coloured pill. */
+/*
+ * State prints itself into the record: a struck mark, never a coloured pill.
+ *
+ * A mark with nothing to report is not collapsed away. One of these is a
+ * `role="status"` region, and `display: none` would take it out of the
+ * accessibility tree, so the word arriving would land in a region that did not
+ * exist a moment earlier and commonly go unannounced (WCAG 2.2 AA). Empty, it
+ * prints nothing anyway, and holding its place stops the line shifting when
+ * the word does arrive.
+ */
 .mark {
   font-size: 0.72rem;
-  font-weight: 700;
   letter-spacing: 0.2em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.mark--held {
+/* The mark struck solid: ink laid down, the stock showing through the letters. */
+.mark--struck {
   padding: 0.2rem 0.55rem;
   background: var(--ink);
   color: var(--stock);
-}
-
-/* A status with nothing to report is not a mark waiting to be read. */
-.mark:empty {
-  display: none;
 }
 
 .mark--open {
@@ -657,7 +677,6 @@ h1 + .roster {
 .stamp-line {
   margin: 0;
   font-size: 0.78rem;
-  color: var(--ink-soft);
 }
 
 .empty {
@@ -682,9 +701,7 @@ h1 + .roster {
 
 .facts dt {
   font-size: 0.78rem;
-  font-weight: 700;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
 }
 
 .facts dd {

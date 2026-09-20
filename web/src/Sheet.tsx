@@ -6,6 +6,12 @@ import type { ReactNode } from "react";
  */
 export type Stock = "goldenrod" | "blue" | "canary" | "pink" | "mint" | "buff";
 
+/** Which sheet this is: the stock it runs on and the name struck in its head. */
+export interface SheetKind {
+  stock: Stock;
+  name: string;
+}
+
 /**
  * Every page is one sheet: the stock floods the frame, the head carries the
  * mark and which sheet this is, and the legend beside the record stays level
@@ -14,20 +20,28 @@ export type Stock = "goldenrod" | "blue" | "canary" | "pink" | "mint" | "buff";
  * The legend explains the sheet's own marks and never names a record. A sheet
  * shown for a refusal carries no legend at all, so nothing about what exists
  * can be read off it (ADR-0002).
+ *
+ * A sheet still coming off the drum is the same sheet with `busy` set: it
+ * names no record and no School, for the same reason.
  */
 export function Sheet({
   stock,
   name,
   legend,
   head,
+  foot,
+  busy = false,
   children,
-}: {
-  stock: Stock;
-  name: string;
+}: SheetKind & {
   legend?: ReactNode;
+  /** Beside the mark in the head. Left off while the sheet is still printing. */
   head?: ReactNode;
-  children: ReactNode;
+  /** The way off this sheet, ruled off below the record. */
+  foot?: ReactNode;
+  busy?: boolean;
+  children?: ReactNode;
 }) {
+  const aside = busy ? undefined : legend;
   return (
     <div className={`sheet sheet--${stock}`}>
       <header className="sheet__head">
@@ -35,31 +49,14 @@ export function Sheet({
           <p className="sheet__mark">SchoolGrid</p>
           <p className="sheet__no">{name}</p>
         </div>
-        {head}
+        {!busy && head}
       </header>
-      <div className={legend === undefined ? "sheet__body sheet__body--single" : "sheet__body"}>
-        {legend !== undefined && <aside className="legend">{legend}</aside>}
-        <main className="run">{children}</main>
-      </div>
-      <footer className="sheet__foot">
-        <p>End of sheet</p>
-      </footer>
-    </div>
-  );
-}
-
-/** A sheet still coming off the drum. It names no record and no School. */
-export function LoadingSheet({ stock, name }: { stock: Stock; name: string }) {
-  return (
-    <div className={`sheet sheet--${stock}`}>
-      <header className="sheet__head">
-        <div className="sheet__group">
-          <p className="sheet__mark">SchoolGrid</p>
-          <p className="sheet__no">{name}</p>
-        </div>
-      </header>
-      <div className="sheet__body sheet__body--single">
-        <main className="run" aria-busy="true" />
+      <div className={aside === undefined ? "sheet__body sheet__body--single" : "sheet__body"}>
+        {aside !== undefined && <aside className="legend">{aside}</aside>}
+        <main className="run" aria-busy={busy || undefined}>
+          {!busy && children}
+          {!busy && foot !== undefined && <div className="foot">{foot}</div>}
+        </main>
       </div>
       <footer className="sheet__foot">
         <p>End of sheet</p>
