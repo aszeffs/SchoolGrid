@@ -4,6 +4,49 @@ Unified digital infrastructure for school administration, course management, and
 
 Built as a practice ground for DevSecOps. The domain is deliberately security-heavy: every record belongs to exactly one School, access derives from scoped relationships rather than from credentials, and every refusal is designed to leak nothing about what exists. The security properties are in the domain, not bolted on afterwards.
 
+## Security pipeline
+
+Live at **<https://schoolgrid-phi.vercel.app>**, running the current `main`. The sign-in page offers a one-click sign-in for each School role, and the ["How this was built" page](https://schoolgrid-phi.vercel.app/how-this-was-built) shows the commit and image digest the site is serving, with the command to verify them yourself.
+
+Nothing reaches that URL by hand. A commit travels the whole way to production through the pipeline below, and every step can refuse to pass it on.
+
+```mermaid
+flowchart TD
+    commit([Commit pushed]) --> checks[Checks]
+    checks --> build[Image build]
+    build --> scan[Scan and smoke test]
+
+    subgraph main ["On a merge to main only"]
+        publish[Publish and sign] --> verify[Verify]
+        verify --> migrate[Migrate]
+        migrate --> deploy[Deploy]
+        deploy --> health[Health check]
+    end
+
+    scan --> publish
+    health --> live([schoolgrid-phi.vercel.app])
+```
+
+Each step, and what it stops:
+
+| Step | What it prevents | Where it runs |
+| --- | --- | --- |
+| **Checks** | Code that does not compile, does not pass its tests, trips a CodeQL query, brings in a vulnerable or copyleft dependency, or carries a credential anywhere in its history. | [`ci.yml`](.github/workflows/ci.yml) (_Typecheck, build and test_), [`codeql.yml`](.github/workflows/codeql.yml), [`dependency-review.yml`](.github/workflows/dependency-review.yml), [`secret-scan.yml`](.github/workflows/secret-scan.yml) |
+| **Image build** | A runtime image carrying a shell, a package manager, a dev dependency, a root user, the web app's sources, or the demo seed that creates accounts with published passwords — all asserted against the image that was built, not against the Dockerfile. | [`container.yml`](.github/workflows/container.yml) (_Container build_) |
+| **Scan and smoke test** | An image with a known vulnerability, or one that cannot start and serve a real browser: it is run against a real PostgreSQL and driven by the browser suite before anything may publish it. | [`container.yml`](.github/workflows/container.yml) (_Trivy image scan_, _Container smoke test_), [`scripts/smoke-test.sh`](scripts/smoke-test.sh) |
+| **Publish and sign** | An unreviewed image reaching the registry, and anything else claiming to be one of ours: only a merge to `main` publishes, only the publishing job holds a token that can push, and every image is signed with the workflow's own identity — so there is no signing key to steal. | [`container.yml`](.github/workflows/container.yml) (_Publish to GHCR_, _Attest provenance and SBOM_), [`scripts/publish-image.sh`](scripts/publish-image.sh) |
+| **Verify** | A published image that is private, unrunnable, or not the one this repository built: it is pulled and booted on a fresh runner with no credentials, and its signatures are checked the way an outside consumer would check them. | [`container.yml`](.github/workflows/container.yml) (_Pull and boot the published image anonymously_, _Verify the attestations as a consumer would_), [`scripts/verify-image.sh`](scripts/verify-image.sh) |
+| **Migrate** | The running service ever holding the credentials that could alter the schema or an Audit record: the database is migrated here, by that same verified image, from the one job that holds the owner's connection string ([docs/database-roles.md](docs/database-roles.md)). | [`container.yml`](.github/workflows/container.yml) (_Verify, migrate and deploy to production_), [`scripts/deploy.sh`](scripts/deploy.sh) |
+| **Deploy** | Production running different bytes from the ones just verified. Vercel is handed a one-line `Dockerfile` pinning that exact digest, never this repository's source, so it has nothing to rebuild from ([ADR-0005](docs/adr/0005-production-runs-the-verified-image.md)). | [`scripts/deploy.sh`](scripts/deploy.sh) |
+| **Health check** | A broken deploy being found by a visitor instead of by the pipeline: `/api/health` is retried until it answers `200`, and the deploy fails if it never does. | [`scripts/deploy.sh`](scripts/deploy.sh) |
+
+### What the demo is not
+
+- It runs on Vercel's free **Hobby plan**, for non-commercial personal use. It scales to zero when nobody is using it, so the first request after a quiet spell waits for the function and the database to wake.
+- The data is **invented**. No real Student, Guardian or school record is on it, and nothing you type into it should be real either.
+- The demo is **reset every night**, dropped and reseeded from [`demo/seed.sql`](demo/seed.sql) ([`demo-reset.yml`](.github/workflows/demo-reset.yml)). Changes you make are temporary, and changes you find were made by someone else. This nightly drop is the one exception to Audit records being append-only; everywhere else, they are.
+- The **rate limit is counted per instance**, in memory. Vercel may run several at once, which multiplies the limit by however many are up.
+
 ## Status
 
 The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). A browser holds its session in a cookie; a client that sends `"session": "bearer"` with its credentials gets a Bearer token instead. No School-scoped behaviour yet.
