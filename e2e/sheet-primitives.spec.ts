@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
+import {
+  acknowledgeIssuedLink,
+  addPerson,
+  issueInvitationFor,
+  openSchool,
+  pendingInvitations,
+  revokeButtonFor,
+  signIn,
+} from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, test } from "./test.ts";
 
@@ -17,19 +26,11 @@ async function invited(page: Page): Promise<string> {
   const { schoolAdministrator, schools } = seeded();
   const displayName = `Alex ${randomUUID().slice(0, 8)}`;
 
-  await page.goto("/sign-in");
-  await page.getByLabel("Username").fill(schoolAdministrator.username);
-  await page.getByLabel("Password").fill(schoolAdministrator.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("list", { name: "Schools" }).getByRole("link", { name: schools[0]! }).click();
-  await page.getByLabel("Display name").fill(displayName);
-  await page.getByRole("button", { name: "Add Person" }).click();
-  await page.getByRole("button", { name: `Invite ${displayName}` }).click();
+  await signIn(page, schoolAdministrator);
+  await openSchool(page, schools[0]!);
+  await addPerson(page, displayName);
+  await issueInvitationFor(page, displayName);
   return displayName;
-}
-
-function revokeButtonFor(page: Page, displayName: string) {
-  return page.getByRole("button", { name: `Revoke the Invitation for ${displayName}` });
 }
 
 test("the issued link's dialog closes only on acknowledgement, not on Escape or a click beside it", async ({
@@ -46,13 +47,13 @@ test("the issued link's dialog closes only on acknowledgement, not on Escape or 
   await page.mouse.click(4, 4);
   await expect(link).toBeVisible();
 
-  await page.getByRole("button", { name: "Done" }).click();
+  await acknowledgeIssuedLink(page);
   await expect(link).toHaveCount(0);
 });
 
 test("a dialog takes focus, holds it, and hands it back to the control that opened it", async ({ page }) => {
   const displayName = await invited(page);
-  await page.getByRole("button", { name: "Done" }).click();
+  await acknowledgeIssuedLink(page);
 
   await revokeButtonFor(page, displayName).click();
   // Cancel holds the focus: the consequence is read before the key that
@@ -92,22 +93,21 @@ test("a dialog takes focus, holds it, and hands it back to the control that open
 
 test("cancelling a confirmation leaves the server as it was", async ({ page }) => {
   const displayName = await invited(page);
-  await page.getByRole("button", { name: "Done" }).click();
-  const pending = page.getByRole("table", { name: "Pending Invitations" }).getByRole("row");
+  await acknowledgeIssuedLink(page);
 
   await revokeButtonFor(page, displayName).click();
   await expect(page.getByRole("dialog")).toContainText(displayName);
   await page.getByRole("button", { name: "Cancel" }).click();
 
   // Nothing was sent, so the Invitation is still pending after a fresh listing.
-  await expect(pending.filter({ hasText: displayName })).toHaveCount(1);
+  await expect(pendingInvitations(page).filter({ hasText: displayName })).toHaveCount(1);
   await page.reload();
-  await expect(pending.filter({ hasText: displayName })).toHaveCount(1);
+  await expect(pendingInvitations(page).filter({ hasText: displayName })).toHaveCount(1);
 });
 
 test("the record lists its columns on a wide sheet and stacks them at 360px", async ({ page, audit }) => {
   const displayName = await invited(page);
-  await page.getByRole("button", { name: "Done" }).click();
+  await acknowledgeIssuedLink(page);
 
   const record = page.getByRole("table", { name: "Pending Invitations" });
   await expect(record.getByRole("columnheader", { name: "Expires" })).toBeVisible();

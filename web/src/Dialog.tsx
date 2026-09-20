@@ -10,27 +10,29 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
  * the rest of the page goes inert, focus moves inside and is trapped there,
  * and Escape asks to close.
  *
+ * A dialog is open for as long as it is rendered. There is no `open` prop to
+ * fall out of step with that: mounting it opens it, and unmounting it closes
+ * it and hands the focus back.
+ *
  * Two shapes, and nothing else. `AcknowledgeDialog` holds something the server
  * will never say again, so it cannot be dismissed by accident. `ConfirmDialog`
  * names what an action will do before it is done, and cancelling does nothing.
  */
 function Dialog({
-  open,
   title,
   kind,
-  onCancel,
+  dismiss,
   children,
   actions,
 }: {
-  open: boolean;
   title: string;
   /** Which of the two shapes this is, struck into the class so the sheet says so. */
   kind: "acknowledge" | "confirm";
   /**
-   * What an Escape or a backdrop dismissal means. Left undefined, the dialog
-   * refuses both and closes only through one of its own actions.
+   * What an Escape or a press beside the slip means. `null` is the decision
+   * that this dialog refuses both and closes only through one of its actions.
    */
-  onCancel?: (() => void) | undefined;
+  dismiss: (() => void) | null;
   children: ReactNode;
   actions: ReactNode;
 }) {
@@ -39,7 +41,7 @@ function Dialog({
 
   useEffect(() => {
     const dialog = ref.current;
-    if (dialog === null || !open) {
+    if (dialog === null) {
       return;
     }
     /*
@@ -56,7 +58,7 @@ function Dialog({
         trigger.focus();
       }
     };
-  }, [open]);
+  }, []);
 
   return (
     <dialog
@@ -66,53 +68,48 @@ function Dialog({
       onCancel={(event) => {
         // A dialog with no way to cancel refuses the request rather than
         // closing: Escape must not lose a link that is shown only once.
-        if (onCancel === undefined) {
+        if (dismiss === null) {
           event.preventDefault();
         } else {
-          onCancel();
+          dismiss();
         }
       }}
       onMouseDown={(event) => {
         /*
-         * A press beside the slip, on the backdrop. The backdrop is the dialog
-         * element's own box, so the target alone does not tell them apart; the
-         * press is outside the slip when it falls outside its rectangle.
+         * A press beside the slip, on the veil. A press there reports the
+         * dialog itself as its target, the same as a press on the slip does,
+         * so the target alone does not tell the two apart; where it fell
+         * relative to the slip's rectangle does.
          */
-        if (onCancel === undefined || event.target !== event.currentTarget) {
+        if (dismiss === null || event.target !== event.currentTarget) {
           return;
         }
         const { top, right, bottom, left } = event.currentTarget.getBoundingClientRect();
         const beside =
           event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom;
         if (beside) {
-          onCancel();
+          dismiss();
         }
       }}
     >
-      {open && (
-        <>
-          <h2 id={headingId}>{title}</h2>
-          {children}
-          <div className="actions">{actions}</div>
-        </>
-      )}
+      <h2 id={headingId}>{title}</h2>
+      {children}
+      <div className="actions">{actions}</div>
     </dialog>
   );
 }
 
 /**
  * A dialog holding something that will not be shown again — an Invitation's
- * link above all. Neither Escape nor a click beside it closes it; only the
+ * link above all. Neither Escape nor a press beside it closes it; only the
  * acknowledgement does, so it cannot be dismissed by a stray keystroke.
  */
 export function AcknowledgeDialog({
-  open,
   title,
   acknowledge,
   onAcknowledge,
   children,
 }: {
-  open: boolean;
   title: string;
   /** The label on the one control that closes this dialog. */
   acknowledge: string;
@@ -121,9 +118,9 @@ export function AcknowledgeDialog({
 }) {
   return (
     <Dialog
-      open={open}
       title={title}
       kind="acknowledge"
+      dismiss={null}
       actions={
         <button type="button" className="button-ghost" onClick={onAcknowledge}>
           {acknowledge}
@@ -137,14 +134,13 @@ export function AcknowledgeDialog({
 
 /**
  * A dialog that names what an action will do before it is done. Cancelling —
- * by the control, by Escape, or by clicking beside the slip — sends nothing,
- * so the server is left exactly as it was.
+ * by the control, by Escape, or by a press beside the slip — sends nothing, so
+ * the server is left exactly as it was.
  *
  * Cancel holds the focus on open: the consequence should be read before the
  * key that confirms it is within reach.
  */
 export function ConfirmDialog({
-  open,
   title,
   confirm,
   onConfirm,
@@ -152,7 +148,6 @@ export function ConfirmDialog({
   busy = false,
   children,
 }: {
-  open: boolean;
   title: string;
   /** The label on the control that goes ahead, naming the act, not "OK". */
   confirm: string;
@@ -163,10 +158,9 @@ export function ConfirmDialog({
 }) {
   return (
     <Dialog
-      open={open}
       title={title}
       kind="confirm"
-      onCancel={onCancel}
+      dismiss={onCancel}
       actions={
         <>
           <button type="button" className="button-ghost" autoFocus onClick={onCancel}>

@@ -34,7 +34,6 @@ export function IssuedLink({ issued, onDone }: { issued: IssuedInvitation; onDon
 
   return (
     <AcknowledgeDialog
-      open
       title={`Invitation for ${issued.invitation.person.displayName}`}
       acknowledge="Done"
       onAcknowledge={onDone}
@@ -107,7 +106,6 @@ export function PendingInvitations({
       />
       {confirming !== null && (
         <ConfirmDialog
-          open
           title="Revoke this Invitation?"
           confirm="Revoke the Invitation"
           busy={busy}

@@ -11,8 +11,8 @@ export interface Column<Row> {
   cell: (row: Row) => ReactNode;
   /**
    * A column of actions rather than of record values. Its head is struck for
-   * a screen reader and held off the sheet, since a column of buttons that
-   * name themselves does not need naming twice.
+   * a screen reader but never printed, since a column of buttons that name
+   * themselves does not need naming twice.
    */
   actions?: boolean;
 }
@@ -54,7 +54,7 @@ export function RecordList<Row>({
         <tr>
           {columns.map((column) => (
             <th key={column.head} scope="col">
-              <span className={column.actions === true ? "held" : undefined}>{column.head}</span>
+              <span className={column.actions === true ? "unprinted" : undefined}>{column.head}</span>
             </th>
           ))}
         </tr>

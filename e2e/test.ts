@@ -15,10 +15,12 @@ export { expect };
  * so the policy it watches does not stop it running.
  *
  * Every test also carries `audit`, which holds a page to WCAG 2.2 AA with
- * axe-core. The page the test is given is audited as it stands when the test
- * ends, whatever it opened along the way; a test that passes through a state
- * worth holding to the bar — a dialog open, a record listed, a refusal shown —
- * audits it there and then.
+ * axe-core. Every page still open in the test's context is audited as it
+ * stands when the test ends, and a test that passes through a state worth
+ * holding to the bar — a dialog open, a record at 360px, a page in a context
+ * of its own — audits it there and then. Between them the suite covers every
+ * sheet the app has: Sign in, Schools, Persons, Redeem Invitation, How this
+ * was built and Not available.
  */
 export const test = base.extend<{ cspViolations: string[]; audit: Audit }>({
   cspViolations: [
@@ -31,11 +33,17 @@ export const test = base.extend<{ cspViolations: string[]; audit: Audit }>({
     { auto: true },
   ],
   audit: [
-    async ({ page, baseURL }, use) => {
+    async ({ context, baseURL }, use) => {
       await use(auditFor);
-      // What the test leaves on the screen is a page a user can be left on too.
-      if (!page.isClosed() && isAppPage(page, baseURL)) {
-        await auditFor(page);
+      // What a test leaves on the screen is a page a user can be left on too,
+      // for every page it opened, not only the one it was given. A test that
+      // opens a browser context of its own — an invitee's, a stale link's —
+      // audits that page itself, since the context is gone by the time this
+      // runs.
+      for (const opened of context.pages()) {
+        if (!opened.isClosed() && isAppPage(opened, baseURL)) {
+          await auditFor(opened);
+        }
       }
     },
     { auto: true },
@@ -90,13 +98,13 @@ async function auditFor(page: Page): Promise<void> {
     WCAG_22_AA,
   );
 
-  expect(results.violations.map(describe), `axe-core violations on ${new URL(page.url()).pathname}`).toEqual(
+  expect(results.violations.map(violationLine), `axe-core violations on ${new URL(page.url()).pathname}`).toEqual(
     [],
   );
 }
 
 /** A violation as a line a reader can act on, rather than as a wall of JSON. */
-function describe(violation: AxeResults["violations"][number]): string {
+function violationLine(violation: AxeResults["violations"][number]): string {
   const where = violation.nodes.map((node) => node.target.join(" ")).join(", ");
   return `${violation.id} (${violation.impact ?? "unknown"}): ${violation.help} — ${where}`;
 }

@@ -754,9 +754,9 @@ h1 + .roster {
   }
 }
 
-/* Struck for a screen reader and held off the sheet: a column of controls
-   that name themselves does not need its term printed above it too. */
-.held {
+/* Struck for a screen reader but never printed: a column of controls that
+   name themselves does not need its term set above them too. */
+.unprinted {
   position: absolute;
   width: 1px;
   height: 1px;
