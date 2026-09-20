@@ -2,7 +2,10 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { api, type School } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
+
+/** Which sheet this page is, named once so the two states cannot drift apart. */
+const SHEET: SheetKind = { stock: "blue", name: "Schools" };
 
 function personsPath(school: School): string {
   return `/schools/${encodeURIComponent(school.id)}/persons`;
@@ -61,7 +64,7 @@ export function Schools() {
 
   switch (state.kind) {
     case "loading":
-      return <LoadingSheet stock="blue" name="Schools" />;
+      return <Sheet {...SHEET} busy />;
     case "not-available":
       return <NotAvailable />;
     case "ready": {
@@ -82,14 +85,14 @@ export function Schools() {
       );
       const head = (
         <div className="actions">
-          <span className="sheet__no">Signed in as {state.username}</span>
+          <span className="sheet__who">Signed in as {state.username}</span>
           <button type="button" className="button-quiet" onClick={signOut}>
             Sign out
           </button>
         </div>
       );
       return (
-        <Sheet stock="blue" name="Schools" legend={legend} head={head}>
+        <Sheet {...SHEET} legend={legend} head={head}>
           <h1>Your Schools</h1>
           {state.schools.length === 0 ? (
             <p className="empty">Your account does not reach any School yet.</p>

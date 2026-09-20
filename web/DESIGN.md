@@ -112,7 +112,7 @@ components:
   input-focus:
     backgroundColor: "{colors.wash-strong}"
     textColor: "{colors.ink}"
-  mark-held:
+  mark-struck:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.stock-canary}"
     typography: "{typography.caption}"
@@ -292,7 +292,7 @@ A typed two-column `max-content / 1fr` definition grid, ruled above, with terms 
 - **Do** keep every rule in `src/styles.css`: the CSP forbids inline `<style>`, `style=`, `on*=` and `data:` inlining, and the Vite build fails on any of them.
 - **Do** set records, names and figures in Courier Prime and reserve Stardos Stencil for the wordmark, the single `h1`, button labels and the slip heading.
 - **Do** draw structure with violet hairlines (`{colors.rule}`, `{colors.rule-faint}`) and 3px double rules; use washes (9% / 15%) for recessed fields.
-- **Do** print state as a struck mark — solid ink for settled, dashed outline for open — and hide the mark entirely when there is nothing to report.
+- **Do** print state as a struck mark — solid ink for settled, dashed outline for open. A mark with nothing to report prints nothing, but stays in the page: one of these is a `role="status"` region, and `display: none` would take it out of the accessibility tree so the word arriving goes unannounced.
 - **Do** put the primary action at the foot of the record, where a form's action sits on paper.
 - **Do** keep every interactive target at 2.75rem (2.25rem for quiet variants), with a visible 3px ink focus ring offset 2px, and keep ink and stamp above 4.5:1 on every stock.
 - **Do** use `CONTEXT.md` vocabulary verbatim in all UI copy — School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment.

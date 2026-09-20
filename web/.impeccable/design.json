@@ -146,18 +146,18 @@
     {
       "name": "Status Mark",
       "kind": "chip",
-      "refersTo": "mark-held",
-      "description": "State printed into the record: solid ink for a settled fact, dashed outline for one still open. An empty mark disappears.",
-      "html": "<span class=\"ds-mark ds-mark-held\">Claimed</span> <span class=\"ds-mark ds-mark-open\">Unclaimed</span>",
-      "css": ".ds-mark { font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; } .ds-mark:empty { display: none; } .ds-mark-held { padding: 0.2rem 0.55rem; background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-mark-open { padding: calc(0.2rem - 1px) calc(0.55rem - 1px); border: 1px dashed var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); }"
+      "refersTo": "mark-struck",
+      "description": "State printed into the record: solid ink for a settled fact, dashed outline for one still open. An empty mark prints nothing but keeps its place.",
+      "html": "<span class=\"ds-mark ds-mark-struck\">Claimed</span> <span class=\"ds-mark ds-mark-open\">Unclaimed</span>",
+      "css": ".ds-mark { font-family: \"Courier Prime\", \"Courier New\", monospace; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; } .ds-mark-struck { padding: 0.2rem 0.55rem; background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-mark-open { padding: calc(0.2rem - 1px) calc(0.55rem - 1px); border: 1px dashed var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); }"
     },
     {
       "name": "Roster Row",
       "kind": "custom",
       "refersTo": null,
       "description": "The record itself: a name, a dotted leader running it across the sheet, and its state hard right, ruled in violet hairlines.",
-      "html": "<ul class=\"ds-roster\"><li><span class=\"ds-roster-name\">Alex Lindqvist</span><span class=\"ds-roster-leader\"></span><span class=\"ds-roster-state\"><span class=\"ds-mark ds-mark-held\">Claimed</span></span></li><li><span class=\"ds-roster-name\">Jamie Lindqvist</span><span class=\"ds-roster-leader\"></span><span class=\"ds-roster-state\"><span class=\"ds-mark ds-mark-open\">Unclaimed</span></span></li></ul>",
-      "css": ".ds-roster { margin: 0; padding: 0; border-top: 1px solid color-mix(in srgb, var(--ink, #3b2a6b) 42%, transparent); list-style: none; color: var(--ink, #3b2a6b); font-family: \"Courier Prime\", \"Courier New\", monospace; } .ds-roster > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.375rem 1rem; padding: 0.875rem 0; border-bottom: 1px solid color-mix(in srgb, var(--ink, #3b2a6b) 18%, transparent); } .ds-roster > li:hover { background: color-mix(in srgb, var(--ink, #3b2a6b) 9%, transparent); } .ds-roster-name { font-size: 1.05rem; } .ds-roster-leader { flex: 1 1 4rem; min-width: 2rem; align-self: center; height: 1px; background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink, #3b2a6b) 42%, transparent) 0 2px, transparent 2px 6px); } .ds-roster-state { display: flex; align-items: center; gap: 0.75rem; margin-left: auto; } .ds-mark { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; } .ds-mark-held { padding: 0.2rem 0.55rem; background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-mark-open { padding: calc(0.2rem - 1px) calc(0.55rem - 1px); border: 1px dashed var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); }"
+      "html": "<ul class=\"ds-roster\"><li><span class=\"ds-roster-name\">Alex Lindqvist</span><span class=\"ds-roster-leader\"></span><span class=\"ds-roster-state\"><span class=\"ds-mark ds-mark-struck\">Claimed</span></span></li><li><span class=\"ds-roster-name\">Jamie Lindqvist</span><span class=\"ds-roster-leader\"></span><span class=\"ds-roster-state\"><span class=\"ds-mark ds-mark-open\">Unclaimed</span></span></li></ul>",
+      "css": ".ds-roster { margin: 0; padding: 0; border-top: 1px solid color-mix(in srgb, var(--ink, #3b2a6b) 42%, transparent); list-style: none; color: var(--ink, #3b2a6b); font-family: \"Courier Prime\", \"Courier New\", monospace; } .ds-roster > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.375rem 1rem; padding: 0.875rem 0; border-bottom: 1px solid color-mix(in srgb, var(--ink, #3b2a6b) 18%, transparent); } .ds-roster > li:hover { background: color-mix(in srgb, var(--ink, #3b2a6b) 9%, transparent); } .ds-roster-name { font-size: 1.05rem; } .ds-roster-leader { flex: 1 1 4rem; min-width: 2rem; align-self: center; height: 1px; background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink, #3b2a6b) 42%, transparent) 0 2px, transparent 2px 6px); } .ds-roster-state { display: flex; align-items: center; gap: 0.75rem; margin-left: auto; } .ds-mark { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; } .ds-mark-struck { padding: 0.2rem 0.55rem; background: var(--ink, #3b2a6b); color: var(--stock, #f7e7a6); } .ds-mark-open { padding: calc(0.2rem - 1px) calc(0.55rem - 1px); border: 1px dashed var(--ink, #3b2a6b); color: var(--ink, #3b2a6b); }"
     },
     {
       "name": "Sheet Head",
@@ -213,7 +213,7 @@
       "Do keep every rule in src/styles.css: the CSP forbids inline <style>, style=, on*= and data: inlining, and the Vite build fails on any of them.",
       "Do set records, names and figures in Courier Prime and reserve Stardos Stencil for the wordmark, the single h1, button labels and the slip heading.",
       "Do draw structure with violet hairlines (rule, rule-faint) and 3px double rules; use washes (9% / 15%) for recessed fields.",
-      "Do print state as a struck mark — solid ink for settled, dashed outline for open — and hide the mark entirely when there is nothing to report.",
+      "Do print state as a struck mark — solid ink for settled, dashed outline for open. A mark with nothing to report prints nothing but stays in the page: one is a role=status region, and display:none would take it out of the accessibility tree.",
       "Do put the primary action at the foot of the record, where a form's action sits on paper.",
       "Do keep every interactive target at 2.75rem (2.25rem for quiet variants), with a visible 3px ink focus ring offset 2px, and keep ink and stamp above 4.5:1 on every stock.",
       "Do use CONTEXT.md vocabulary verbatim in all UI copy — School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment."

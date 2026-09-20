@@ -17,16 +17,19 @@ export function NotAvailable() {
     navigate("/");
   };
   return (
-    <Sheet stock="buff" name="Not available">
-      <h1>Not available</h1>
-      <p>This page is not available.</p>
-      <div className="foot">
+    <Sheet
+      stock="buff"
+      name="Not available"
+      foot={
         <p>
           <a href="/" onClick={home}>
             Go to your Schools
           </a>
         </p>
-      </div>
+      }
+    >
+      <h1>Not available</h1>
+      <p>This page is not available.</p>
     </Sheet>
   );
 }

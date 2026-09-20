@@ -73,7 +73,7 @@ export function SignIn() {
       <h2>This sheet</h2>
       <p>Signing in to SchoolGrid.</p>
       <dl>
-        <Key term="Account">
+        <Key term="User account">
           One User account, which may reach more than one School. It holds no role and no academic record of its own.
         </Key>
         <Key term="Refusals">
@@ -84,7 +84,18 @@ export function SignIn() {
   );
 
   return (
-    <Sheet stock="canary" name="Sign in" legend={legend}>
+    <Sheet
+      stock="canary"
+      name="Sign in"
+      legend={legend}
+      foot={
+        <p className="muted">
+          <a href="/how-this-was-built" onClick={howThisWasBuilt}>
+            How this was built
+          </a>
+        </p>
+      }
+    >
       <h1>Sign in to SchoolGrid</h1>
       <form onSubmit={submit}>
         <label>
@@ -135,13 +146,6 @@ export function SignIn() {
           </ul>
         </section>
       )}
-      <div className="foot">
-        <p className="muted">
-          <a href="/how-this-was-built" onClick={howThisWasBuilt}>
-            How this was built
-          </a>
-        </p>
-      </div>
     </Sheet>
   );
 }
