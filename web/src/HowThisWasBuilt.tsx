@@ -1,7 +1,10 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { api, type BuildInfo } from "./api.ts";
 import { navigate } from "./navigation.ts";
-import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
+
+/** Which sheet this page is, named once so the two states cannot drift apart. */
+const SHEET: SheetKind = { stock: "mint", name: "How this was built" };
 
 const REPOSITORY = "aszeffs/SchoolGrid";
 const IMAGE = "ghcr.io/aszeffs/schoolgrid";
@@ -62,7 +65,7 @@ export function HowThisWasBuilt() {
   };
 
   if (state.kind === "loading") {
-    return <LoadingSheet stock="mint" name="How this was built" />;
+    return <Sheet {...SHEET} busy />;
   }
 
   const build = state.kind === "ready" ? state.build : undefined;
@@ -85,7 +88,17 @@ export function HowThisWasBuilt() {
   );
 
   return (
-    <Sheet stock="mint" name="How this was built" legend={legend}>
+    <Sheet
+      {...SHEET}
+      legend={legend}
+      foot={
+        <p>
+          <a href="/" onClick={home}>
+            Go to SchoolGrid
+          </a>
+        </p>
+      }
+    >
       <h1>How this was built</h1>
       <p>
         Every change to SchoolGrid is tested before it merges. On a merge to <code>{RELEASE_BRANCH}</code>,
@@ -150,14 +163,6 @@ export function HowThisWasBuilt() {
           </pre>
         </>
       )}
-
-      <div className="foot">
-        <p>
-          <a href="/" onClick={home}>
-            Go to SchoolGrid
-          </a>
-        </p>
-      </div>
     </Sheet>
   );
 }

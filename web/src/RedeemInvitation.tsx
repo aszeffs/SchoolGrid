@@ -2,7 +2,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
+
+/** Which sheet this page is, named once so the two states cannot drift apart. */
+const SHEET: SheetKind = { stock: "pink", name: "Invitation" };
 
 // The same bound sign-in holds a password to.
 const MAX_PASSWORD_LENGTH = 1024;
@@ -125,14 +128,13 @@ export function RedeemInvitation() {
 
   switch (state.kind) {
     case "loading":
-      return <LoadingSheet stock="pink" name="Invitation" />;
+      return <Sheet {...SHEET} busy />;
     case "not-available":
       return <NotAvailable />;
     case "ready":
       return (
         <Sheet
-          stock="pink"
-          name="Invitation"
+          {...SHEET}
           legend={
             <>
               <h2>This sheet</h2>

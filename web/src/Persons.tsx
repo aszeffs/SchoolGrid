@@ -3,7 +3,7 @@ import { api, type ApiResult, type Invitation, type ListedPerson } from "./api.t
 import { IssuedLink, PendingInvitations, type IssuedInvitation } from "./Invitations.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { Key, LoadingSheet, Sheet } from "./Sheet.tsx";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 type State =
   | { kind: "loading" }
@@ -13,16 +13,12 @@ type State =
       persons: ListedPerson[];
       /** Pending Invitations, listed only for a School Administrator; null for anyone else. */
       invitations: Invitation[] | null;
-      /**
-       * The School this roster belongs to, for the sheet's head. An account may
-       * reach more than one School, so a roster that does not name its own is a
-       * roster the reader cannot place. Null when the listing could not be had;
-       * the head is then left off rather than guessed at.
-       */
-      schoolName: string | null;
     };
 
 type Ready = Extract<State, { kind: "ready" }>;
+
+/** Which sheet this page is, named once so the two states cannot drift apart. */
+const SHEET: SheetKind = { stock: "goldenrod", name: "Persons" };
 
 /** The same bound the API holds a display name to. */
 const MAX_DISPLAY_NAME_LENGTH = 200;
@@ -44,27 +40,13 @@ async function load(schoolId: string): Promise<ApiResult<Ready>> {
     return listed;
   }
   const { persons } = listed.body;
-  const schoolName = await nameOf(schoolId);
   if (!administers(persons)) {
-    return { ok: true, body: { kind: "ready", persons, invitations: null, schoolName } };
+    return { ok: true, body: { kind: "ready", persons, invitations: null } };
   }
   const invitations = await api.invitations(schoolId);
   return invitations.ok
-    ? { ok: true, body: { kind: "ready", persons, invitations: invitations.body.invitations, schoolName } }
+    ? { ok: true, body: { kind: "ready", persons, invitations: invitations.body.invitations } }
     : invitations;
-}
-
-/**
- * The School's name, from the listing the account can already read. A failure
- * here is not the page's failure: the roster still stands, so it is reported as
- * an absent name rather than turned into the refusal state.
- */
-async function nameOf(schoolId: string): Promise<string | null> {
-  const schools = await api.schools();
-  if (!schools.ok) {
-    return null;
-  }
-  return schools.body.schools.find((school) => school.id === schoolId)?.name ?? null;
 }
 
 /** Every Person in one School that the caller may read. */
@@ -152,7 +134,7 @@ export function Persons({ schoolId }: { schoolId: string }) {
 
   switch (state.kind) {
     case "loading":
-      return <LoadingSheet stock="goldenrod" name="Persons" />;
+      return <Sheet {...SHEET} busy />;
     case "not-available":
       return <NotAvailable />;
     case "ready": {
@@ -178,10 +160,19 @@ export function Persons({ schoolId }: { schoolId: string }) {
           </dl>
         </>
       );
-      const head =
-        state.schoolName === null ? undefined : <p className="sheet__school">{state.schoolName}</p>;
+      /*
+       * The way back is struck in the head, not the foot: a long roster would
+       * push it below the fold, and staff reach for it mid-lesson.
+       */
+      const head = (
+        <p className="sheet__return">
+          <a href="/" onClick={home}>
+            Your Schools
+          </a>
+        </p>
+      );
       return (
-        <Sheet stock="goldenrod" name="Persons" legend={legend} head={head}>
+        <Sheet {...SHEET} legend={legend} head={head}>
           <h1>Persons</h1>
           <ul aria-label="Persons" className="roster">
             {state.persons.map((person) => (
@@ -191,7 +182,7 @@ export function Persons({ schoolId }: { schoolId: string }) {
                   <>
                     <span className="roster__leader" />
                     <span className="roster__state">
-                      <span className={person.claimed ? "mark mark--held" : "mark mark--open"}>
+                      <span className={person.claimed ? "mark mark--struck" : "mark mark--open"}>
                         {person.claimed ? "Claimed" : "Unclaimed"}
                       </span>
                       {!person.claimed && (
@@ -227,13 +218,6 @@ export function Persons({ schoolId }: { schoolId: string }) {
               </button>
             </form>
           )}
-          <div className="foot">
-            <p>
-              <a href="/" onClick={home}>
-                Your Schools
-              </a>
-            </p>
-          </div>
         </Sheet>
       );
     }
