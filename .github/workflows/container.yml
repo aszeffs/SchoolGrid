@@ -41,6 +41,13 @@ jobs:
         # production for an image that never verified.
         run: scripts/deploy.test.sh
 
+      - name: Test the demo reset script
+        # Here too, and for the sharpest version of the same reason: the reset
+        # is the one script in this repository that destroys production data,
+        # and a reset that dropped before it verified would first show it on a
+        # night nobody was watching.
+        run: scripts/reset-demo.test.sh
+
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build the image
