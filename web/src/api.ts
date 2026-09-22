@@ -46,11 +46,6 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return { ok: true, body: sent.body as T };
 }
 
-export interface School {
-  id: string;
-  name: string;
-}
-
 /** A role a Person holds in their School, imported rather than restated. */
 export type { Role };
 
@@ -144,7 +139,6 @@ export const api = {
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
-  schools: () => request<{ schools: School[] }>("GET", "/schools"),
   persons: (schoolId: string) => request<{ persons: ListedPerson[] }>("GET", inSchool(schoolId, "/persons")),
   createPerson: (schoolId: string, person: { displayName: string }) =>
     request<{ person: ListedPerson }>("POST", inSchool(schoolId, "/persons"), person),

@@ -1,5 +1,5 @@
-import type { MouseEvent } from "react";
-import { navigate } from "./navigation.ts";
+import { Link } from "./Link.tsx";
+import { ShellContext, useShell } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
 
 /**
@@ -9,27 +9,31 @@ import { Sheet } from "./Sheet.tsx";
  * a reason would tell them what the API would not. Do not add one.
  *
  * It carries no legend for the same reason: a key explaining this sheet could
- * only explain which refusal it is.
+ * only explain which refusal it is. Inside the shell it carries the account's
+ * head and never a School's: shown under a School's name and navigation, it
+ * would differ from the sheet for a School the account does not reach.
  */
 export function NotAvailable() {
-  const home = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigate("/");
-  };
-  return (
+  const shell = useShell();
+  const sheet = (
     <Sheet
       stock="buff"
       name="Not available"
       foot={
         <p>
-          <a href="/" onClick={home}>
+          <Link to={{ name: "schools" }}>
             Go to your Schools
-          </a>
+          </Link>
         </p>
       }
     >
       <h1>Not available</h1>
       <p>This page is not available.</p>
     </Sheet>
+  );
+  return shell === null ? (
+    sheet
+  ) : (
+    <ShellContext.Provider value={{ head: shell.account, account: shell.account }}>{sheet}</ShellContext.Provider>
   );
 }

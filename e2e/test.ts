@@ -21,8 +21,30 @@ export { expect };
  * of its own — audits it there and then. Between them the suite covers every
  * sheet the app has: Sign in, Schools, Persons, Redeem Invitation, How this
  * was built and Not available.
+ *
+ * And every test requires that nothing it sent was throttled. The whole suite
+ * reaches the server from one client address, and the rate limit is per
+ * address and per instance, so the suite spends one client's allowance.
+ * scripts/smoke-test.sh widens it for exactly that reason (RATE_LIMIT_MAX).
+ * A throttled request would otherwise surface as a screen that never finished
+ * loading, blamed on whatever the test was waiting for; this names the cause.
  */
-export const test = base.extend<{ cspViolations: string[]; audit: Audit }>({
+export const test = base.extend<{ cspViolations: string[]; audit: Audit; throttled: string[] }>({
+  throttled: [
+    async ({ context }, use) => {
+      const throttled: string[] = [];
+      context.on("response", (response) => {
+        if (response.status() === 429) {
+          throttled.push(`${response.request().method()} ${new URL(response.url()).pathname}`);
+        }
+      });
+      await use(throttled);
+      expect(throttled, "requests throttled by the rate limit; raise RATE_LIMIT_MAX in scripts/smoke-test.sh").toEqual(
+        [],
+      );
+    },
+    { auto: true },
+  ],
   cspViolations: [
     async ({ page }, use) => {
       const violations: string[] = [];

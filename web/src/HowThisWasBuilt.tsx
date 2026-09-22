@@ -1,6 +1,6 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 import { api, type BuildInfo } from "./api.ts";
-import { navigate } from "./navigation.ts";
+import { Link } from "./Link.tsx";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 /** Which sheet this page is, named once so the two states cannot drift apart. */
@@ -59,11 +59,6 @@ export function HowThisWasBuilt() {
     };
   }, []);
 
-  const home = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigate("/");
-  };
-
   if (state.kind === "loading") {
     return <Sheet {...SHEET} busy />;
   }
@@ -93,9 +88,9 @@ export function HowThisWasBuilt() {
       legend={legend}
       foot={
         <p>
-          <a href="/" onClick={home}>
+          <Link to={{ name: "schools" }}>
             Go to SchoolGrid
-          </a>
+          </Link>
         </p>
       }
     >

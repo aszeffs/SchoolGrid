@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, type DemoAccount } from "./api.ts";
+import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { Key, Sheet } from "./Sheet.tsx";
 
@@ -21,7 +22,7 @@ export function SignIn() {
     let current = true;
     void api.session().then((session) => {
       if (current && session.ok) {
-        navigate("/", { replace: true });
+        navigate({ name: "schools" }, { replace: true });
       }
     });
     return () => {
@@ -48,7 +49,7 @@ export function SignIn() {
     const result = await api.signIn(credentials);
     setSubmitting(false);
     if (result.ok) {
-      navigate("/", { replace: true });
+      navigate({ name: "schools" }, { replace: true });
     } else {
       setFailed(true);
     }
@@ -61,11 +62,6 @@ export function SignIn() {
       username: String(form.get("username") ?? ""),
       password: String(form.get("password") ?? ""),
     });
-  };
-
-  const howThisWasBuilt = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigate("/how-this-was-built");
   };
 
   const legend = (
@@ -90,9 +86,9 @@ export function SignIn() {
       legend={legend}
       foot={
         <p className="muted">
-          <a href="/how-this-was-built" onClick={howThisWasBuilt}>
+          <Link to={{ name: "howThisWasBuilt" }}>
             How this was built
-          </a>
+          </Link>
         </p>
       }
     >

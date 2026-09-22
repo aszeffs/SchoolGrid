@@ -234,7 +234,7 @@ There are no neutrals. Where a lighter or darker plane is needed, the ink is mix
 
 ## Layout
 
-One sheet fills the viewport: a three-row grid (`head / body / foot`) at `min-height: 100dvh`, with the stock as its background and no outer margin. The head is a baseline-aligned flex row — wordmark plus sheet name at the left, contextual head content (the School's name, or the signed-in line and Sign out) hard right — closed by a 3px double ink rule. The foot mirrors it with a 3px double rule above, the registration mark at the far left and "End of sheet" at the far right.
+One sheet fills the viewport: a three-row grid (`head / body / foot`) at `min-height: 100dvh`, with the stock as its background and no outer margin. The head is a baseline-aligned flex row — wordmark plus sheet name at the left, contextual head content (the signed-in line and Sign out, joined inside a School by the School's name and the switcher) hard right — closed by a 3px double ink rule. The foot mirrors it with a 3px double rule above, the registration mark at the far left and "End of sheet" at the far right.
 
 The body is a two-column grid: a `minmax(13rem, 17rem)` legend strip and a `minmax(0, 1fr)` record column, separated by `1.2 × gutter` and a faint vertical hairline. The legend is `position: sticky` at `top: 1rem` — held level so it never scrolls away from the record it explains. The record column caps at 62rem; prose inside it caps at 68ch. A sheet with no legend (a refusal, or a sheet still coming off the drum) switches to a single full-width column rather than leaving the strip empty.
 
@@ -245,7 +245,7 @@ There is one breakpoint, 52rem, and it does everything. Below it: the legend dro
 ### Named Rules
 **The Level Legend Rule.** The legend explains the sheet's own marks and never names a record. It stays sticky and visible while the record scrolls on wide sheets, and moves below the record — never away — on narrow ones.
 
-**The No Rail Rule.** There is no left nav rail and no persistent global navigation. Movement between sheets happens through links struck into the record and its foot.
+**The No Rail Rule.** There is no left nav rail. Inside a School, the School's pages are a single row of register tabs ruled under the head, wrapping rather than scrolling at 360px; everywhere else, movement between sheets happens through links struck into the record and its foot.
 
 ## Elevation & Depth
 
@@ -290,7 +290,9 @@ Form language is drawn with rules, not with boxes. An input is a wash field with
 - **Error:** a separate oxblood block (2px border, oxblood bold text) rendered with `role="alert"` above or below the control; the field itself is not recoloured.
 
 ### Navigation
-There is no nav component. The head carries identity (wordmark, sheet name) and at most one contextual action; movement is by links in the record and in the `.foot` block. Links are ink-coloured with a 1px underline offset 0.22em, thickening to 2px over a strong-wash highlight on hover.
+The head carries identity (wordmark, sheet name) and, on a signed-in sheet, the shell's part: the School in stencil caps, who the sheet was run for, a School switcher when the account reaches more than one, and sign-out. The switcher is a native `<details>` whose slip of the same stock hangs from the head on wide sheets and is struck in line on narrow ones, so it never lies over the tabs.
+
+Inside a School, `.shell-nav` rules a row of tabs under the head: 0.78rem bold caps tracked 0.16em, each at least 2.75rem tall. The page being shown carries `aria-current="page"` and is struck with a strong wash and a 3px ink underline. It lists only the pages the actor's roles reach. Elsewhere, movement is by links in the record and in the `.foot` block. Links are ink-coloured with a 1px underline offset 0.22em, thickening to 2px over a strong-wash highlight on hover.
 
 ### Status Mark (signature component)
 State prints itself into the record instead of appearing as chrome. A mark is 0.72rem bold caps tracked 0.2em, `white-space: nowrap`, in one of two renditions: **held** — solid ink block with stock-coloured type, for a settled fact (CLAIMED, COPIED) — or **open** — 1px dashed ink outline with ink type, padding reduced by the border width so both renditions sit on the same baseline grid (UNCLAIMED). An empty mark sets `display: none`, so a status with nothing to report is not a blank box waiting to be read.
@@ -336,7 +338,7 @@ A typed two-column `max-content / 1fr` definition grid, ruled above, with terms 
 - **Don't** introduce a third colour. Oxblood is for errors, refusals and revocation only, and never for a heading or a highlight.
 - **Don't** use a gradient to imply light, gloss or depth; gradients are printing artifacts and drawn marks only.
 - **Don't** add animation. The drum pass is the system's only entrance, and reduced-motion removes it.
-- **Don't** add a left nav rail, a floating top-right action bar, or a second persistent chrome region.
+- **Don't** add a left nav rail, a floating top-right action bar, or any persistent chrome region beyond the head and, inside a School, its row of tabs.
 - **Don't** print a figure the app cannot source — a run number, a count, or a status the API did not give — in the same hand as its records.
 - **Don't** let a refusal sheet carry a legend, a reason, or any variation: one `NotAvailable` state, identical for absent, out-of-School and forbidden.
 - **Don't** add a kicker or eyebrow line above a heading. The head's sheet name is chrome in the head, not a device for the record column.

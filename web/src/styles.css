@@ -251,12 +251,129 @@ body {
   color: var(--ink-soft);
 }
 
-/* The way off this sheet, struck in the head where a long record cannot bury it. */
-.sheet__return {
+/*
+ * The shell's part of the head: which School this sheet was run for and who
+ * for, then the way to another School and the way out. It takes the rest of
+ * the head's line, and wraps under the mark when there is not room.
+ */
+.shell-head {
+  display: flex;
+  flex: 1 1 22rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--step) calc(var(--step) * 3);
+  min-width: 0;
+}
+
+.shell-head__who {
+  min-width: 0;
+}
+
+.shell-head__who p {
+  overflow-wrap: anywhere;
+}
+
+.shell-head__school {
   margin: 0;
-  font-size: 0.8rem;
-  letter-spacing: 0.18em;
+  font-family: var(--type-stencil);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/*
+ * The School's pages, ruled under the head like the tabs of a register. They
+ * wrap rather than scroll, so every one stays reachable at 360px.
+ */
+.shell-nav {
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--rule);
+}
+
+.shell-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 calc(var(--step) * 0.5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 calc(var(--step) * 1.5);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+/* The page being shown is struck through with the double rule of the head. */
+.shell-nav a[aria-current="page"] {
+  background: var(--wash-strong);
+  box-shadow: inset 0 -3px 0 var(--ink);
+}
+
+/* The other Schools, dropped from the head on a slip of the same stock. */
+.switcher {
+  position: relative;
+}
+
+.switcher summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: calc(var(--step) * 0.75) calc(var(--step) * 1.5);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  font-family: var(--type-stencil);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.switcher summary::-webkit-details-marker {
+  display: none;
+}
+
+.switcher summary::after {
+  content: "\25BE" / "";
+  margin-left: var(--step);
+}
+
+.switcher[open] summary::after {
+  content: "\25B4" / "";
+}
+
+.switcher ul {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + var(--step) * 0.5);
+  right: 0;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - var(--gutter) * 2));
+  margin: 0;
+  padding: calc(var(--step) * 0.5) 0;
+  background: color-mix(in srgb, var(--ink) 9%, var(--stock));
+  border: 2px solid var(--ink);
+  list-style: none;
+}
+
+.switcher li a {
+  display: block;
+  padding: var(--step) calc(var(--step) * 2);
+  overflow-wrap: anywhere;
+}
+
+.switcher li:last-child {
+  border-top: 1px solid var(--rule);
 }
 
 .sheet__foot {
@@ -458,7 +575,7 @@ strong {
 
 /* ---- Controls: struck, not rendered ---------------------------------- */
 
-:where(a, button, input, [tabindex]):focus-visible {
+:where(a, button, input, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
@@ -546,6 +663,11 @@ button {
 
   .roster > li:hover {
     background: var(--wash);
+  }
+
+  .switcher summary:hover {
+    background: var(--ink);
+    color: var(--stock);
   }
 }
 
@@ -894,6 +1016,15 @@ dialog.slip::backdrop {
 /* ---- Narrow sheets --------------------------------------------------- */
 
 @media (max-width: 52rem) {
+  /*
+   * On a narrow sheet the slip is struck in line, pushing the navigation down
+   * rather than lying over it, where it would hide the links beneath.
+   */
+  .switcher ul {
+    position: static;
+    margin-top: calc(var(--step) * 0.5);
+  }
+
   .sheet__body {
     grid-template-columns: minmax(0, 1fr);
     gap: calc(var(--step) * 4) 0;

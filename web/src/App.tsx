@@ -1,42 +1,22 @@
 import { HowThisWasBuilt } from "./HowThisWasBuilt.tsx";
-import { NotAvailable } from "./NotAvailable.tsx";
-import { Persons } from "./Persons.tsx";
 import { RedeemInvitation } from "./RedeemInvitation.tsx";
-import { Schools } from "./Schools.tsx";
+import { SignedIn } from "./Shell.tsx";
 import { SignIn } from "./SignIn.tsx";
-import { usePath } from "./navigation.ts";
-
-const PERSONS = /^\/schools\/([^/]+)\/persons$/;
-
-/** A path segment as written, decoded; null when absent or not validly encoded. */
-function segment(encoded: string | undefined): string | null {
-  if (encoded === undefined) {
-    return null;
-  }
-  try {
-    return decodeURIComponent(encoded);
-  } catch {
-    return null;
-  }
-}
+import { useRoute } from "./navigation.ts";
 
 export function App() {
-  const path = usePath();
-  const schoolId = segment(PERSONS.exec(path)?.[1]);
-  if (schoolId !== null) {
-    // Whatever the path names, the API decides whether it is available.
-    return <Persons key={schoolId} schoolId={schoolId} />;
-  }
-  switch (path) {
-    case "/":
-      return <Schools />;
-    case "/sign-in":
+  const route = useRoute();
+  switch (route?.name) {
+    case "signIn":
       return <SignIn />;
-    case "/invitation":
+    case "invitation":
       return <RedeemInvitation />;
-    case "/how-this-was-built":
+    case "howThisWasBuilt":
       return <HowThisWasBuilt />;
     default:
-      return <NotAvailable />;
+      // Whatever School the path names, the session decides whether it is
+      // reached. A path that names nothing is shown to a signed-in user the
+      // same way as a School they do not reach.
+      return <SignedIn route={route} />;
   }
 }

@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
+import { href, parse, type Route } from "./routes.ts";
 
 const NAVIGATED = "schoolgrid:navigated";
 
 /** Moves to another page of the app without reloading it. */
-export function navigate(path: string, { replace = false }: { replace?: boolean } = {}): void {
+export function navigate(route: Route, { replace = false }: { replace?: boolean } = {}): void {
   if (replace) {
-    history.replaceState(null, "", path);
+    history.replaceState(null, "", href(route));
   } else {
-    history.pushState(null, "", path);
+    history.pushState(null, "", href(route));
   }
   dispatchEvent(new Event(NAVIGATED));
 }
 
 /** The path the app is showing, kept current across navigation and history. */
-export function usePath(): string {
+function usePath(): string {
   const [path, setPath] = useState(location.pathname);
   useEffect(() => {
     const update = () => setPath(location.pathname);
@@ -25,4 +26,9 @@ export function usePath(): string {
     };
   }, []);
   return path;
+}
+
+/** The route the app is showing, or null when its path names none. */
+export function useRoute(): Route | null {
+  return parse(usePath());
 }

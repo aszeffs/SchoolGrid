@@ -87,7 +87,7 @@ export function RedeemInvitation() {
     setSubmitting(false);
     switch (result.status) {
       case "redeemed":
-        navigate("/", { replace: true });
+        navigate({ name: "schools" }, { replace: true });
         return;
       case "username_unavailable":
         setState({ ...state, usernameTaken: true });
@@ -112,7 +112,7 @@ export function RedeemInvitation() {
     const redeemed = await api.redeemInvitationSignedIn(secret);
     setSubmitting(false);
     if (redeemed.ok) {
-      navigate("/", { replace: true });
+      navigate({ name: "schools" }, { replace: true });
     } else {
       refused();
     }

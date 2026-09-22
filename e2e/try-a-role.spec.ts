@@ -40,11 +40,9 @@ test.describe("with demo mode on", () => {
       await page.goto("/sign-in");
       await page.getByRole("button", { name: `Sign in as ${role}`, exact: true }).click();
 
-      await expect(page).toHaveURL("/");
-      await expect(page.getByRole("list", { name: "Schools" }).getByRole("listitem")).toHaveText(
-        ["Riverbend Demo School"],
-        { useInnerText: true },
-      );
+      // Each demo account reaches the one School, so lands straight inside it.
+      await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
+      await expect(page.getByRole("banner").getByText("Riverbend Demo School", { exact: true })).toBeVisible();
     });
   }
 });
