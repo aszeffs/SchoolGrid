@@ -96,12 +96,25 @@ export function HowThisWasBuilt() {
     >
       <h1>How this was built</h1>
       <p>
-        Every change to SchoolGrid is tested before it merges. On a merge to <code>{RELEASE_BRANCH}</code>,
-        GitHub Actions builds one container image and never rebuilds it: those same bytes are scanned for known
-        vulnerabilities, started against a real database, and driven in a browser. Only an image that passes
-        all of it is published, and it is signed with a record of the workflow and commit that built it.
-        An image's digest is a hash of its contents, so the digest below names exactly those bytes, and the
-        command further down lets you check that signature against them yourself.
+        Nothing here asks to be taken on trust. Every SchoolGrid image goes through the same run, this
+        server names the one it is running, and the command at the foot checks that claim against the
+        signature rather than against this page.
+      </p>
+
+      <h2>What every image goes through</h2>
+      <ol>
+        <li>Every change is tested before it merges.</li>
+        <li>
+          On a merge to <code>{RELEASE_BRANCH}</code>, GitHub Actions builds one container image and never
+          rebuilds it.
+        </li>
+        <li>Those same bytes are scanned for known vulnerabilities.</li>
+        <li>Those same bytes are started against a real database and driven in a browser.</li>
+        <li>Only an image that passed all of it is published, signed with the workflow and commit that built it.</li>
+      </ol>
+      <p>
+        An image&apos;s digest is a hash of its contents, so a digest names exactly one set of bytes and
+        cannot be moved to another later.
       </p>
 
       <h2>What this site is running</h2>

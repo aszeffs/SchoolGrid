@@ -522,12 +522,28 @@ pre code {
 }
 
 /* The marker is part of the sheet too, not the browser's grey disc. */
-.run ul:not([class]) {
+.run ul:not([class]),
+.run ol:not([class]) {
+  max-width: var(--measure);
   padding-left: 1.4em;
+}
+
+.run ul:not([class]) {
   list-style: square;
 }
 
-.run ul:not([class]) li::marker {
+/* A numbered run is a run of steps, so its marker counts them. */
+.run ol:not([class]) {
+  list-style: decimal;
+}
+
+.run ul:not([class]) li,
+.run ol:not([class]) li {
+  margin-bottom: var(--step);
+}
+
+.run ul:not([class]) li::marker,
+.run ol:not([class]) li::marker {
   color: var(--ink);
 }
 
@@ -975,29 +991,41 @@ dialog.slip::backdrop {
   margin-top: 0;
 }
 
-.demo ul {
+/*
+ * One entry per role, ruled off from the next the way a roster's rows are: the
+ * action struck first, then the line saying what that role sees, then the
+ * sign-in itself. Four buttons in a row would say which roles exist; this says
+ * what each of them is.
+ */
+.demo .roles {
   display: grid;
-  gap: calc(var(--step) * 1.5);
   margin: calc(var(--step) * 3) 0 0;
   padding: 0;
   list-style: none;
+  border-top: 1px solid var(--rule);
 }
 
-.demo li button {
-  min-width: 24rem;
+.demo .roles li {
+  display: grid;
+  gap: calc(var(--step) * 1.5);
+  justify-items: start;
+  padding: calc(var(--step) * 3) 0;
+  border-bottom: 1px solid var(--rule-faint);
+}
+
+.demo .roles li button {
+  min-width: 20rem;
   text-align: left;
 }
 
-.demo li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(var(--step) * 1) calc(var(--step) * 2);
-}
-
-.demo li span {
-  font-size: 0.8rem;
-  color: var(--ink-soft);
+/*
+ * The role's line and its sign-in are both struck as data, at body size: a
+ * username and a password are values to be read and typed, so they are not
+ * shrunk into a label's caps and tracking the way the sheet's small type is.
+ */
+.roles__sees,
+.roles__account {
+  margin: 0;
 }
 
 /* ---- Foot ------------------------------------------------------------ */
@@ -1038,7 +1066,7 @@ dialog.slip::backdrop {
     border-top: 1px solid var(--rule);
   }
 
-  .demo li button {
+  .demo .roles li button {
     min-width: 0;
     width: 100%;
   }

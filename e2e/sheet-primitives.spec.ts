@@ -10,7 +10,7 @@ import {
   signIn,
 } from "./app.ts";
 import { seeded } from "./seeded.ts";
-import { expect, test } from "./test.ts";
+import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
  * The two primitives the sheet is built from, driven where the app already
@@ -117,9 +117,6 @@ test("the record lists its columns on a wide sheet and stacks them at 360px", as
   // The columns stack: each value carries its own term, so the head is dropped.
   await expect(record.getByRole("columnheader", { name: "Expires" })).toBeHidden();
   await expect(record).toContainText(displayName);
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth),
-    "the sheet scrolls sideways at 360px",
-  ).toBe(false);
+  await expectNoSidewaysScroll(page);
   await audit(page);
 });
