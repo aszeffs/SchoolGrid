@@ -245,7 +245,7 @@ There is one breakpoint, 52rem, and it does everything. Below it: the legend dro
 ### Named Rules
 **The Level Legend Rule.** The legend explains the sheet's own marks and never names a record. It stays sticky and visible while the record scrolls on wide sheets, and moves below the record — never away — on narrow ones.
 
-**The No Rail Rule.** There is no left nav rail and no persistent global navigation. Movement between sheets happens through links struck into the record and its foot.
+**The No Rail Rule.** There is no left nav rail. Inside a School, the School's pages are a single row of register tabs ruled under the head, wrapping rather than scrolling at 360px; everywhere else, movement between sheets happens through links struck into the record and its foot.
 
 ## Elevation & Depth
 
@@ -290,7 +290,9 @@ Form language is drawn with rules, not with boxes. An input is a wash field with
 - **Error:** a separate oxblood block (2px border, oxblood bold text) rendered with `role="alert"` above or below the control; the field itself is not recoloured.
 
 ### Navigation
-There is no nav component. The head carries identity (wordmark, sheet name) and at most one contextual action; movement is by links in the record and in the `.foot` block. Links are ink-coloured with a 1px underline offset 0.22em, thickening to 2px over a strong-wash highlight on hover.
+The head carries identity (wordmark, sheet name) and, on a signed-in sheet, the shell's part: the School in stencil caps, who the sheet was run for, a School switcher when the account reaches more than one, and sign-out. The switcher is a native `<details>` whose slip of the same stock hangs from the head on wide sheets and is struck in line on narrow ones, so it never lies over the tabs.
+
+Inside a School, `.shell-nav` rules a row of tabs under the head: 0.78rem bold caps tracked 0.16em, each at least 2.75rem tall. The page being shown carries `aria-current="page"` and is struck with a strong wash and a 3px ink underline. It lists only the pages the actor's roles reach. Elsewhere, movement is by links in the record and in the `.foot` block. Links are ink-coloured with a 1px underline offset 0.22em, thickening to 2px over a strong-wash highlight on hover.
 
 ### Status Mark (signature component)
 State prints itself into the record instead of appearing as chrome. A mark is 0.72rem bold caps tracked 0.2em, `white-space: nowrap`, in one of two renditions: **held** — solid ink block with stock-coloured type, for a settled fact (CLAIMED, COPIED) — or **open** — 1px dashed ink outline with ink type, padding reduced by the border width so both renditions sit on the same baseline grid (UNCLAIMED). An empty mark sets `display: none`, so a status with nothing to report is not a blank box waiting to be read.

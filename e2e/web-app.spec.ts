@@ -213,6 +213,7 @@ test("an invited Person redeems the link with a new account and lands signed in"
     await inviteePage.getByLabel("Password").fill(credentials.password);
     await inviteePage.getByRole("button", { name: "Redeem Invitation" }).click();
 
+    // Claiming a Person grants no School membership, so the account reaches no School yet.
     await expect(inviteePage).toHaveURL("/");
     await expect(inviteePage.getByText(`Signed in as ${credentials.username}`)).toBeVisible();
   } finally {

@@ -1,5 +1,4 @@
-import type { MouseEvent } from "react";
-import { navigate } from "./navigation.ts";
+import { Link } from "./Link.tsx";
 import { Sheet } from "./Sheet.tsx";
 
 /**
@@ -12,19 +11,15 @@ import { Sheet } from "./Sheet.tsx";
  * only explain which refusal it is.
  */
 export function NotAvailable() {
-  const home = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigate("/");
-  };
   return (
     <Sheet
       stock="buff"
       name="Not available"
       foot={
         <p>
-          <a href="/" onClick={home}>
+          <Link to={{ name: "schools" }}>
             Go to your Schools
-          </a>
+          </Link>
         </p>
       }
     >

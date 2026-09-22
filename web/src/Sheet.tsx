@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useShell } from "./ShellContext.ts";
 
 /**
  * The stock a sheet is run on. One per kind of sheet, so a School
@@ -22,7 +23,8 @@ export interface SheetKind {
  * can be read off it (ADR-0002).
  *
  * A sheet still coming off the drum is the same sheet with `busy` set: it
- * names no record and no School, for the same reason.
+ * names no record. Inside the shell it keeps the shell's head and navigation,
+ * which the session had already settled before the sheet was asked for.
  */
 export function Sheet({
   stock,
@@ -34,13 +36,14 @@ export function Sheet({
   children,
 }: SheetKind & {
   legend?: ReactNode;
-  /** Beside the mark in the head. Left off while the sheet is still printing. */
+  /** Beside the mark in the head, after the shell's own. Left off while the sheet is still printing. */
   head?: ReactNode;
   /** The way off this sheet, ruled off below the record. */
   foot?: ReactNode;
   busy?: boolean;
   children?: ReactNode;
 }) {
+  const shell = useShell();
   const aside = busy ? undefined : legend;
   return (
     <div className={`sheet sheet--${stock}`}>
@@ -49,8 +52,10 @@ export function Sheet({
           <p className="sheet__mark">SchoolGrid</p>
           <p className="sheet__no">{name}</p>
         </div>
+        {shell?.head}
         {!busy && head}
       </header>
+      {shell?.nav}
       <div className={aside === undefined ? "sheet__body sheet__body--single" : "sheet__body"}>
         {aside !== undefined && <aside className="legend">{aside}</aside>}
         <main className="run" aria-busy={busy || undefined}>

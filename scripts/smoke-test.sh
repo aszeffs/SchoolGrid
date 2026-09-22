@@ -194,7 +194,11 @@ APPLIED_MIGRATIONS="SELECT count(*) FROM public.schema_migrations"
 # DEFAULT_RATE_LIMIT in src/config.ts). Every request the browser suite makes
 # below shares this one container's IP as far as the rate limiter can tell, so
 # the production limit — sized for one real client — throttles the whole suite
-# partway through, not the abuse it is meant to catch.
+# partway through, not the abuse it is meant to catch. Widened rather than the
+# suite paced: pacing would slow every run to protect a limit this container
+# does not need, and would still break as specs are added. Whether the width
+# is enough is checked on every run, not assumed: e2e/test.ts fails any test
+# that had a request throttled, and says to raise this.
 start_image() {
   local into="$1"
   local port="$2"
