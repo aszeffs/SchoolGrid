@@ -95,7 +95,7 @@ describe("Browser sessions", () => {
       const response = await alice.get("/api/session");
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ account: { id: expect.any(String), username: "alice" } });
+      expect(response.body).toEqual({ account: { id: expect.any(String), username: "alice" }, schools: [] });
     });
 
     it("gives a Bearer token, and no cookie, to a sign-in that asks for one", async () => {

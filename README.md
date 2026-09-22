@@ -51,7 +51,7 @@ That is the whole path, in summary. The detail behind it is further down: [Secur
 
 ## Status
 
-The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). A browser holds its session in a cookie; a client that sends `"session": "bearer"` with its credentials gets a Bearer token instead. No School-scoped behaviour yet.
+The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). `GET /api/session` names the actor: the account, and each School it reaches with the Person it resolves to there and the roles that Person holds — facts, never permissions ([ADR-0007](docs/adr/0007-the-session-response-carries-the-actors-facts.md)). A browser holds its session in a cookie; a client that sends `"session": "bearer"` with its credentials gets a Bearer token instead. No School-scoped behaviour yet.
 
 A web app in `web/` (React, Vite, TypeScript) is built into the image and served by the service on every path outside `/api`, on the same origin. It signs in with the cookie session, lists the Schools the account reaches, and signs out.
 

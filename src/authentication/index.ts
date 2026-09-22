@@ -3,7 +3,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PublicOrigin } from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
-import { forAccount } from "../http/account-route.ts";
 import { isRateLimited } from "../http/rate-limit.ts";
 import { refuse } from "../http/refusal.ts";
 import { MAX_PASSWORD_LENGTH, MAX_USERNAME_LENGTH } from "../validation/bounds.ts";
@@ -379,13 +378,9 @@ async function authenticationRoutes(
     return reply.header("set-cookie", sessionCookie(session.token)).send({ expiresAt });
   });
 
-  app.get(
-    "/session",
-    forAccount(
-      (request) => authenticator.authenticate(request),
-      async (account) => ({ account }),
-    ),
-  );
+  // `GET /session` is not here. It answers with the Schools, Persons and roles
+  // the account reaches, which this module may not know: it is registered in
+  // identity/routes.ts, where resolving an account to a Person belongs.
 
   app.delete("/session", async (request, reply) => {
     const { ended, failure, expiringCookie } = await authenticator.endSession(request);
