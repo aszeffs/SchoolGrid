@@ -1,3 +1,5 @@
+import type { Role } from "../../src/access/roles.ts";
+
 /**
  * The API, reached on the page's own origin.
  *
@@ -49,6 +51,34 @@ export interface School {
   name: string;
 }
 
+/** A role a Person holds in their School, imported rather than restated. */
+export type { Role };
+
+/**
+ * One School the signed-in account reaches: the Person it resolves to there
+ * and the roles that Person holds.
+ *
+ * Facts about the actor, never permissions (ADR-0007). Roles say what to put
+ * in the navigation, so a caller is not led into a refusal; they never say
+ * whether an action will be allowed. The server alone decides that, and an
+ * action it refuses still shows the one "not available" state.
+ */
+export interface ReachedSchool {
+  schoolId: string;
+  /** The School's name; the Person's is `displayName`. */
+  name: string;
+  personId: string;
+  displayName: string;
+  roles: Role[];
+}
+
+/** Whoever holds the session: the account, and each School it reaches. */
+export interface Session {
+  account: { id: string; username: string };
+  /** Empty for an account reaching no School, which is not a refusal. */
+  schools: ReachedSchool[];
+}
+
 export interface ListedPerson {
   id: string;
   displayName: string;
@@ -72,7 +102,7 @@ export interface BuildInfo {
 
 /** A sign-in the public demo publishes. Every other deployment publishes none. */
 export interface DemoAccount {
-  role: "school_administrator" | "faculty" | "student" | "guardian";
+  role: Role;
   username: string;
   password: string;
 }
@@ -112,7 +142,7 @@ export const api = {
   demo: () => request<{ accounts: DemoAccount[] }>("GET", "/demo"),
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
-  session: () => request<{ account: { id: string; username: string } }>("GET", "/session"),
+  session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
   schools: () => request<{ schools: School[] }>("GET", "/schools"),
   persons: (schoolId: string) => request<{ persons: ListedPerson[] }>("GET", inSchool(schoolId, "/persons")),

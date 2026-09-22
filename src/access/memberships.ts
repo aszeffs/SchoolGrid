@@ -1,5 +1,6 @@
 import type { Queryable } from "../db/transaction.ts";
 import type { Person } from "../identity/index.ts";
+import type { Role } from "./roles.ts";
 
 /**
  * School memberships as stored. Each is one role, held by one Person, between
@@ -10,13 +11,7 @@ import type { Person } from "../identity/index.ts";
  * Nothing here decides whether anyone may see or change a membership: that is
  * the decision in ./index.ts, made before any of this is reached.
  */
-export const ROLES = ["school_administrator", "faculty", "student", "guardian"] as const;
-
-export type Role = (typeof ROLES)[number];
-
-export function isRole(value: unknown): value is Role {
-  return (ROLES as readonly unknown[]).includes(value);
-}
+export { isRole, ROLES, type Role } from "./roles.ts";
 
 export interface Membership {
   id: string;

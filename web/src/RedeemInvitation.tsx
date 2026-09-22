@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { MAX_PASSWORD_LENGTH } from "../../src/validation/bounds.ts";
 import { api } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
@@ -6,9 +7,6 @@ import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 /** Which sheet this page is, named once so the two states cannot drift apart. */
 const SHEET: SheetKind = { stock: "pink", name: "Invitation" };
-
-// The same bound sign-in holds a password to.
-const MAX_PASSWORD_LENGTH = 1024;
 
 /** Whether the invited person is creating an account or signing in to one they have. */
 type AccountChoice = "new" | "existing";

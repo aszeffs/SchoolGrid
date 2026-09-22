@@ -49,6 +49,10 @@ COPY package.json package-lock.json ./
 COPY web/package.json ./web/
 RUN npm ci --workspace=@schoolgrid/web --include-workspace-root=false
 
+# The bounds the page holds a form to are the service's, imported rather than
+# restated (src/validation/bounds.ts). That one directory, and not the rest of
+# the service, so a change to a route does not invalidate this layer.
+COPY src/validation ./src/validation
 COPY web ./web
 RUN npm run build --workspace=@schoolgrid/web
 

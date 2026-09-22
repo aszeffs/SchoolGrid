@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { MAX_NAME_LENGTH } from "../../src/validation/bounds.ts";
 import { api, type ApiResult, type Invitation, type ListedPerson } from "./api.ts";
 import { IssuedLink, PendingInvitations, type IssuedInvitation } from "./Invitations.tsx";
 import { navigate } from "./navigation.ts";
@@ -19,9 +20,6 @@ type Ready = Extract<State, { kind: "ready" }>;
 
 /** Which sheet this page is, named once so the two states cannot drift apart. */
 const SHEET: SheetKind = { stock: "goldenrod", name: "Persons" };
-
-/** The same bound the API holds a display name to. */
-const MAX_DISPLAY_NAME_LENGTH = 200;
 
 /**
  * Whether the caller administers the School. The API includes whether a Person
@@ -211,7 +209,7 @@ export function Persons({ schoolId }: { schoolId: string }) {
               <h2>Add a Person</h2>
               <label>
                 Display name
-                <input name="displayName" required maxLength={MAX_DISPLAY_NAME_LENGTH} autoComplete="off" />
+                <input name="displayName" required maxLength={MAX_NAME_LENGTH} autoComplete="off" />
               </label>
               <button type="submit" disabled={busy}>
                 Add Person

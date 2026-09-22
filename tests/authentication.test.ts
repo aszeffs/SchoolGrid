@@ -19,7 +19,8 @@ describe("User account authentication", () => {
     const response = await caller.get("/api/session");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ account: { id: expect.any(String), username: "alice" } });
+    // The Schools, Persons and roles it also names are tests/session.test.ts's.
+    expect(response.body).toEqual({ account: { id: expect.any(String), username: "alice" }, schools: [] });
   });
 
   it("keeps identifying the caller across requests without re-authenticating", async () => {
@@ -89,7 +90,7 @@ describe("User account authentication", () => {
       const caller = await server().signIn({ ...ALICE, username: lookAlike });
       const response = await caller.get("/api/session");
 
-      expect(response.body).toEqual({ account: { id: account.id, username: stored } });
+      expect(response.body).toEqual({ account: { id: account.id, username: stored }, schools: [] });
     });
   });
 

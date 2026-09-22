@@ -14,6 +14,7 @@ import { hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
 import { linkedStudentIds, type GuardianLink } from "./guardian-links.ts";
 import {
   activeRoles,
+  ROLES,
   schoolIdsWithActiveMembership,
   type Membership,
   type Role,
@@ -202,6 +203,55 @@ export async function reachableSchools(
   const schools = await schoolsReachedBy(database, account.id);
   const active = await schoolIdsWithActiveMembership(database, account.id);
   return schools.filter((school) => active.has(school.id));
+}
+
+/**
+ * One School an account reaches, the Person it resolves to there, and the
+ * roles that Person holds at this moment.
+ */
+export interface ReachedSchool {
+  schoolId: string;
+  /** The School's name; the Person's is `displayName`. */
+  name: string;
+  personId: string;
+  displayName: string;
+  roles: Role[];
+}
+
+/**
+ * What the account holding a Session can be told about itself: every School it
+ * reaches, named with the Person and roles that are its own facts.
+ *
+ * Facts, never a decision (ADR-0007). Roles are here because they are the
+ * actor's own; whether a role may do a given thing stays in this module's
+ * decisions, where it is enforced. Nothing about any other Person appears, and
+ * each School names only what belongs to it (ADR-0001).
+ */
+export async function actorInEachSchool(
+  database: Queryable,
+  account: UserAccount,
+): Promise<ReachedSchool[]> {
+  const reached: ReachedSchool[] = [];
+  for (const school of await reachableSchools(database, account)) {
+    const person = await personFor(database, { userAccountId: account.id, schoolId: school.id });
+    // A School is reachable only through the Person the account resolves to in
+    // it, so this cannot be null; skipped rather than asserted, because an
+    // account losing its Person between the two queries is not worth failing on.
+    if (person === null) {
+      continue;
+    }
+    const held = await activeRoles(database, person);
+    reached.push({
+      schoolId: school.id,
+      name: school.name,
+      personId: person.id,
+      displayName: person.displayName,
+      // In the order ROLES declares, so the response does not vary with what
+      // the database happened to return first.
+      roles: ROLES.filter((role) => held.has(role)),
+    });
+  }
+  return reached;
 }
 
 function holds(actor: Actor, role: Role): boolean {
