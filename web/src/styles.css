@@ -526,23 +526,25 @@ pre code {
 .run ol:not([class]) {
   max-width: var(--measure);
   padding-left: 1.4em;
+}
+
+.run ul:not([class]) {
   list-style: square;
 }
 
-/* A numbered run is a run of steps, so it keeps its numbers. */
+/* A numbered run is a run of steps, so its marker counts them. */
 .run ol:not([class]) {
   list-style: decimal;
 }
 
 .run ul:not([class]) li,
 .run ol:not([class]) li {
-  margin-bottom: calc(var(--step) * 1);
+  margin-bottom: var(--step);
 }
 
 .run ul:not([class]) li::marker,
 .run ol:not([class]) li::marker {
   color: var(--ink);
-  font-weight: 700;
 }
 
 pre {
@@ -1016,13 +1018,14 @@ dialog.slip::backdrop {
   text-align: left;
 }
 
+/*
+ * The role's line and its sign-in are both struck as data, at body size: a
+ * username and a password are values to be read and typed, so they are not
+ * shrunk into a label's caps and tracking the way the sheet's small type is.
+ */
 .roles__sees,
 .roles__account {
   margin: 0;
-}
-
-.roles__account {
-  font-size: 0.8rem;
 }
 
 /* ---- Foot ------------------------------------------------------------ */

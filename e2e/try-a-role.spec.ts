@@ -10,7 +10,15 @@ const DEMO_ORIGIN = process.env["SCHOOLGRID_DEMO_ORIGIN"];
 const ROLES = ["School Administrator", "Faculty", "Student", "Guardian"];
 
 /** What the panel promises a visitor about the data behind every role. */
-const ABOUT_THE_DATA = [/invented/, /anyone can change/i, /resets every night/];
+const ABOUT_THE_DATA = [/invented/i, /anyone can change/i, /resets every night/i];
+
+/**
+ * The parts of the glossary whose screens are not built. A role's line may
+ * name one only to say so: three of the four roles reach nothing but People
+ * (SECTIONS in web/src/routes.ts), and a line selling the academic screens
+ * would mis-sell them.
+ */
+const NOT_BUILT = /Class Offering|Attendance|Term result|published academic records/;
 
 test("without demo mode the sign-in page offers no roles to try", async ({ page }) => {
   // Asserted once the page has been told there are none, or an absent panel
@@ -44,8 +52,6 @@ test.describe("with demo mode on", () => {
     await page.goto("/sign-in");
 
     for (const role of ROLES) {
-      // Read out with the button rather than left beside it, so the
-      // perspective on offer reaches a screen reader as part of the choice.
       const described = await page
         .getByRole("button", { name: `Sign in as ${role}`, exact: true })
         .evaluate((button) => {
@@ -54,6 +60,15 @@ test.describe("with demo mode on", () => {
         });
       expect(described, `no line on what the ${role} sees`).toBeTruthy();
       expect(described!.length, `the line on the ${role} is not short`).toBeLessThan(160);
+
+      // A line may name an unbuilt part of the glossary only to say it is not
+      // built. Offering it as something the role sees would be a promise the
+      // demo does not keep.
+      if (NOT_BUILT.test(described!)) {
+        expect(described, `the line on the ${role} offers a screen that is not built`).toMatch(
+          /not built yet/,
+        );
+      }
     }
   });
 

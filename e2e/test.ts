@@ -76,6 +76,19 @@ export const test = base.extend<{ cspViolations: string[]; audit: Audit; throttl
 export type Audit = (page: Page) => Promise<void>;
 
 /**
+ * That the sheet is read down rather than scrolled across, at whatever width
+ * the test has set. A record that will not hold its viewport says so here
+ * rather than in a screenshot nobody looks at.
+ */
+export async function expectNoSidewaysScroll(page: Page): Promise<void> {
+  const width = page.viewportSize()?.width;
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth),
+    `the sheet scrolls sideways at ${width ?? "this width"}px`,
+  ).toBe(false);
+}
+
+/**
  * Whether what the page is showing is one of the app's own pages, and so
  * something the bar applies to.
  *

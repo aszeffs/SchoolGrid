@@ -13,14 +13,21 @@ const ROLE_NAMES: Record<DemoAccount["role"], string> = {
 };
 
 /**
- * What each role sees once it is signed in, so a visitor picks a perspective
- * rather than a button. One line each, read out with the button it describes.
+ * What each role reaches once it is signed in, so a visitor picks a
+ * perspective rather than a button. One line each, read out with the button it
+ * describes.
+ *
+ * What these promise is what `SECTIONS` in routes.ts actually lists for those
+ * roles, and no more: only the School Administrator reaches a page beyond
+ * People. A line that sold the academic screens would mis-sell three roles of
+ * the four, so each says plainly where its own screens stop.
  */
 const ROLE_SEES: Record<DemoAccount["role"], string> = {
-  school_administrator: "Every Person in the School, their Invitations and School memberships, and the Audit records.",
-  faculty: "The rosters of the Class Offerings they are assigned, and the academic activity they record.",
-  student: "Their own published academic records, and nothing about any other Student.",
-  guardian: "One Student they are linked to, as far as that link's Access profile reaches.",
+  school_administrator:
+    "Every Person in the School, with their Invitations, School memberships, Enrollments, Guardian links and Audit records.",
+  faculty: "The School's People. The Class Offerings they teach are not built yet.",
+  student: "The School's People. Their own published academic records are not built yet.",
+  guardian: "The School's People. The Student they are linked to is not built yet.",
 };
 
 /** The id of the line describing a role, named once so button and line cannot drift apart. */
@@ -148,8 +155,8 @@ export function SignIn() {
         <section className="demo" aria-labelledby="try-a-role">
           <h2 id="try-a-role">Try a role</h2>
           <p>
-            SchoolGrid shows each role a different School. Pick one to sign in as, and the sheets that
-            follow are the ones that role reaches.
+            Each role sees a different part of the same School. Pick one to sign in as, and the sheets
+            that follow are the ones that role reaches.
           </p>
           <p className="muted">
             Every Person, Class Offering and record in this demo is invented. Anyone can change any of it,

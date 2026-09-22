@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "./test.ts";
+import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
  * The two sheets a visitor sees before signing in: the demo's front door.
@@ -8,24 +8,30 @@ import { expect, test } from "./test.ts";
  * roles to try-a-role.spec.ts, the build's provenance to
  * how-this-was-built.spec.ts. What is asserted here is what both owe a
  * visitor who arrives on them cold: that they explain themselves, that they
- * can be worked by the keyboard, that they hold 360px, and that they print on
- * their own stock whichever theme the browser asks for.
+ * can be worked by the keyboard, that they hold 360px, and that they print the
+ * same whichever theme the browser asks for.
  */
 
 const PUBLIC_SHEETS = [
-  { path: "/sign-in", heading: "Sign in to SchoolGrid", stock: "rgb(247, 231, 166)" },
-  { path: "/how-this-was-built", heading: "How this was built", stock: "rgb(203, 224, 206)" },
+  { path: "/sign-in", heading: "Sign in to SchoolGrid" },
+  { path: "/how-this-was-built", heading: "How this was built" },
 ] as const;
 
-/** Whether the element with the focus draws a ring, rather than taking it invisibly. */
-async function focusRingIsVisible(page: Page): Promise<boolean> {
+/** The element that floods the frame, and so the one carrying the sheet's stock. */
+const sheet = (page: Page) => page.locator(".sheet");
+
+/** What the element holding the focus is, as a name a failure can be read by. */
+async function focused(page: Page): Promise<{ name: string; ring: string } | undefined> {
   return page.evaluate(() => {
     const active = document.activeElement;
     if (active === null || active === document.body) {
-      return false;
+      return undefined;
     }
     const { outlineStyle, outlineWidth } = getComputedStyle(active);
-    return outlineStyle !== "none" && Number.parseFloat(outlineWidth) > 0;
+    return {
+      name: (active.getAttribute("name") ?? active.textContent ?? "").trim(),
+      ring: `${outlineStyle} ${outlineWidth}`,
+    };
   });
 }
 
@@ -41,7 +47,7 @@ test("sign-in says what SchoolGrid is before it asks for credentials", async ({ 
   expect(explanationTop).toBeLessThan(formTop);
 });
 
-test("sign-in is worked by the keyboard alone, and every stop shows its focus", async ({ page }) => {
+test("sign-in is worked by the keyboard alone, and every stop shows the ring", async ({ page }) => {
   await page.goto("/sign-in");
   await expect(page.getByRole("heading", { name: "Sign in to SchoolGrid" })).toBeVisible();
 
@@ -49,48 +55,46 @@ test("sign-in is worked by the keyboard alone, and every stop shows its focus", 
   // Enough presses to cross the head and the form, whatever the head carries.
   for (let press = 0; press < 12 && !reached.includes("Sign in"); press += 1) {
     await page.keyboard.press("Tab");
-    const stop = await page.evaluate(() => {
-      const active = document.activeElement;
-      if (active === null || active === document.body) {
-        return undefined;
-      }
-      return (active.getAttribute("name") ?? active.textContent ?? "").trim();
-    });
-    if (stop !== undefined && stop !== "") {
-      expect(await focusRingIsVisible(page), `no focus ring on ${stop}`).toBe(true);
-      reached.push(stop);
+    const stop = await focused(page);
+    if (stop !== undefined && stop.name !== "") {
+      // The ring the design system states: 3px solid ink, not merely something.
+      expect(stop.ring, `the focus ring on ${stop.name}`).toBe("solid 3px");
+      reached.push(stop.name);
     }
   }
 
   expect(reached).toEqual(expect.arrayContaining(["username", "password", "Sign in"]));
 });
 
-for (const { path, heading, stock } of PUBLIC_SHEETS) {
+for (const { path, heading } of PUBLIC_SHEETS) {
   test(`${path} holds 360px with no sideways scroll`, async ({ page, audit }) => {
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(path);
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
 
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth),
-      "the sheet scrolls sideways at 360px",
-    ).toBe(false);
+    await expectNoSidewaysScroll(page);
     await audit(page);
   });
 
-  test.describe(`${path} in a dark browser`, () => {
-    test.use({ colorScheme: "dark" });
+  test(`${path} prints the same in a dark browser as in a light one`, async ({ page, audit }) => {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
 
-    test("prints on its own stock rather than inverting", async ({ page, audit }) => {
-      await page.goto(path);
-      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-
-      // Paper does not invert: the stocks carry the whole range, so a browser
-      // asking for dark gets the same sheet, and axe still finds the contrast.
-      // Asserted on the sheet, which is what floods the frame; `body` behind
-      // it carries the default stock whichever sheet is run.
-      await expect(page.locator(".sheet")).toHaveCSS("background-color", stock);
-      await audit(page);
+    // Paper does not invert: the stocks carry the whole range, so the sheet a
+    // dark browser gets is the sheet a light one gets. Asserted against the
+    // page's own light rendition rather than against a colour written down
+    // here, which would only restate what styles.css already says.
+    await page.emulateMedia({ colorScheme: "light" });
+    const inLight = await sheet(page).evaluate((node) => {
+      const { backgroundColor, color } = getComputedStyle(node);
+      return { backgroundColor, color };
     });
+
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(sheet(page)).toHaveCSS("background-color", inLight.backgroundColor);
+    await expect(sheet(page)).toHaveCSS("color", inLight.color);
+    // And the ink still clears the bar against that stock, which is the thing
+    // an unasked-for dark rendition would break.
+    await audit(page);
   });
 }
