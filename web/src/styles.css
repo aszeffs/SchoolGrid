@@ -709,6 +709,64 @@ h1 + .roster {
   overflow-wrap: anywhere;
 }
 
+/* ---- The record list: columns above the break, entries below --------- */
+
+/*
+ * A record with more than one thing to say about each row. One table carries
+ * both renditions: columns ruled across the sheet while there is width for
+ * them, and — below the sheet's one breakpoint — the columns stacked, each
+ * value struck under its own term so the record is read down instead of
+ * scrolled across. `.roster` still carries the flat name-and-mark line.
+ */
+.record {
+  width: 100%;
+  margin: calc(var(--step) * 2) 0 calc(var(--step) * 4);
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.record th {
+  padding: 0 calc(var(--step) * 2) calc(var(--step) * 1.25) 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  vertical-align: bottom;
+}
+
+.record td {
+  padding: calc(var(--step) * 1.75) calc(var(--step) * 2) calc(var(--step) * 1.75) 0;
+  border-bottom: 1px solid var(--rule-faint);
+  vertical-align: baseline;
+  overflow-wrap: anywhere;
+}
+
+.record th:last-child,
+.record td:last-child {
+  padding-right: 0;
+  text-align: right;
+}
+
+@media (hover: hover) {
+  .record tbody tr:hover {
+    background: var(--wash);
+  }
+}
+
+/* Struck for a screen reader but never printed: a column of controls that
+   name themselves does not need its term set above them too. */
+.unprinted {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* ---- The issued Invitation: a slip torn off the sheet ---------------- */
 
 .slip {
@@ -746,6 +804,41 @@ h1 + .roster {
   flex-wrap: wrap;
   align-items: center;
   gap: calc(var(--step) * 1.5);
+}
+
+/*
+ * The same slip, held over the sheet: the app's one overlay, and a native
+ * `<dialog>` rather than a kit's, because `style-src 'self'` has no inline
+ * exception and every library positions its overlay with one (ADR-0006).
+ *
+ * Its fill is the wash mixed into the stock rather than laid over it: an
+ * overlay has the veil behind it, and a translucent slip would let the sheet
+ * read through the record it is holding.
+ */
+dialog.slip {
+  display: none;
+  position: fixed;
+  inset: 0;
+  width: min(34rem, calc(100vw - var(--gutter) * 2));
+  max-width: none;
+  max-height: calc(100dvh - var(--gutter) * 2);
+  margin: auto;
+  overflow: auto;
+  background: color-mix(in srgb, var(--ink) 9%, var(--stock));
+  color: var(--ink);
+}
+
+dialog.slip[open] {
+  display: grid;
+}
+
+/*
+ * The veil: ink laid over the whole sheet while the slip is held above it.
+ * `::backdrop` inherits the element's custom properties only in newer engines,
+ * so the ink is named again here for the ones where it does not.
+ */
+dialog.slip::backdrop {
+  background: color-mix(in srgb, var(--ink, #3b2a6b) 55%, transparent);
 }
 
 /* ---- Try a role ------------------------------------------------------ */
@@ -833,6 +926,53 @@ h1 + .roster {
 
   .roster__name {
     flex: 1 1 8rem;
+  }
+
+  /*
+   * The record's columns stack. The head is dropped, because each value now
+   * carries its own term; the row becomes the entry, ruled off from the next.
+   */
+  .record,
+  .record tbody,
+  .record tr,
+  .record td {
+    display: block;
+  }
+
+  .record thead {
+    display: none;
+  }
+
+  .record tr {
+    padding: calc(var(--step) * 1.75) 0;
+    border-bottom: 1px solid var(--rule-faint);
+  }
+
+  .record tbody tr:first-child {
+    border-top: 1px solid var(--rule);
+  }
+
+  .record td {
+    padding: 0;
+    border: 0;
+  }
+
+  .record td + td {
+    margin-top: calc(var(--step) * 1.25);
+  }
+
+  .record td[data-head]::before {
+    content: attr(data-head);
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .record td:last-child {
+    text-align: left;
   }
 }
 
