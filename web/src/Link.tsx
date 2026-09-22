@@ -10,13 +10,11 @@ import { href, type Route } from "./routes.ts";
 export function Link({
   to,
   current = false,
-  className,
   children,
 }: {
   to: Route;
   /** Marks the link as the page being shown. */
   current?: boolean;
-  className?: string;
   children: ReactNode;
 }) {
   const follow = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -27,7 +25,7 @@ export function Link({
     navigate(to);
   };
   return (
-    <a href={href(to)} onClick={follow} className={className} aria-current={current ? "page" : undefined}>
+    <a href={href(to)} onClick={follow} aria-current={current ? "page" : undefined}>
       {children}
     </a>
   );

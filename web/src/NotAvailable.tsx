@@ -1,4 +1,5 @@
 import { Link } from "./Link.tsx";
+import { ShellContext, useShell } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
 
 /**
@@ -8,10 +9,13 @@ import { Sheet } from "./Sheet.tsx";
  * a reason would tell them what the API would not. Do not add one.
  *
  * It carries no legend for the same reason: a key explaining this sheet could
- * only explain which refusal it is.
+ * only explain which refusal it is. Inside the shell it carries the account's
+ * head and never a School's: shown under a School's name and navigation, it
+ * would differ from the sheet for a School the account does not reach.
  */
 export function NotAvailable() {
-  return (
+  const shell = useShell();
+  const sheet = (
     <Sheet
       stock="buff"
       name="Not available"
@@ -26,5 +30,10 @@ export function NotAvailable() {
       <h1>Not available</h1>
       <p>This page is not available.</p>
     </Sheet>
+  );
+  return shell === null ? (
+    sheet
+  ) : (
+    <ShellContext.Provider value={{ head: shell.account, account: shell.account }}>{sheet}</ShellContext.Provider>
   );
 }

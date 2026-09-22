@@ -1,5 +1,4 @@
 import { HowThisWasBuilt } from "./HowThisWasBuilt.tsx";
-import { NotAvailable } from "./NotAvailable.tsx";
 import { RedeemInvitation } from "./RedeemInvitation.tsx";
 import { SignedIn } from "./Shell.tsx";
 import { SignIn } from "./SignIn.tsx";
@@ -7,10 +6,7 @@ import { useRoute } from "./navigation.ts";
 
 export function App() {
   const route = useRoute();
-  if (route === null) {
-    return <NotAvailable />;
-  }
-  switch (route.name) {
+  switch (route?.name) {
     case "signIn":
       return <SignIn />;
     case "invitation":
@@ -18,7 +14,9 @@ export function App() {
     case "howThisWasBuilt":
       return <HowThisWasBuilt />;
     default:
-      // Whatever School the path names, the session decides whether it is reached.
+      // Whatever School the path names, the session decides whether it is
+      // reached. A path that names nothing is shown to a signed-in user the
+      // same way as a School they do not reach.
       return <SignedIn route={route} />;
   }
 }

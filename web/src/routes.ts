@@ -40,7 +40,7 @@ export type Route = { [N in RouteName]: Flatten<{ name: N } & Params<Paths[N]>> 
 export type SchoolRoute = Extract<Route, { schoolId: string }>;
 
 /** A page within a School, by name. */
-export type SchoolRouteName = SchoolRoute["name"];
+type SchoolRouteName = SchoolRoute["name"];
 
 /** The route a path names, or null when it names none. */
 export function parse(path: string): Route | null {
@@ -106,7 +106,7 @@ export interface Section {
 export const SECTIONS: readonly Section[] = [
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
-  { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },
+  { name: "memberships", label: "Memberships", reachedBy: ["school_administrator"] },
   { name: "enrollments", label: "Enrollments", reachedBy: ["school_administrator"] },
   { name: "guardianLinks", label: "Guardians", reachedBy: ["school_administrator"] },
   { name: "auditRecords", label: "Audit", reachedBy: ["school_administrator"] },
@@ -117,6 +117,11 @@ export function sectionsFor(roles: readonly Role[]): Section[] {
   return SECTIONS.filter(
     (section) => section.reachedBy === null || section.reachedBy.some((role) => roles.includes(role)),
   );
+}
+
+/** The navigation's entry for a page within a School. */
+export function sectionOf(route: SchoolRoute): Section {
+  return SECTIONS.find((section) => section.name === route.name)!;
 }
 
 /** Where a School opens: the first page its navigation lists. */

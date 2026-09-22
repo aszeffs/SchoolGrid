@@ -8,6 +8,12 @@ import { createContext, useContext, type ReactNode } from "react";
 export interface ShellChrome {
   head: ReactNode;
   nav?: ReactNode;
+  /**
+   * The head as it stands outside any School: who is signed in, and the way
+   * out. The one "not available" sheet carries this and nothing more, so it is
+   * the same sheet wherever it is shown (ADR-0002).
+   */
+  account: ReactNode;
 }
 
 export const ShellContext = createContext<ShellChrome | null>(null);

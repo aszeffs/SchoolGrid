@@ -8,7 +8,7 @@ import { expect, test } from "./test.ts";
 const SECTIONS = [
   { label: "People", path: "persons", heading: "Persons" },
   { label: "Invitations", path: "invitations", heading: "Invitations" },
-  { label: "Roles", path: "memberships", heading: "Roles" },
+  { label: "Memberships", path: "memberships", heading: "Memberships" },
   { label: "Enrollments", path: "enrollments", heading: "Enrollments" },
   { label: "Guardians", path: "guardian-links", heading: "Guardians" },
   { label: "Audit", path: "audit-records", heading: "Audit" },
@@ -42,6 +42,12 @@ async function recordEveryNavigation(page: Page): Promise<void> {
       }
     }).observe(document, { childList: true, subtree: true });
   });
+}
+
+/** The one School the signed-in account reaches. */
+async function ownSchool(page: Page): Promise<string> {
+  const { schools } = (await (await page.request.get("/api/session")).json()) as { schools: { schoolId: string }[] };
+  return schools[0]!.schoolId;
 }
 
 async function navigationsSeen(page: Page): Promise<string[][]> {
@@ -107,13 +113,15 @@ test("an account reaching one School goes straight into it, and sees only what i
     expect(links).toEqual(["People"]);
   }
 
-  // Asked for by its URL, a page their roles do not reach is not available.
+  // Asked for by its URL, a page their roles do not reach still opens: its
+  // records are the server's to refuse, not the navigation's (ADR-0007).
   const schoolId = new URL(page.url()).pathname.split("/")[2]!;
   await page.goto(`/schools/${schoolId}/audit-records`);
-  await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Audit" })).toBeVisible();
+  await expect(navLinks(page)).toHaveText(["People"]);
 });
 
-test("every page within a School opens from its URL", async ({ page }) => {
+test("every page within a School opens from its URL", async ({ page, audit }) => {
   await signIn(page, seeded().schoolAdministrator);
   await expect(schoolsList(page)).not.toHaveCount(0);
   const [first] = await schoolIds(page);
@@ -122,10 +130,11 @@ test("every page within a School opens from its URL", async ({ page }) => {
     await page.goto(`/schools/${first}/${path}`);
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
     await expect(navLinks(page).filter({ hasText: label })).toHaveAttribute("aria-current", "page");
+    await audit(page);
   }
 });
 
-test("a School the account does not reach and a page that names nothing look the same", async ({ page }) => {
+test("every way a page is not available looks the same", async ({ page }) => {
   // The administrator reaches the second School; the Faculty member does not.
   await signIn(page, seeded().schoolAdministrator);
   await expect(schoolsList(page)).not.toHaveCount(0);
@@ -144,9 +153,13 @@ test("a School the account does not reach and a page that names nothing look the
   const unreachedSchool = await shown(`/schools/${unreached}/persons`);
   const noSuchSchool = await shown(`/schools/${randomUUID()}/persons`);
   const noSuchPage = await shown("/no/such/page");
+  // A School the account reaches, whose page the API then refuses.
+  await page.route("**/api/schools/*/persons", (route) => route.fulfill({ status: 404, json: { status: "refused" } }));
+  const refused = await shown(`/schools/${await ownSchool(page)}/persons`);
 
   expect(unreachedSchool).toEqual(noSuchPage);
   expect(noSuchSchool).toEqual(noSuchPage);
+  expect(refused).toEqual(noSuchPage);
 });
 
 test("a session that has ended sends the next step to sign in", async ({ page, context }) => {
@@ -157,7 +170,7 @@ test("a session that has ended sends the next step to sign in", async ({ page, c
 
   // Ended elsewhere: the page still holds what it drew, but the server holds no session.
   await context.clearCookies();
-  await navLinks(page).filter({ hasText: "Roles" }).click();
+  await navLinks(page).filter({ hasText: "Memberships" }).click();
   await expect(page).toHaveURL("/sign-in");
 });
 

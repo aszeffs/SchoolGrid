@@ -7,7 +7,7 @@ import { Sheet } from "./Sheet.tsx";
  */
 export function NotBuilt({ name, note }: { name: string; note?: string }) {
   return (
-    <Sheet stock="canary" name={name}>
+    <Sheet stock="mint" name={name}>
       <h1>{name}</h1>
       <p>This screen is not built yet.</p>
       {note !== undefined && <p className="muted">{note}</p>}

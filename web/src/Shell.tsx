@@ -5,19 +5,19 @@ import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { NotBuilt } from "./NotBuilt.tsx";
 import { Persons } from "./Persons.tsx";
-import { href, landing, sectionsFor, type Route, type SchoolRoute } from "./routes.ts";
+import { href, landing, sectionOf, sectionsFor, type Route, type SchoolRoute } from "./routes.ts";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; session: Session }
-  /** A sign-out that did not work. */
-  | { kind: "not-available" };
+  /** `signOutFailed` when a sign-out did not work, which leaves the session as it was. */
+  | { kind: "ready"; session: Session; signOutFailed?: true };
 
 /**
- * Every signed-in page, inside the shell.
+ * Every signed-in page, inside the shell. `route` is null for a path that
+ * names nothing.
  *
  * The session is read before anything is shown, so the header and the
  * navigation are right on first paint rather than rearranging after it. It is
@@ -25,9 +25,9 @@ type State =
  * so a session that has ended sends the user to sign in at their next step
  * instead of leaving them in a half-working app.
  */
-export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }> | SchoolRoute }) {
+export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }> | SchoolRoute | null }) {
   const [state, setState] = useState<State>({ kind: "loading" });
-  const location = href(route);
+  const location = route === null ? null : href(route);
 
   useEffect(() => {
     let current = true;
@@ -48,7 +48,7 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
     };
   }, [location]);
 
-  const reachesOne = state.kind === "ready" && route.name === "schools" && state.session.schools.length === 1;
+  const reachesOne = state.kind === "ready" && route?.name === "schools" && state.session.schools.length === 1;
   useEffect(() => {
     if (reachesOne) {
       // Nobody is asked to pick from a list of one.
@@ -62,58 +62,65 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
     if ((await api.signOut()).ok) {
       navigate({ name: "signIn" }, { replace: true });
     } else {
-      setState({ kind: "not-available" });
+      setState((shown) => (shown.kind === "ready" ? { ...shown, signOutFailed: true } : shown));
     }
   };
 
-  if (state.kind === "not-available") {
-    return <NotAvailable />;
-  }
   if (state.kind === "loading" || reachesOne) {
-    return <Sheet stock="blue" name="Schools" busy />;
+    // Named for the page on its way, and nothing more: no School is named
+    // until the session says the account reaches it.
+    const name = route === null ? "Not available" : route.name === "schools" ? "Schools" : sectionOf(route).label;
+    return <Sheet stock="blue" name={name} busy />;
   }
 
   const { session } = state;
+  const who = (name: string) => <span className="sheet__who">Signed in as {name}</span>;
   const signOutButton = (
     <button type="button" className="button-quiet" onClick={signOut}>
       Sign out
     </button>
   );
+  const account = (
+    <div className="actions">
+      {who(session.account.username)}
+      {signOutButton}
+    </div>
+  );
 
-  if (route.name === "schools") {
-    const chrome: ShellChrome = {
-      head: (
-        <div className="actions">
-          <span className="sheet__who">Signed in as {session.account.username}</span>
-          {signOutButton}
-        </div>
-      ),
-    };
+  const notAvailable = (
+    <ShellContext.Provider value={{ head: account, account }}>
+      <NotAvailable />
+    </ShellContext.Provider>
+  );
+  if (state.signOutFailed) {
+    return notAvailable;
+  }
+
+  if (route?.name === "schools") {
     return (
-      <ShellContext.Provider value={chrome}>
+      <ShellContext.Provider value={{ head: account, account }}>
         <Schools schools={session.schools} />
       </ShellContext.Provider>
     );
   }
 
   /*
-   * A School the account does not reach and a page that names nothing are the
+   * A School the account does not reach and a path that names nothing are the
    * same sheet, shown the same way (ADR-0002): which of the two it was is
-   * exactly what the API would not say. So is a page the actor's roles do not
-   * reach, since the navigation never leads there.
+   * exactly what the API would not say.
    */
-  const school = session.schools.find((reached) => reached.schoolId === route.schoolId);
-  const sections = school === undefined ? [] : sectionsFor(school.roles);
-  if (school === undefined || !sections.some((section) => section.name === route.name)) {
-    return <NotAvailable />;
+  const school = route === null ? undefined : reached(session, route);
+  if (route === null || school === undefined) {
+    return notAvailable;
   }
 
   const chrome: ShellChrome = {
+    account,
     head: (
       <div className="shell-head">
         <div className="shell-head__who">
           <p className="shell-head__school">{school.name}</p>
-          <p className="sheet__who">Signed in as {school.displayName}</p>
+          {who(school.displayName)}
         </div>
         <div className="actions">
           <Switcher current={school} schools={session.schools} />
@@ -124,7 +131,7 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
     nav: (
       <nav aria-label={school.name} className="shell-nav">
         <ul>
-          {sections.map((section) => (
+          {sectionsFor(school.roles).map((section) => (
             <li key={section.name}>
               <Link to={{ name: section.name, schoolId: school.schoolId }} current={section.name === route.name}>
                 {section.label}
@@ -145,21 +152,25 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
   );
 }
 
-/** The screen a route within a School names. */
+/** The School a route names, if the account reaches it. */
+function reached(session: Session, route: SchoolRoute): ReachedSchool | undefined {
+  return session.schools.find((school) => school.schoolId === route.schoolId);
+}
+
+/**
+ * The screen a route within a School names. Every page is shown whatever the
+ * actor's roles: the navigation leaves out what they do not reach, but whether
+ * a page's records are available is for the server to say when the page asks
+ * (ADR-0007).
+ */
 function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSchool }) {
   switch (route.name) {
     case "persons":
       return <Persons school={school} />;
     case "invitations":
-      return <NotBuilt name="Invitations" note="Pending Invitations are listed on People until then." />;
-    case "memberships":
-      return <NotBuilt name="Roles" />;
-    case "enrollments":
-      return <NotBuilt name="Enrollments" />;
-    case "guardianLinks":
-      return <NotBuilt name="Guardians" />;
-    case "auditRecords":
-      return <NotBuilt name="Audit" />;
+      return <NotBuilt name={sectionOf(route).label} note="Pending Invitations are listed on People until then." />;
+    default:
+      return <NotBuilt name={sectionOf(route).label} />;
   }
 }
 

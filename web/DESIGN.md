@@ -234,7 +234,7 @@ There are no neutrals. Where a lighter or darker plane is needed, the ink is mix
 
 ## Layout
 
-One sheet fills the viewport: a three-row grid (`head / body / foot`) at `min-height: 100dvh`, with the stock as its background and no outer margin. The head is a baseline-aligned flex row — wordmark plus sheet name at the left, contextual head content (the School's name, or the signed-in line and Sign out) hard right — closed by a 3px double ink rule. The foot mirrors it with a 3px double rule above, the registration mark at the far left and "End of sheet" at the far right.
+One sheet fills the viewport: a three-row grid (`head / body / foot`) at `min-height: 100dvh`, with the stock as its background and no outer margin. The head is a baseline-aligned flex row — wordmark plus sheet name at the left, contextual head content (the signed-in line and Sign out, joined inside a School by the School's name and the switcher) hard right — closed by a 3px double ink rule. The foot mirrors it with a 3px double rule above, the registration mark at the far left and "End of sheet" at the far right.
 
 The body is a two-column grid: a `minmax(13rem, 17rem)` legend strip and a `minmax(0, 1fr)` record column, separated by `1.2 × gutter` and a faint vertical hairline. The legend is `position: sticky` at `top: 1rem` — held level so it never scrolls away from the record it explains. The record column caps at 62rem; prose inside it caps at 68ch. A sheet with no legend (a refusal, or a sheet still coming off the drum) switches to a single full-width column rather than leaving the strip empty.
 
@@ -338,7 +338,7 @@ A typed two-column `max-content / 1fr` definition grid, ruled above, with terms 
 - **Don't** introduce a third colour. Oxblood is for errors, refusals and revocation only, and never for a heading or a highlight.
 - **Don't** use a gradient to imply light, gloss or depth; gradients are printing artifacts and drawn marks only.
 - **Don't** add animation. The drum pass is the system's only entrance, and reduced-motion removes it.
-- **Don't** add a left nav rail, a floating top-right action bar, or a second persistent chrome region.
+- **Don't** add a left nav rail, a floating top-right action bar, or any persistent chrome region beyond the head and, inside a School, its row of tabs.
 - **Don't** print a figure the app cannot source — a run number, a count, or a status the API did not give — in the same hand as its records.
 - **Don't** let a refusal sheet carry a legend, a reason, or any variation: one `NotAvailable` state, identical for absent, out-of-School and forbidden.
 - **Don't** add a kicker or eyebrow line above a heading. The head's sheet name is chrome in the head, not a device for the record column.
