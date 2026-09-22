@@ -4,13 +4,27 @@ import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { Key, Sheet } from "./Sheet.tsx";
 
-/** Each School role as the demo's panel names it. */
+/** Each School role as the demo's panel names it, in CONTEXT.md's own words. */
 const ROLE_NAMES: Record<DemoAccount["role"], string> = {
   school_administrator: "School Administrator",
   faculty: "Faculty",
   student: "Student",
   guardian: "Guardian",
 };
+
+/**
+ * What each role sees once it is signed in, so a visitor picks a perspective
+ * rather than a button. One line each, read out with the button it describes.
+ */
+const ROLE_SEES: Record<DemoAccount["role"], string> = {
+  school_administrator: "Every Person in the School, their Invitations and School memberships, and the Audit records.",
+  faculty: "The rosters of the Class Offerings they are assigned, and the academic activity they record.",
+  student: "Their own published academic records, and nothing about any other Student.",
+  guardian: "One Student they are linked to, as far as that link's Access profile reaches.",
+};
+
+/** The id of the line describing a role, named once so button and line cannot drift apart. */
+const seesId = (role: DemoAccount["role"]) => `sees-${role}`;
 
 export function SignIn() {
   const [failed, setFailed] = useState(false);
@@ -93,6 +107,19 @@ export function SignIn() {
       }
     >
       <h1>Sign in to SchoolGrid</h1>
+      {/*
+        What the visitor is signing in to, before they are asked for anything.
+        Said in the glossary's own terms, because those are the words every
+        sheet beyond this one is struck in.
+      */}
+      <p>
+        SchoolGrid is a K-12 academic records system for a School. One School owns its Persons, its
+        Class Offerings and every record about them, and nothing is shared between Schools.
+      </p>
+      <p>
+        One User account signs in here. It holds no role of its own: what it reaches is whichever Person
+        it resolves to in each School, and the School memberships that Person holds.
+      </p>
       <form onSubmit={submit}>
         <label>
           Username
@@ -120,23 +147,35 @@ export function SignIn() {
       {demoAccounts.length > 0 && (
         <section className="demo" aria-labelledby="try-a-role">
           <h2 id="try-a-role">Try a role</h2>
-          <p className="muted">
-            This is a demo holding invented data only. Anyone can change it, and it resets every night.
+          <p>
+            SchoolGrid shows each role a different School. Pick one to sign in as, and the sheets that
+            follow are the ones that role reaches.
           </p>
-          <ul>
+          <p className="muted">
+            Every Person, Class Offering and record in this demo is invented. Anyone can change any of it,
+            and all of it resets every night.
+          </p>
+          <ul className="roles">
             {demoAccounts.map((account) => (
               <li key={account.role}>
                 <button
                   type="button"
                   className="button-ghost"
                   disabled={submitting}
+                  // The role's line is read out with the button rather than
+                  // left beside it, so the perspective on offer reaches a
+                  // screen reader as part of the choice.
+                  aria-describedby={seesId(account.role)}
                   onClick={() => void signIn({ username: account.username, password: account.password })}
                 >
                   Sign in as {ROLE_NAMES[account.role]}
                 </button>
-                <span className="muted">
+                <p className="roles__sees" id={seesId(account.role)}>
+                  {ROLE_SEES[account.role]}
+                </p>
+                <p className="muted roles__account">
                   {account.username} / {account.password}
-                </span>
+                </p>
               </li>
             ))}
           </ul>
