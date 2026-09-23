@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Account } from "./Account.tsx";
 import { api, type ReachedSchool, type Session } from "./api.ts";
+import { Invitations } from "./Invitations.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
@@ -172,7 +173,7 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
     case "persons":
       return <Persons school={school} />;
     case "invitations":
-      return <NotBuilt name={sectionOf(route).label} note="Pending Invitations are listed on People until then." />;
+      return <Invitations school={school} />;
     default:
       return <NotBuilt name={sectionOf(route).label} />;
   }

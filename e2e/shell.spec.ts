@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { addPerson, openSchool, schoolsList, signIn } from "./app.ts";
+import { addPerson, openSchool, personsRecord, schoolsList, signIn } from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, test } from "./test.ts";
 
@@ -74,8 +74,7 @@ test("inside a School the header names the Person and the School, and the switch
   await expect(navLinks(page)).toHaveText(SECTIONS.map(({ label }) => label));
   await expect(navLinks(page).filter({ hasText: "People" })).toHaveAttribute("aria-current", "page");
   await addPerson(page, displayName);
-  const persons = page.getByRole("list", { name: "Persons" }).getByRole("listitem");
-  await expect(persons.filter({ hasText: displayName })).toHaveCount(1);
+  await expect(personsRecord(page).filter({ hasText: displayName })).toHaveCount(1);
 
   // The switcher is held open for the audit, which should see its links too.
   await header.getByText("Switch School").click();
@@ -87,9 +86,9 @@ test("inside a School the header names the Person and the School, and the switch
   await expect(header.getByText(schools[1]!, { exact: true })).toBeVisible();
   // Named now only among the Schools the closed switcher would offer.
   await expect(header.getByText(schools[0]!, { exact: true })).toBeHidden();
-  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
   // Nothing from the first School is shown under the second (ADR-0001).
-  await expect(persons.filter({ hasText: displayName })).toHaveCount(0);
+  await expect(personsRecord(page).filter({ hasText: displayName })).toHaveCount(0);
 });
 
 test("an account reaching one School goes straight into it, and sees only what its roles reach", async ({
@@ -168,7 +167,7 @@ test("a session that has ended sends the next step to sign in", async ({ page, c
   const { schoolAdministrator, schools } = seeded();
   await signIn(page, schoolAdministrator);
   await openSchool(page, schools[0]!);
-  await expect(page.getByRole("list", { name: "Persons" })).toBeVisible();
+  await expect(personsRecord(page).first()).toBeVisible();
 
   // Ended elsewhere: the page still holds what it drew, but the server holds no session.
   await context.clearCookies();
@@ -196,7 +195,7 @@ test.describe("on a phone", () => {
     const { schoolAdministrator, schools } = seeded();
     await signIn(page, schoolAdministrator);
     await openSchool(page, schools[0]!);
-    await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
 
     for (const link of await navLinks(page).all()) {
       await expect(link).toBeInViewport();
@@ -215,7 +214,7 @@ test("the shell is reached from the keyboard, with focus shown", async ({ page }
   const [first] = await schoolIds(page);
   // Loaded afresh, so the first Tab starts from the top of the page.
   await page.goto(`/schools/${first}/persons`);
-  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
 
   const focused = () =>
     page.evaluate(() => {

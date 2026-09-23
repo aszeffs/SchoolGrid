@@ -19,9 +19,19 @@ export function schoolsList(page: Page) {
   return page.getByRole("list", { name: "Schools" }).getByRole("listitem");
 }
 
+/** The Persons as rows of the record; the head row names no Person. */
+export function personsRecord(page: Page) {
+  return page.getByRole("table", { name: "Persons" }).getByRole("row");
+}
+
 /** The pending Invitations as rows of the record; the head row names no Person. */
 export function pendingInvitations(page: Page) {
   return page.getByRole("table", { name: "Pending Invitations" }).getByRole("row");
+}
+
+/** Moves to another page within the School the way the navigation offers it. */
+export async function openSection(page: Page, label: string) {
+  await page.getByRole("navigation").getByRole("link", { name: label }).click();
 }
 
 export async function openSchool(page: Page, name: string) {
@@ -34,9 +44,9 @@ export async function addPerson(page: Page, displayName: string) {
 }
 
 /**
- * Issues the Person's Invitation, leaving its link on the screen. The link is
- * held in a dialog that only the acknowledgement closes, so a spec that has
- * read it goes on through `acknowledgeIssuedLink`.
+ * Issues the Person's Invitation from the Persons sheet, leaving its link on the
+ * screen. The link is held in a dialog that only the acknowledgement closes, so
+ * a spec that has read it goes on through `acknowledgeIssuedLink`.
  */
 export async function issueInvitationFor(page: Page, displayName: string) {
   await page.getByRole("button", { name: `Invite ${displayName}` }).click();
@@ -50,7 +60,11 @@ export function revokeButtonFor(page: Page, displayName: string) {
   return page.getByRole("button", { name: `Revoke the Invitation for ${displayName}` });
 }
 
-/** Revokes the Person's Invitation, through the confirmation that names what that does. */
+/**
+ * Revokes the Person's Invitation, through the confirmation that names what that
+ * does. Revoking is offered on the Invitations sheet, so the page is already
+ * there.
+ */
 export async function revokeInvitationFor(page: Page, displayName: string) {
   await revokeButtonFor(page, displayName).click();
   await page.getByRole("button", { name: "Revoke the Invitation", exact: true }).click();

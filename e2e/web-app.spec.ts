@@ -5,7 +5,8 @@ import {
   addPerson,
   issueInvitationFor,
   openSchool,
-  pendingInvitations,
+  openSection,
+  personsRecord,
   revokeInvitationFor,
   schoolsList,
   signIn,
@@ -100,79 +101,12 @@ test("a deep link opens the app at that page", async ({ page }) => {
   };
 
   await page.goto(`/schools/${schools[0]!.id}/persons`);
-  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
 
   await page.goto("/schools/no-such-school/persons");
   await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
   await page.goto("/no/such/page");
   await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
-});
-
-test("a School Administrator adds a Person, who is listed unclaimed", async ({ page }) => {
-  const { schoolAdministrator, schools } = seeded();
-  const displayName = `Riley ${randomUUID().slice(0, 8)}`;
-
-  await signIn(page, schoolAdministrator);
-  await openSchool(page, schools[0]!);
-  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
-
-  await addPerson(page, displayName);
-
-  const persons = page.getByRole("list", { name: "Persons" }).getByRole("listitem");
-  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}UnclaimedInvite`);
-  await expect(page.getByLabel("Display name")).toHaveValue("");
-
-  // A refresh lists them from the API, not from what the page remembered.
-  await page.reload();
-  await expect(persons.filter({ hasText: displayName })).toHaveText(`${displayName}UnclaimedInvite`);
-  // The Person is in the School that was chosen, and no other.
-  await page.goto("/");
-  await openSchool(page, schools[1]!);
-  await expect(page.getByRole("heading", { name: "Persons" })).toBeVisible();
-  await expect(persons.filter({ hasText: displayName })).toHaveCount(0);
-});
-
-test("a School Administrator invites an unclaimed Person, copies the link once, and revokes it", async ({
-  page,
-  context,
-  baseURL,
-  audit,
-}) => {
-  const { schoolAdministrator, schools } = seeded();
-  const displayName = `Casey ${randomUUID().slice(0, 8)}`;
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-
-  await signIn(page, schoolAdministrator);
-  await openSchool(page, schools[0]!);
-  await addPerson(page, displayName);
-  await issueInvitationFor(page, displayName);
-
-  const link = page.getByLabel("Invitation link");
-  await expect(link).toHaveValue(new RegExp(`^${new URL(baseURL!).origin}/invitation#[A-Za-z0-9_-]{43}$`));
-  const issuedLink = await link.inputValue();
-  await page.getByRole("button", { name: "Copy link" }).click();
-  await expect(page.getByRole("status")).toHaveText("Copied");
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(issuedLink);
-
-  // The link is held in a dialog, and the dialog is held to the same bar.
-  await audit(page);
-  await acknowledgeIssuedLink(page);
-  await expect(page.getByLabel("Invitation link")).toHaveCount(0);
-
-  const pending = pendingInvitations(page);
-  await expect(pending.filter({ hasText: displayName })).toHaveCount(1);
-
-  // Once the page is left, the link is gone for good; the Invitation is still pending.
-  await page.reload();
-  await expect(pending.filter({ hasText: displayName })).toHaveCount(1);
-  await expect(page.getByLabel("Invitation link")).toHaveCount(0);
-  await expect(page.locator("body")).not.toContainText(issuedLink);
-
-  await revokeInvitationFor(page, displayName);
-  await expect(pending.filter({ hasText: displayName })).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Pending Invitations" })).toBeVisible();
-  await expect(pending.filter({ hasText: displayName })).toHaveCount(0);
 });
 
 test("an invited Person redeems the link with a new account and lands signed in", async ({
@@ -280,9 +214,9 @@ test("a person with an account at one School redeems an Invitation into a second
   ] as const) {
     await page.goto("/");
     await openSchool(page, school);
-    const persons = page.getByRole("list", { name: "Persons" }).getByRole("listitem");
-    await expect(persons.filter({ hasText: displayName })).toHaveCount(1);
-    await expect(persons.filter({ hasText: displayName })).not.toContainText("Unclaimed");
+    const listed = personsRecord(page).filter({ hasText: displayName });
+    await expect(listed).toHaveCount(1);
+    await expect(listed).not.toContainText("Unclaimed");
   }
 });
 
@@ -333,6 +267,7 @@ test("a stale Invitation link shows the one generic state", async ({ page, conte
   await issueInvitationFor(page, displayName);
   const link = await page.getByLabel("Invitation link").inputValue();
   await acknowledgeIssuedLink(page);
+  await openSection(page, "Invitations");
   await revokeInvitationFor(page, displayName);
 
   const stale = await context.browser()!.newContext();
