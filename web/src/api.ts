@@ -74,6 +74,34 @@ export interface Session {
   schools: ReachedSchool[];
 }
 
+/** What a Guardian link permits, each permission independent of the other. */
+export interface AccessProfile {
+  attendanceRead: boolean;
+  resultsRead: boolean;
+}
+
+/** One Student the actor reaches as their Guardian, and what that link permits. */
+export interface LinkedStudent {
+  student: { id: string; displayName: string };
+  accessProfile: AccessProfile;
+}
+
+/**
+ * What the actor holds in one School, as their own facts: the roles in force,
+ * the Enrollment they hold as a Student, and the Students they reach as a
+ * Guardian.
+ *
+ * Read on every visit rather than taken from the session, which names the
+ * School and the Person but nothing either of these depends on.
+ */
+export interface OwnAccount {
+  person: { id: string; displayName: string };
+  roles: Role[];
+  /** Null for a Person holding no Student membership, and for a Student never enrolled. */
+  enrollment: { startedAt: string; endedAt: string | null } | null;
+  linkedStudents: LinkedStudent[];
+}
+
 export interface ListedPerson {
   id: string;
   displayName: string;
@@ -139,6 +167,7 @@ export const api = {
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
+  account: (schoolId: string) => request<{ account: OwnAccount }>("GET", inSchool(schoolId, "/account")),
   persons: (schoolId: string) => request<{ persons: ListedPerson[] }>("GET", inSchool(schoolId, "/persons")),
   createPerson: (schoolId: string, person: { displayName: string }) =>
     request<{ person: ListedPerson }>("POST", inSchool(schoolId, "/persons"), person),

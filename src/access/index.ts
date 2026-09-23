@@ -1,6 +1,7 @@
 import type { Authentication, AuthenticationFailure, UserAccount } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import {
+  findPerson,
   personFor,
   platformAdministratorFor,
   schoolsReachedBy,
@@ -10,8 +11,8 @@ import {
   type School,
 } from "../identity/index.ts";
 import { invitationState, type Invitation, type InvitationState } from "../identity/invitations.ts";
-import { hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
-import { linkedStudentIds, type GuardianLink } from "./guardian-links.ts";
+import { currentEnrollmentOf, hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
+import { guardianLinksHeldBy, linkedStudentIds, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 import {
   activeRoles,
   ROLES,
@@ -29,7 +30,7 @@ import {
  */
 export { grantMembership, ROLES, type Membership, type Role } from "./memberships.ts";
 export { recordEnrollment, type Enrollment } from "./enrollments.ts";
-export type { AccessProfile, GuardianLink } from "./guardian-links.ts";
+export { linkGuardian, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 
 /**
  * Why a request was refused. It is written to the Audit record, where a School
@@ -252,6 +253,78 @@ export async function actorInEachSchool(
     });
   }
   return reached;
+}
+
+/**
+ * One Student an actor reaches as their Guardian, and what that link's Access
+ * profile permits. Read-only: changing a profile is a School Administrator's,
+ * through the Guardian link routes.
+ */
+export interface LinkedStudent {
+  student: { id: string; displayName: string };
+  accessProfile: AccessProfile;
+}
+
+/**
+ * What an actor holds in the School they are acting in, as their own facts:
+ * the roles in force, the Enrollment they hold as a Student, and the Students
+ * they reach as a Guardian.
+ */
+export interface OwnAccount {
+  person: { id: string; displayName: string };
+  roles: Role[];
+  /** The Enrollment as it stands, for an actor holding a Student membership; null otherwise. */
+  enrollment: { startedAt: string; endedAt: string | null } | null;
+  /** Empty for an actor who is not a Guardian, and for one linked to no Student. */
+  linkedStudents: LinkedStudent[];
+}
+
+/**
+ * What the actor can be told about themselves within one School.
+ *
+ * Every actor reaches this, and only about themselves: a Person's own record
+ * is never withheld from them, and nothing here reads beyond what their own
+ * memberships, Enrollment and links already say. The Students a Guardian is
+ * named are exactly the ones their links reach, which is what
+ * `decideReadRecordOf` already permits them to read.
+ *
+ * Facts, never a decision (ADR-0007). An Access profile appears because it is
+ * the actor's own standing, not so a page can act on it: the slices whose
+ * records it gates, Attendance and Term results, enforce it themselves.
+ */
+export async function ownAccount(database: Queryable, actor: Actor): Promise<OwnAccount> {
+  const standing = standingOf.get(actor);
+  const roles = ROLES.filter((role) => standing?.roles.has(role) ?? false);
+  const enrollment = holds(actor, "student")
+    ? await currentEnrollmentOf(database, actor.person)
+    : null;
+  const linkedStudents: LinkedStudent[] = [];
+  if (holds(actor, "guardian")) {
+    for (const link of await guardianLinksHeldBy(database, actor.person)) {
+      const student = await findPerson(database, link.studentPersonId);
+      // A link's Student cannot be absent; skipped rather than asserted, for
+      // the same reason actorInEachSchool skips a School without its Person.
+      if (student === null) {
+        continue;
+      }
+      linkedStudents.push({
+        student: { id: student.id, displayName: student.displayName },
+        accessProfile: link.accessProfile,
+      });
+    }
+  }
+  return {
+    person: { id: actor.person.id, displayName: actor.person.displayName },
+    roles,
+    enrollment:
+      enrollment === null
+        ? null
+        : {
+            startedAt: enrollment.startedAt.toISOString(),
+            endedAt: enrollment.endedAt?.toISOString() ?? null,
+          },
+    linkedStudents,
+  };
 }
 
 function holds(actor: Actor, role: Role): boolean {

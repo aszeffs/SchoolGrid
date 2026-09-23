@@ -77,8 +77,11 @@ test.describe("with demo mode on", () => {
       await page.goto("/sign-in");
       await page.getByRole("button", { name: `Sign in as ${role}`, exact: true }).click();
 
-      // Each demo account reaches the one School, so lands straight inside it.
-      await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
+      // Each demo account reaches the one School, so lands straight inside it:
+      // the School Administrator on its People, every other role on their own
+      // account (landing in web/src/routes.ts).
+      const opensOn = role === "School Administrator" ? "persons" : "account";
+      await expect(page).toHaveURL(new RegExp(`/schools/[^/]+/${opensOn}$`));
       await expect(page.getByRole("banner").getByText("Riverbend Demo School", { exact: true })).toBeVisible();
     });
   }

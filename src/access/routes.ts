@@ -13,6 +13,7 @@ import {
   authorizeGrantMembershipTo,
   authorizeManageMembership,
   authorizeManageMemberships,
+  ownAccount,
   type Actor,
 } from "./index.ts";
 import {
@@ -149,6 +150,17 @@ export function registerAccessRoutes(
   authenticator: Authenticator,
 ): void {
   registerSchoolScope(app, database, authenticator, (scope) => {
+    /*
+     * The actor's own standing in this School, and nothing of anyone else's
+     * beyond the Students their Guardian links already reach. Every actor
+     * resolved into the School reaches it, so there is no further decision to
+     * ask for: one who holds no membership in force never got this far
+     * (see resolveActor).
+     */
+    scope.get("/account", async (actor) => {
+      return { account: await ownAccount(database, actor) };
+    });
+
     scope.get("/memberships", async (actor) => {
       const schoolId = authorizeManageMemberships(actor);
       return { memberships: (await membershipsInSchool(database, schoolId)).map(present) };

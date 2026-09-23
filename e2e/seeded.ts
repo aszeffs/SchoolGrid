@@ -11,8 +11,17 @@ export interface Account {
 export interface Seeded {
   /** A School Administrator in every School below. */
   schoolAdministrator: Account;
-  /** A Faculty member in the first School below, and in no other. */
+  /**
+   * A Faculty member in the first School below, and in no other, who is also a
+   * Guardian of the Student below: one Person holding several roles.
+   */
   faculty: Account;
+  /** A Student in the first School, enrolled there. */
+  student: Account;
+  /** A Guardian in the first School, linked to that Student. */
+  guardian: Account;
+  /** What the Guardian's one link lets them read of the Student's. */
+  guardianAccessProfile: { attendanceRead: boolean; resultsRead: boolean };
   /** The names of the Schools that account reaches. */
   schools: string[];
 }

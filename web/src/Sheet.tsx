@@ -5,7 +5,7 @@ import { useShell } from "./ShellContext.ts";
  * The stock a sheet is run on. One per kind of sheet, so a School
  * Administrator knows which sheet is in front of them before reading a word.
  */
-export type Stock = "goldenrod" | "blue" | "canary" | "pink" | "mint" | "buff";
+export type Stock = "goldenrod" | "blue" | "canary" | "pink" | "mint" | "buff" | "salmon";
 
 /** Which sheet this is: the stock it runs on and the name struck in its head. */
 export interface SheetKind {

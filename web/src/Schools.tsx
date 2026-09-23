@@ -33,7 +33,7 @@ export function Schools({ schools }: { schools: ReachedSchool[] }) {
           {schools.map((school) => (
             <li key={school.schoolId}>
               <span className="roster__name">
-                <Link to={landing(school.schoolId)}>{school.name}</Link>
+                <Link to={landing(school.schoolId, school.roles)}>{school.name}</Link>
               </span>
               {/* The leader carries no text: a listed School reads as its name and nothing else. */}
               <span className="roster__leader" />

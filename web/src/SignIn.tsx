@@ -18,16 +18,19 @@ const ROLE_NAMES: Record<DemoAccount["role"], string> = {
  * describes.
  *
  * What these promise is what `SECTIONS` in routes.ts actually lists for those
- * roles, and no more: only the School Administrator reaches a page beyond
- * People. A line that sold the academic screens would mis-sell three roles of
- * the four, so each says plainly where its own screens stop.
+ * roles, and no more: the School Administrator runs the School, and every
+ * other role lands on their own account. A line that sold the academic screens
+ * would mis-sell three roles of the four, so each says plainly where its own
+ * screens stop.
  */
 const ROLE_SEES: Record<DemoAccount["role"], string> = {
   school_administrator:
     "Every Person in the School, with their Invitations, School memberships, Enrollments, Guardian links and Audit records.",
-  faculty: "The School's People. The Class Offerings they teach are not built yet.",
-  student: "The School's People. Their own published academic records are not built yet.",
-  guardian: "The School's People. The Student they are linked to is not built yet.",
+  faculty: "Their own account and the School's People. The Class Offerings they teach are not built yet.",
+  student:
+    "Their own account: the School memberships they hold, and their Enrollment. Their published academic records are not built yet.",
+  guardian:
+    "Their own account: each Student they are linked to, and what that link lets them read. Those records are not built yet.",
 };
 
 /** The id of the line describing a role, named once so button and line cannot drift apart. */

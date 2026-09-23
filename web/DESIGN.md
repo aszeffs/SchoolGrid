@@ -11,6 +11,7 @@ colors:
   stock-pink: "#edd9e4"
   stock-mint: "#cbe0ce"
   stock-buff: "#e8cdb5"
+  stock-salmon: "#eab9a1"
   rule: "color-mix(in srgb, #3b2a6b 42%, transparent)"
   rule-faint: "color-mix(in srgb, #3b2a6b 18%, transparent)"
   wash: "color-mix(in srgb, #3b2a6b 9%, transparent)"
@@ -168,11 +169,11 @@ SchoolGrid is printed, not rendered. Every screen is one run off a spirit duplic
 
 Density is a working document's, not a dashboard's: hairline-ruled rosters, a two-column head separated by a 3px double rule, a legend held level beside the record, and a foot that closes the sheet with a registration mark and the words "End of sheet". Chrome is limited to three devices, all of them printer's marks: the stapled corner struck across the top-left gutter, the registration target at the foot, and the drum-wear texture in the stock itself. State prints itself into the record as a struck mark rather than appearing as coloured product chrome.
 
-The system is bound by three constraints that outrank expression, and the build honours all three. The Content Security Policy permits no inline `<style>`, no `style=` attribute, no `on*=` handler and no `data:` inlining, and `vite.config.ts` fails the build on any of them — every rule in this document lives in `src/styles.css` and nowhere else. UI copy uses `CONTEXT.md` domain vocabulary verbatim (School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment). WCAG 2.2 AA is binding: both inks clear 4.5:1 on all six stocks, every interactive target is at least 2.25rem tall, and focus is a 3px solid ink outline offset 2px.
+The system is bound by three constraints that outrank expression, and the build honours all three. The Content Security Policy permits no inline `<style>`, no `style=` attribute, no `on*=` handler and no `data:` inlining, and `vite.config.ts` fails the build on any of them — every rule in this document lives in `src/styles.css` and nowhere else. UI copy uses `CONTEXT.md` domain vocabulary verbatim (School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment). WCAG 2.2 AA is binding: both inks clear 4.5:1 on all seven stocks, every interactive target is at least 2.25rem tall, and focus is a 3px solid ink outline offset 2px.
 
 **Key Characteristics:**
 - One ink (violet) plus one stamp (oxblood red) for refusal and revocation only
-- Six saturated copy stocks, one per sheet, flooding the whole viewport
+- Seven saturated copy stocks, one per sheet, flooding the whole viewport
 - Typewriter strike for every record and figure; stencil caps for heads and actions
 - Zero shadows, zero rounded corners, zero floating panels
 - Violet hairlines and 3px double rules carry all structure
@@ -180,7 +181,7 @@ The system is bound by three constraints that outrank expression, and the build 
 
 ## Colors
 
-A one-ink press with a six-stock paper drawer: the colour range lives in the paper, never in the ink.
+A one-ink press with a seven-stock paper drawer: the colour range lives in the paper, never in the ink.
 
 ### Primary
 - **Aniline Violet** (`{colors.ink}`): the only ink in the system. Body copy, headings, rules, borders, roster text, the filled primary button, list markers, the caret and the selection highlight are all this one value. Darkened from a true duplicator violet until it clears 4.5:1 on every stock, goldenrod included.
@@ -190,13 +191,14 @@ A one-ink press with a six-stock paper drawer: the colour range lives in the pap
 - **Office Stamp Oxblood** (`{colors.stamp}`): the rubber stamp, the only second colour the office ever saw. Used exclusively for destructive and failed states — the error block's border and text, and the revoke action. It is never decorative and never a heading colour.
 
 ### Tertiary
-The six copy stocks. One stock is assigned per kind of sheet so a School Administrator knows which sheet is in front of them before reading a word. The stock is set once on `.sheet` and inherited; it is never set on an element inside the sheet.
+The seven copy stocks. One stock is assigned per kind of sheet so a School Administrator knows which sheet is in front of them before reading a word. The stock is set once on `.sheet` and inherited; it is never set on an element inside the sheet.
 - **Goldenrod** (`{colors.stock-goldenrod}`): Persons — the roster sheet, the system's first viewport.
 - **Canary** (`{colors.stock-canary}`): Sign in. Also the default stock for any sheet that does not name one.
 - **Duplicator Blue** (`{colors.stock-blue}`): Schools.
 - **Carbon Pink** (`{colors.stock-pink}`): Redeem Invitation.
 - **Ledger Mint** (`{colors.stock-mint}`): How this was built.
 - **Manila Buff** (`{colors.stock-buff}`): Not available.
+- **Duplicator Salmon** (`{colors.stock-salmon}`): Your account — what one Person holds in one School.
 
 ### Neutral
 There are no neutrals. Where a lighter or darker plane is needed, the ink is mixed into the stock rather than a grey being introduced.
