@@ -9,6 +9,7 @@ import { Link } from "./Link.tsx";
 import { Memberships } from "./Memberships.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { ROLE_NAMES } from "./roles.ts";
 import { Persons } from "./Persons.tsx";
 import { href, landing, sectionOf, sectionsFor, type Route, type SchoolRoute } from "./routes.ts";
 import { Schools } from "./Schools.tsx";
@@ -76,7 +77,7 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
     // Named for the page on its way, and nothing more: no School is named
     // until the session says the account reaches it.
     const name = route === null ? "Not available" : route.name === "schools" ? "Schools" : sectionOf(route).label;
-    return <Sheet stock="blue" name={name} busy />;
+    return <Sheet name={name} busy />;
   }
 
   const { session } = state;
@@ -126,7 +127,14 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
       <div className="shell-head">
         <div className="shell-head__who">
           <p className="shell-head__school">{school.name}</p>
-          {who(school.displayName)}
+          <div className="shell-head__actor">
+            {who(school.displayName)}
+            <ul className="held" aria-label={`Your roles in ${school.name}`}>
+              {school.roles.map((role) => (
+                <li key={role}>{ROLE_NAMES[role]}</li>
+              ))}
+            </ul>
+          </div>
         </div>
         <div className="actions">
           <Switcher current={school} schools={session.schools} />
@@ -142,6 +150,8 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
               <Link to={{ name: section.name, schoolId: school.schoolId }} current={section.name === route.name}>
                 {section.label}
               </Link>
+              {/* The seal on the page being read: one, so a move slides it to the next. */}
+              {section.name === route.name && <span className="shell-nav__seal" aria-hidden="true" />}
             </li>
           ))}
         </ul>

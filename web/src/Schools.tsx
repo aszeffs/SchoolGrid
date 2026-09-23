@@ -10,7 +10,7 @@ import { Key, Sheet } from "./Sheet.tsx";
 export function Schools({ schools }: { schools: ReachedSchool[] }) {
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>The Schools your account reaches.</p>
       <dl>
         <Key term="School">
@@ -24,7 +24,7 @@ export function Schools({ schools }: { schools: ReachedSchool[] }) {
     </>
   );
   return (
-    <Sheet stock="blue" name="Schools" legend={legend}>
+    <Sheet name="Schools" legend={legend}>
       <h1>Your Schools</h1>
       {schools.length === 0 ? (
         <p className="empty">Your account does not reach any School yet.</p>

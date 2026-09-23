@@ -9,7 +9,7 @@ import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { byName, dayAfter, hasEnded, MOMENT, namesOf, startOfDay } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
-const SHEET: SheetKind = { stock: "canary", name: "School memberships" };
+const SHEET: SheetKind = { name: "School memberships" };
 
 /** A School's memberships, with the Persons they are held by so each can be named. */
 async function list(schoolId: string) {
@@ -96,7 +96,7 @@ function MembershipsSheet({
 
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>Every role held in this School, one row per role.</p>
       <dl>
         <Key term="School membership">

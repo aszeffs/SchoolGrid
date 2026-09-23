@@ -17,7 +17,6 @@ export function NotAvailable() {
   const shell = useShell();
   const sheet = (
     <Sheet
-      stock="buff"
       name="Not available"
       foot={
         <p>

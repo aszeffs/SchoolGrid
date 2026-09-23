@@ -10,7 +10,7 @@ import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { byName, DAY, holdingNowOrLater, namesOf } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
-const SHEET: SheetKind = { stock: "mint", name: "Enrollments" };
+const SHEET: SheetKind = { name: "Enrollments" };
 
 /**
  * A School's Enrollments, and what ending one would reach: the Persons to name
@@ -105,7 +105,7 @@ function EnrollmentsSheet({
 
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>Every Student’s participation in this School, open and ended.</p>
       <dl>
         <Key term="Enrollment">

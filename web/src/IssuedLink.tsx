@@ -50,7 +50,7 @@ export function IssuedLink({ issued, onDone }: { issued: IssuedInvitation; onDon
         <button type="button" onClick={copy}>
           Copy link
         </button>
-        <span role="status" className={copied ? "mark mark--struck" : "mark"}>
+        <span role="status" className={copied ? "mark mark--filled" : "mark"}>
           {copied ? "Copied" : ""}
         </span>
       </div>

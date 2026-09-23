@@ -1,350 +1,376 @@
 ---
 name: SchoolGrid
-description: A school office's own printing press — one aniline violet ink struck onto coloured copy stock that floods the frame.
+description: An official school record, set calm and hyperlegible, with one seal blue for what can be acted on and what is current.
 colors:
-  ink: "#3b2a6b"
-  ink-soft: "#4f3d7a"
-  stamp: "#8e1e26"
-  stock-goldenrod: "#f2c14e"
-  stock-canary: "#f7e7a6"
-  stock-blue: "#c9dae8"
-  stock-pink: "#edd9e4"
-  stock-mint: "#cbe0ce"
-  stock-buff: "#e8cdb5"
-  stock-salmon: "#eab9a1"
-  rule: "color-mix(in srgb, #3b2a6b 42%, transparent)"
-  rule-faint: "color-mix(in srgb, #3b2a6b 18%, transparent)"
-  wash: "color-mix(in srgb, #3b2a6b 9%, transparent)"
-  wash-strong: "color-mix(in srgb, #3b2a6b 15%, transparent)"
+  page: "#f7f8fa"
+  band: "#eceff4"
+  field: "#ffffff"
+  ink: "#18202e"
+  ink-soft: "#4a5467"
+  seal: "#234aa6"
+  seal-strong: "#1a3a88"
+  on-seal: "#ffffff"
+  alarm: "#a3262d"
+  rule: "color-mix(in srgb, #18202e 22%, transparent)"
+  rule-faint: "color-mix(in srgb, #18202e 11%, transparent)"
+  wash: "color-mix(in srgb, #18202e 5%, transparent)"
+  wash-seal: "color-mix(in srgb, #234aa6 8%, transparent)"
+  dark-page: "#12161d"
+  dark-band: "#1a1f28"
+  dark-field: "#0d1016"
+  dark-ink: "#e5e8ee"
+  dark-ink-soft: "#a4adbb"
+  dark-seal: "#8eaefc"
+  dark-seal-strong: "#b3c8ff"
+  dark-on-seal: "#0d1321"
+  dark-alarm: "#ff9d97"
+  dark-rule: "color-mix(in srgb, #e5e8ee 20%, transparent)"
+  dark-rule-faint: "color-mix(in srgb, #e5e8ee 10%, transparent)"
+  dark-wash: "color-mix(in srgb, #e5e8ee 6%, transparent)"
+  dark-wash-seal: "color-mix(in srgb, #8eaefc 12%, transparent)"
 typography:
   display:
-    fontFamily: "Stardos Stencil, Courier Prime, monospace"
-    fontSize: "clamp(2rem, 5.5vw, 3.25rem)"
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
+    fontSize: "2rem"
     fontWeight: 700
-    lineHeight: 1.05
-    letterSpacing: "0.02em"
+    lineHeight: 1.15
+    letterSpacing: "-0.02em"
   headline:
-    fontFamily: "Stardos Stencil, Courier Prime, monospace"
-    fontSize: "1.05rem"
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
+    fontSize: "1.75rem"
     fontWeight: 700
-    lineHeight: 1.6
-    letterSpacing: "0.22em"
+    lineHeight: 1.2
+    letterSpacing: "-0.015em"
   title:
-    fontFamily: "Courier Prime, Courier New, monospace"
-    fontSize: "0.9rem"
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
+    fontSize: "1.375rem"
     fontWeight: 700
-    lineHeight: 1.6
-    letterSpacing: "0.18em"
+    lineHeight: 1.3
+    letterSpacing: "-0.01em"
+  lead:
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 700
+    lineHeight: 1.35
   body:
-    fontFamily: "Courier Prime, Courier New, monospace"
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
-    lineHeight: 1.6
-    letterSpacing: "normal"
+    lineHeight: 1.55
   label:
-    fontFamily: "Courier Prime, Courier New, monospace"
-    fontSize: "0.78rem"
-    fontWeight: 700
-    lineHeight: 1.6
-    letterSpacing: "0.18em"
-  caption:
-    fontFamily: "Courier Prime, Courier New, monospace"
-    fontSize: "0.72rem"
-    fontWeight: 700
-    lineHeight: 1.6
-    letterSpacing: "0.2em"
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 650
+    lineHeight: 1.5
+  small:
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
+    fontSize: "0.8125rem"
+    fontWeight: 650
+  figures:
+    fontFamily: "Atkinson Hyperlegible Mono, ui-monospace, monospace"
+    fontSize: "0.8125rem"
+    fontWeight: 400
+    fontFeature: "tnum"
 rounded:
-  none: "0"
-  mark: "50%"
+  corner: "4px"
+  fine: "2px"
+  disc: "50%"
 spacing:
-  step: "0.5rem"
-  xs: "0.375rem"
-  sm: "0.75rem"
-  md: "1rem"
-  lg: "1.5rem"
-  xl: "2rem"
-  2xl: "2.5rem"
-  3xl: "3rem"
-  gutter: "clamp(1.25rem, 4vw, 3rem)"
+  step: "8px"
+  half: "4px"
+  step-1-5: "12px"
+  step-2: "16px"
+  step-3: "24px"
+  step-4: "32px"
+  step-6: "48px"
+  step-8: "64px"
+  gutter: "clamp(1rem, 4vw, 2.5rem)"
+  measure: "68ch"
+  frame: "78rem"
 components:
   button-primary:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.stock-canary}"
-    typography: "{typography.headline}"
-    rounded: "{rounded.none}"
-    padding: "0.625rem 1.5rem"
+    backgroundColor: "{colors.seal}"
+    textColor: "{colors.on-seal}"
+    typography: "{typography.body}"
+    rounded: "{rounded.corner}"
+    padding: "0 20px"
     height: "2.75rem"
   button-primary-hover:
-    backgroundColor: "color-mix(in srgb, #3b2a6b 82%, #000)"
-    textColor: "{colors.stock-canary}"
+    backgroundColor: "{colors.seal-strong}"
+    textColor: "{colors.on-seal}"
   button-ghost:
     backgroundColor: "transparent"
-    textColor: "{colors.ink}"
-    typography: "{typography.headline}"
-    rounded: "{rounded.none}"
-    padding: "0.625rem 1.5rem"
+    textColor: "{colors.seal}"
+    rounded: "{rounded.corner}"
+    padding: "0 20px"
     height: "2.75rem"
   button-ghost-hover:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.stock-canary}"
+    backgroundColor: "{colors.wash-seal}"
+    textColor: "{colors.seal-strong}"
   button-quiet:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
-    padding: "0.375rem 0.75rem"
-    height: "2.25rem"
+    typography: "{typography.label}"
+    rounded: "{rounded.corner}"
+    padding: "0 14px"
+    height: "2.5rem"
+  button-quiet-hover:
+    backgroundColor: "{colors.wash-seal}"
+    textColor: "{colors.seal-strong}"
   button-stamp:
     backgroundColor: "transparent"
-    textColor: "{colors.stamp}"
-    rounded: "{rounded.none}"
-    padding: "0.625rem 1rem"
+    textColor: "{colors.alarm}"
+    typography: "{typography.label}"
+    rounded: "{rounded.corner}"
+    padding: "0 14px"
     height: "2.75rem"
   button-disabled:
     backgroundColor: "transparent"
     textColor: "{colors.ink-soft}"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.corner}"
   input:
-    backgroundColor: "{colors.wash}"
+    backgroundColor: "{colors.field}"
     textColor: "{colors.ink}"
     typography: "{typography.body}"
-    rounded: "{rounded.none}"
-    padding: "0.625rem 0.625rem"
+    rounded: "{rounded.corner}"
+    padding: "9px 12px"
     height: "2.75rem"
-  input-focus:
-    backgroundColor: "{colors.wash-strong}"
-    textColor: "{colors.ink}"
-  mark-struck:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.stock-canary}"
-    typography: "{typography.caption}"
-    rounded: "{rounded.none}"
-    padding: "0.2rem 0.55rem"
-  mark-open:
+  role-label:
     backgroundColor: "transparent"
-    textColor: "{colors.ink}"
-    typography: "{typography.caption}"
-    rounded: "{rounded.none}"
-    padding: "calc(0.2rem - 1px) calc(0.55rem - 1px)"
-  slip:
-    backgroundColor: "{colors.wash}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
-    padding: "1.5rem"
-  slip-held:
-    backgroundColor: "color-mix(in srgb, #3b2a6b 9%, var(--stock))"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
-    padding: "1.5rem"
-  slip-held-veil:
-    backgroundColor: "color-mix(in srgb, #3b2a6b 55%, transparent)"
-  record-head:
+    textColor: "{colors.seal}"
+    typography: "{typography.small}"
+    rounded: "{rounded.fine}"
+    padding: "1px 7px"
+  tab:
     backgroundColor: "transparent"
+    textColor: "{colors.ink-soft}"
+    typography: "{typography.label}"
+    rounded: "{rounded.corner}"
+    padding: "0 16px"
+    height: "2.75rem"
+  tab-current:
+    backgroundColor: "{colors.page}"
+    textColor: "{colors.ink}"
+  switcher:
+    backgroundColor: "{colors.field}"
     textColor: "{colors.ink}"
     typography: "{typography.label}"
-    rounded: "{rounded.none}"
-    padding: "0 1rem 0.625rem 0"
-  record-row:
+    rounded: "{rounded.corner}"
+    padding: "0 14px"
+    height: "2.5rem"
+  mark-filled:
+    backgroundColor: "{colors.seal}"
+    textColor: "{colors.seal}"
+    rounded: "{rounded.disc}"
+    size: "0.625rem"
+  mark-open:
     backgroundColor: "transparent"
+    textColor: "{colors.seal}"
+    rounded: "{rounded.disc}"
+    size: "0.625rem"
+  mark-struck:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-soft}"
+    rounded: "{rounded.disc}"
+    size: "0.625rem"
+  record-head:
+    textColor: "{colors.ink-soft}"
+    typography: "{typography.label}"
+    padding: "0 12px 8px 8px"
+  record-cell:
     textColor: "{colors.ink}"
     typography: "{typography.body}"
-    rounded: "{rounded.none}"
-    padding: "0.875rem 1rem 0.875rem 0"
-  record-row-hover:
-    backgroundColor: "{colors.wash}"
+    padding: "12px 12px 12px 8px"
+  slip:
+    backgroundColor: "{colors.field}"
     textColor: "{colors.ink}"
+    padding: "24px"
+  notice:
+    backgroundColor: "{colors.wash-seal}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.corner}"
+    padding: "12px 16px"
   error:
+    textColor: "{colors.alarm}"
+    rounded: "{rounded.corner}"
+    padding: "10px 14px"
+  empty:
     backgroundColor: "transparent"
-    textColor: "{colors.stamp}"
-    rounded: "{rounded.none}"
-    padding: "0.625rem 0.75rem"
+    textColor: "{colors.ink-soft}"
+    rounded: "{rounded.corner}"
+    padding: "32px 16px"
 ---
 
 # Design System: SchoolGrid
 
 ## Overview
 
-**Creative North Star: "The Ditto Sheet"**
+**Creative North Star: "The School Report"**
 
-SchoolGrid is printed, not rendered. Every screen is one run off a spirit duplicator's drum: a single aniline violet ink struck onto coloured copy stock, with the stock flooding the entire frame edge to edge. The record *is* the page. There is no card, no panel, no container, and no grey page behind anything — the arrangement every school portal ships (white cards floating on grey behind a left nav rail) is the thing this world exists to refuse.
+Every screen reads as an official school record: whom it concerns, who is acting, and what was recorded, in that order. The reading field is calm and nearly colourless, cool near-white in light and deep slate in dark, and a single seal blue marks what can be acted on and what is current. Colour lives in hairline edges and seal marks, never in large fills beyond the one primary button.
 
-Density is a working document's, not a dashboard's: hairline-ruled rosters, a two-column head separated by a 3px double rule, a legend held level beside the record, and a foot that closes the sheet with a registration mark and the words "End of sheet". Chrome is limited to three devices, all of them printer's marks: the stapled corner struck across the top-left gutter, the registration target at the foot, and the drum-wear texture in the stock itself. State prints itself into the record as a struck mark rather than appearing as coloured product chrome.
+The page is a report: a full-width band carries the wordmark, the School's name set as the largest type on the page, "Signed in as" with the roles held, and the section tabs; the current tab is lifted onto the page and wears the seal along its top edge. Below, a narrow key sits at the left edge beside a wide ruled record. Density is comfortable, not cramped: 44px controls, ruled rows at least 56px tall on rosters, and a 68ch reading measure.
 
-The system is bound by three constraints that outrank expression, and the build honours all three. The Content Security Policy permits no inline `<style>`, no `style=` attribute, no `on*=` handler and no `data:` inlining, and `vite.config.ts` fails the build on any of them — every rule in this document lives in `src/styles.css` and nowhere else. UI copy uses `CONTEXT.md` domain vocabulary verbatim (School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment). WCAG 2.2 AA is binding: both inks clear 4.5:1 on all seven stocks, every interactive target is at least 2.25rem tall, and focus is a 3px solid ink outline offset 2px.
+The system refuses the portal default (white cards on grey behind a left rail) and any themed costume, including the ditto sheet it replaced. There are two renditions, light and dark, and the browser's own setting picks between them (ADR-0010); there is no manual toggle.
 
 **Key Characteristics:**
-- One ink (violet) plus one stamp (oxblood red) for refusal and revocation only
-- Seven saturated copy stocks, one per sheet, flooding the whole viewport
-- Typewriter strike for every record and figure; stencil caps for heads and actions
-- Zero shadows, zero rounded corners, zero floating panels
-- Violet hairlines and 3px double rules carry all structure
-- Exactly one animation in the app: the drum pass on sheet entry
+- One hyperlegible sans for words, its mono cut for identifiers and codes, tabular figures in records.
+- One hue (seal blue) for action, current place and state marks; alarm red only for errors and actions that take something away.
+- State is always a word with a mark beside it: filled, ringed or struck disc.
+- Ruled, flat surfaces: hairlines and a one-step tonal band, no shadows.
+- A fixed type scale that does not grow with the window.
+- Every colour is a token defined for both renditions.
 
 ## Colors
 
-A one-ink press with a seven-stock paper drawer: the colour range lives in the paper, never in the ink.
+A cool achromatic reading field with a single seal blue, and a sanctioned alarm red held back for loss and error. Each role has a light value and a dark value (`dark-*` in the frontmatter) swapped under `prefers-color-scheme: dark`.
 
 ### Primary
-- **Aniline Violet** (`{colors.ink}`): the only ink in the system. Body copy, headings, rules, borders, roster text, the filled primary button, list markers, the caret and the selection highlight are all this one value. Darkened from a true duplicator violet until it clears 4.5:1 on every stock, goldenrod included.
-- **Washed Violet** (`{colors.ink-soft}`): the same ink laid down thinner. Reserved for secondary voice — the legend's body text, the sheet number, the foot line, expiry lines, `.muted` copy, and disabled control text. Never used for a record's own value.
+- **Seal Blue** (`seal`; dark `dark-seal`): primary buttons, links, the lifted tab's top edge, the wordmark's ruled square, role labels, focus rings, text caret, checkbox accent, and filled and ringed state marks. In dark it lightens so it still clears 4.5:1 as text.
+- **Deep Seal** (`seal-strong`; dark `dark-seal-strong`): hover for primary buttons and links, and hover text on ghost and quiet buttons.
+- **On Seal** (`on-seal`; dark `dark-on-seal`): text on a filled seal button. White in light, near-black navy in dark, where the button fill is pale.
 
 ### Secondary
-- **Office Stamp Oxblood** (`{colors.stamp}`): the rubber stamp, the only second colour the office ever saw. Used exclusively for destructive and failed states — the error block's border and text, and the revoke action. It is never decorative and never a heading colour.
-
-### Tertiary
-The seven copy stocks. One stock is assigned per kind of sheet so a School Administrator knows which sheet is in front of them before reading a word. Where two sheets are two ends of one piece of business, they share a stock rather than a new one being cut — the drawer holds seven, and the range is the paper's, not the ink's. The stock is set once on `.sheet` and inherited; it is never set on an element inside the sheet.
-- **Goldenrod** (`{colors.stock-goldenrod}`): Persons — the roster sheet, the system's first viewport.
-- **Canary** (`{colors.stock-canary}`): Sign in, School memberships (listed as Roles), and Audit. Also the default stock for any sheet that does not name one, which is how Audit came by it: the trail is read, never worked in, and is not one end of any other sheet's business. Sign in and School memberships never meet: no one signing in holds a list of roles, and no one holding one is signing in.
-- **Duplicator Blue** (`{colors.stock-blue}`): Schools.
-- **Carbon Pink** (`{colors.stock-pink}`): the Invitation, both sides of it — Invitations, where a School Administrator holds what is pending, and Redeem Invitation, where a human claims a Person. The one stock covers both because they are the same business seen from its two ends, and no actor is ever asked to tell one from the other at a glance: an administrator holding a list never lands on a claim, and a claimant never holds a list.
-- **Ledger Mint** (`{colors.stock-mint}`): How this was built, and Enrollments. The one is a public page read once; the other is worked in, and a School Administrator does not move between them.
-- **Manila Buff** (`{colors.stock-buff}`): Not available.
-- **Duplicator Salmon** (`{colors.stock-salmon}`): Your account — what one Person holds in one School — and Guardian links, where a Guardian link's Access profile is set. The one stock covers both for the Invitation's reason: a link is set on the one and read on the other, the same business seen from its two ends.
+- **Alarm Red** (`alarm`; dark `dark-alarm`): the one sanctioned exception to the single hue. It appears only in the error block and on stamp buttons (actions that end, revoke or remove). It is used as text and outline, with at most a 9 to 10% wash behind; it never fills a control.
 
 ### Neutral
-There are no neutrals. Where a lighter or darker plane is needed, the ink is mixed into the stock rather than a grey being introduced.
-- **Rule** (`{colors.rule}`): the standard violet hairline — under headings, above rosters and facts lists, around `pre` blocks.
-- **Faint Rule** (`{colors.rule-faint}`): the between-rows hairline in a roster and the legend's right edge; quieter so rows read as a run, not as a table.
-- **Wash** (`{colors.wash}`) and **Strong Wash** (`{colors.wash-strong}`): ink bled into the stock. Wash fills inputs, code spans, `pre` blocks and the torn-off slip; Strong Wash is the hover/focus lift on inputs and links.
+- **Page** (`page`; dark `dark-page`): the reading plane, and the ground of the current tab.
+- **Band** (`band`; dark `dark-band`): the report head and tab row, and `pre` blocks; one step cooler (light) or lifted (dark) from the page.
+- **Field** (`field`; dark `dark-field`): inputs, the switcher button and its list, and the slip. White in light; darker than the page in dark, so fields read as wells.
+- **Ink** (`ink`; dark `dark-ink`): body text, headings, current tab text.
+- **Soft Ink** (`ink-soft`; dark `dark-ink-soft`): secondary text: the key's prose, column heads, fact terms, counts, identifiers, unmarked state words, struck marks, disabled text.
+- **Rule** (`rule`): section hairlines, control borders, record header underline, ringed-mark default.
+- **Faint Rule** (`rule-faint`): row dividers inside records and rosters, fieldset tops, the foot's hairline, phone tab grid gaps.
+- **Wash** (`wash`): hover on record rows and inactive tabs; inline code ground; the loading placeholder title bar.
+- **Seal Wash** (`wash-seal`): notice ground, and hover on ghost and quiet buttons and switcher entries.
 
 ### Named Rules
-**The One Ink Rule.** Violet is the only ink. If a new surface needs to distinguish something, it distinguishes it with a rule, a wash, caps, or a struck mark — not with a new hue. Oxblood is not an accent; it may appear only on a refusal, an error, or a revocation.
+**The One Seal Rule.** Seal blue is the only hue in the system. It marks what can be acted on, what is current, and what state a record is in. No second accent, no status greens or ambers.
 
-**The Flooded Stock Rule.** The stock paints the entire frame, edge to edge, with no margin and no container. A white panel on a grey page is forbidden, and cream and grey are not stocks in this family — they are the light ground this world exists to refuse.
+**The Alarm Exception Rule.** Alarm red is sanctioned for two things only: an error, named in words, and an action that takes something away (the stamp button and the confirming button in a removal slip). It is text and outline; it is never a fill and never the only signal.
 
-**The One Stock Per Sheet Rule.** `--stock` is overridden on the sheet, never on an element. Two stocks never appear in one viewport.
+**The Two Renditions Rule.** Every colour is a token defined for both light and dark. A rule that names a raw colour breaks one of the renditions.
 
 ## Typography
 
-**Display Font:** Stardos Stencil (self-hosted woff2, 400/700; falls back to Courier Prime, then monospace)
-**Body Font:** Courier Prime (self-hosted woff2, 400/400-italic/700; falls back to Courier New, then monospace)
-**Label/Mono Font:** Courier Prime — the body font is the mono font; there is no third face.
+**Body Font:** Atkinson Hyperlegible Next (variable 200 to 800, self-hosted, with system-ui, sans-serif)
+**Label/Mono Font:** Atkinson Hyperlegible Mono (variable 200 to 800, self-hosted, with ui-monospace, monospace)
 
-**Character:** A stencilled crate-mark meeting a typewriter carriage. The stencil says *this sheet was labelled*; the typewriter says *this record was struck, not rendered*. Both are self-hosted, so the world never falls back to a system display face.
+**Character:** A face drawn for readers with low vision, where I l 1, O 0 and rn m are told apart; it carries every heading and every word, so the School's name and a Person's name are read without doubt. The mono cut sets identifiers, action codes and inline code so columns of them line up.
 
 ### Hierarchy
-- **Display** (Stardos Stencil 700, `clamp(2rem, 5.5vw, 3.25rem)`, line-height 1.05, uppercase): the sheet's `h1`, one per page, closed with a violet hairline beneath it.
-- **Headline** (Stardos Stencil 700, 1.05rem, tracked 0.22em, uppercase): the SchoolGrid wordmark in the head, and — at 0.95rem with 0.16em tracking — every button label. Stencil means "struck onto the sheet by the office", so it marks identity and action, nothing else.
-- **Title** (Courier Prime 700, 0.9rem, tracked 0.18em, uppercase): section `h2`s inside the record.
-- **Body** (Courier Prime 400, 1rem, line-height 1.6, measure capped at 68ch): every record value, name, figure, paragraph and code span. Italic body is reserved for the empty state.
-- **Label** (Courier Prime 700, 0.78rem, tracked 0.18em, uppercase): form labels, facts-list terms, legend headings and legend terms. Inputs override the label's caps and tracking so typed values read as struck data.
-- **Caption** (Courier Prime 700, 0.72rem, tracked 0.2em, uppercase): status marks, the foot line; at 0.8rem/0.18em it carries the sheet's name and the signed-in line in the head.
+- **Display** (700, 2rem, 1.15, -0.02em): the School's name in the report head only; the largest type on any School page. Drops to 1.375rem below 52rem.
+- **Headline** (700, 1.75rem, 1.2, -0.015em, balanced wrap): the page title (`h1`).
+- **Title** (700, 1.375rem, 1.3, -0.01em): section headings (`h2`) and the slip's heading.
+- **Lead** (700, 1.125rem, 1.35): sub-sections (`h3`); roster names at 600.
+- **Body** (400, 1rem, 1.55): running text, inputs, buttons (at 650), record cells. Paragraphs and plain lists hold to 68ch.
+- **Label** (600 to 650, 0.875rem): form labels, column heads, fact terms, tabs, the key, state words, quiet and stamp buttons, the wordmark (at 750).
+- **Small** (650, 0.8125rem): role labels; the stacked field names on phone records.
+- **Figures** (Mono 400, 0.8125rem): identifiers under names and codes in records. Records set `tabular-nums` throughout.
 
 ### Named Rules
-**The Struck Record Rule.** Anything that is a record — a name, a figure, a date, an identifier — is set in Courier Prime. Stencil is for the wordmark, the page's one `h1`, button labels and the slip's heading. A record set in stencil is a defect.
+**The Fixed Ramp Rule.** One fixed scale (0.8125, 0.875, 1, 1.125, 1.375, 1.75, 2rem). A product's type does not grow with the window; the only responsive change is the School's name stepping down on a phone.
 
-**The Caps-and-Track Rule.** Every type role below 0.9rem is uppercase and tracked between 0.12em and 0.22em. Small type in this world is a printed label, never shrunken prose. The one exception is input text, which is sentence-case and untracked.
+**The One Family Rule.** One sans for all words, bold for emphasis, its mono cut for figures. No second display face, no uppercase tracking labels.
 
 ## Layout
 
-One sheet fills the viewport: a three-row grid (`head / body / foot`) at `min-height: 100dvh`, with the stock as its background and no outer margin. The head is a baseline-aligned flex row — wordmark plus sheet name at the left, contextual head content (the signed-in line and Sign out, joined inside a School by the School's name and the switcher) hard right — closed by a 3px double ink rule. The foot mirrors it with a 3px double rule above, the registration mark at the far left and "End of sheet" at the far right.
+The page is a three-row grid: the report head band, the section tabs, and the body. The band and tabs run the full width with their contents held to a 78rem frame, padded by a fluid gutter (clamp(1rem, 4vw, 2.5rem)). The body is a two-column grid, the key at 11 to 14rem and the record in the rest, separated by 48px; the record column caps at 62rem. Screens with no key use a single column.
 
-The body is a two-column grid: a `minmax(13rem, 17rem)` legend strip and a `minmax(0, 1fr)` record column, separated by `1.2 × gutter` and a faint vertical hairline. The legend is `position: sticky` at `top: 1rem` — held level so it never scrolls away from the record it explains. The record column caps at 62rem; prose inside it caps at 68ch. A sheet with no legend (a refusal, or a sheet still coming off the drum) switches to a single full-width column rather than leaving the strip empty.
+Spacing counts in an 8px step: 4, 6, 10, 12, 16, 20, 24, 32, 48 and 64px are the multiples in use. Headings open generous space above (48px before a section, 32px before a sub-section); forms stack at 20px and cap at 30rem.
 
-Rhythm is a 0.5rem step used in multiples: 0.75 and 1 for intra-control gaps, 1.5–2 for stacked blocks, 3 for heading separation, 4–6 for section breaks. Horizontal padding is always the gutter, `clamp(1.25rem, 4vw, 3rem)`.
+There is one breakpoint, 52rem. Below it: the School's name keeps its line with Sign out held at its right; the switcher list opens inside the head, full width, pushing the tabs down rather than covering them; the tabs become ruled rows of pages, three to a row, edge to edge, with a short last row stretched to fill; the key moves below the record behind a rule; records stack each row into an entry whose values carry their own field names; forms stretch to full width.
 
-There is one breakpoint, 52rem, and it does everything. Below it: the legend drops under the record (`order: 2`) with a hairline above instead of beside; forms stretch to full width; demo-role buttons go full width; the dotted leader in a roster row is hidden so the name takes the freed space; and the stapled corner is dropped, because the gutter is too narrow to hold it without crowding the head's type.
-
-### Named Rules
-**The Level Legend Rule.** The legend explains the sheet's own marks and never names a record. It stays sticky and visible while the record scrolls on wide sheets, and moves below the record — never away — on narrow ones.
-
-**The No Rail Rule.** There is no left nav rail. Inside a School, the School's pages are a single row of register tabs ruled under the head, wrapping rather than scrolling at 360px; everywhere else, movement between sheets happens through links struck into the record and its foot.
+The key (`legend`) is sticky at 24px from the top on wide screens, so it never scrolls away from the record it explains.
 
 ## Elevation & Depth
 
-This system has no shadows. `box-shadow` does not appear once in the stylesheet and must not be added: paper laid on a drum has no drop shadow, and a lifted card would reintroduce the floating panel this world refuses. Depth is entirely tonal and linear — ink mixed into the stock (9% wash, 15% strong wash) for recessed fields and slips, hairlines at 18% and 42% for structure, and a 3px double ink rule where a major plane changes (head, foot, the "Try a role" break).
-
-The only volumetric cue in the world is the press itself: the stock carries a fixed drum-wear texture — 1px violet pinstripes at 3% every 3px, plus a 5% wash falling off at 97° across the first 38% of the sheet, heavier where the roller bites and washed out toward the tail. That texture is part of the paper and is never used to imply an element is raised.
-
-Motion is one gesture. On sheet entry, a fixed full-viewport violet gradient wipes top to bottom over 560ms `cubic-bezier(0.16, 1, 0.3, 1)` — the drum pass. It is an overlay with `pointer-events: none`, so no content is ever hidden waiting for it, and it is the only animation in the app. Controls carry short state transitions only (140ms ease-out on colour, 90ms on the button's 1px press). `prefers-reduced-motion: reduce` removes both.
+The system is flat. There are no shadows anywhere. Depth is tonal and ruled: the band sits one step off the page, hairlines close each part, and the current tab is "lifted" only by taking the page's ground and borders while the band's closing rule stops under it. The only things that sit over the page are the switcher list (field ground, rule border) and the slip dialog over a dark 55% veil.
 
 ### Named Rules
-**The No Shadow Rule.** No `box-shadow`, no `filter: drop-shadow`, no hard offset shadow, ever — including as a "brutalist" device. Separation is a rule, a wash, or a double rule.
-
-**The One Pass Rule.** The drum pass is the only animation in the system. New surfaces inherit it by being a sheet; they do not add entrances, parallax, or scroll-triggered motion.
-
-**The Honest Gradient Rule.** Gradients exist in this world only as printing artifacts and drawn marks — drum wear, the dotted leader, the registration target, the drum pass. A gradient used to imply light, gloss or elevation is forbidden.
+**The Ruled, Not Raised Rule.** Separate things with hairlines and the band's one tonal step, never with shadow or a floating card in the reading plane.
 
 ## Shapes
 
-Every corner in the system is square. `border-radius` is `0` on buttons and inputs — set explicitly, because the browser default is not — and no card, panel or chip exists to round. The single curved shape in the world is the registration mark at the foot: a 1.5rem circle, 2px ink border, crossed by two 8%-wide ink bars drawn as gradients.
-
-Form language is drawn with rules, not with boxes. An input is a wash field with no border except a 2px ink underline that thickens to 3px on focus. A roster row is a name, a dotted leader, and a state mark separated by a 1px faint hairline — never a bordered cell. Where a real boundary is needed, it is a 2px solid ink box (the torn-off slip, the error block) or a 3px double rule (head, foot, section break). The stapled corner is a 2.6rem × 5px ink bar rotated -45° in the top-left gutter, shown only at 52rem and above.
-
-### Named Rules
-**The Square Corner Rule.** `border-radius: 0` everywhere. The registration mark's circle is the one exception, and it is a printed mark, not a container.
+Gently squared: controls, fields, notices, errors, empty states, the switcher, `pre` blocks and the top corners of tabs share a 4px corner (`corner`). The wordmark's ruled square and the role labels use a finer 2px corner (`fine`). State marks are full discs (`disc`, 50%) at 0.625rem. The slip is square-cornered, its top edge a 3px seal rule. Borders are 1px hairlines; the seal edge on the lifted tab and slip is 3px; focus is a 3px seal outline offset 2px. Glyphs are drawn from borders and gradients, not icon fonts: the wordmark's ruled square is a bordered box crossed by two 2px seal lines, and the switcher chevron is two 2px borders rotated 45 degrees, turning to point the way the list opens.
 
 ## Components
 
 ### Buttons
-- **Shape:** square (`0` radius), 2px solid ink border, minimum height 2.75rem, stencil caps at 0.95rem tracked 0.16em.
-- **Primary:** solid ink fill with stock-coloured type, padded 0.625rem × 1.5rem. It sits at the foot of the record where a form's action sits on paper — never floating top-right.
-- **Hover / Focus / Active:** hover (pointer devices only) deepens the fill to 82% ink mixed with black; focus-visible draws a 3px solid ink outline offset 2px; active translates down 1px — the stamp meeting the page.
-- **Ghost:** transparent with ink border and ink type, inverting to solid ink on hover. The office's second-choice action: demo roles, "Use an existing account", secondary form actions.
-- **Quiet:** a 1px-bordered, 2.25rem-tall, 0.78rem variant for in-head and in-row actions (Sign out, Issue an Invitation).
-- **Stamp:** transparent with oxblood border and type at 0.8rem, filling oxblood on hover, with an oxblood focus ring. Destructive only (Revoke).
-- **Disabled:** transparent fill, dashed border, washed-violet type, `not-allowed` cursor. The border going dashed is the signal, not a reduced opacity.
+Plain, firm, and never costumed.
+- **Shape:** 4px corner, 44px tall (40px for quiet), 1px border.
+- **Primary:** seal fill, on-seal text, body size at 650, 20px side padding. Hover goes to deep seal. Press drops 1px (90ms).
+- **Ghost:** the second action beside a first: transparent, rule border, seal text. Hover lays the seal wash with a 55% seal border and deep seal text.
+- **Quiet:** head actions such as Sign out and pager steps: transparent, rule border, ink text, label size at 600. Same hover as ghost.
+- **Stamp:** an action that takes something away: transparent, 55% alarm border, alarm text, label size. Hover adds a 10% alarm wash and a full alarm border; its focus ring turns alarm.
+- **Disabled (held):** transparent, dashed rule border, soft ink at 80%, not-allowed cursor, no hover or press. Pager steps that go nowhere use `aria-disabled` and draw the same way.
+- **Focus:** 3px seal outline, 2px offset, on every interactive element.
+
+### Role labels
+Each role held in the School, beside "Signed in as": seal text at 0.8125rem 650, a 1px 45% seal border, 2px corner, no fill. Never a pill.
 
 ### Inputs / Fields
-- **Style:** wash-filled field, no border except a 2px ink bottom rule, square corners, 2.75rem minimum height, body type at 1rem with label caps and tracking explicitly cleared.
-- **Focus:** field deepens to strong wash and the bottom rule thickens to 3px, with the outline offset collapsed to 0 so the ring meets the field.
-- **Hover:** deepens to strong wash on pointer devices.
-- **Label:** always visible above the field in label caps; there are no placeholder-only fields.
-- **Error:** a separate oxblood block (2px border, oxblood bold text) rendered with `role="alert"` above or below the control; the field itself is not recoloured.
+- **Style:** field ground, 1px rule border, 4px corner, 44px tall, body size at 400, soft-ink placeholder. Labels sit above at label size 650, 6px gap.
+- **Hover:** border darkens to 40% ink.
+- **Focus:** border turns seal, plus the 3px seal outline.
+- **Checkbox:** 24px, seal accent, in a 36px row with its label at body size.
+- **Fieldset:** no box; a faint rule on top and a label-size legend.
 
-### Navigation
-The head carries identity (wordmark, sheet name) and, on a signed-in sheet, the shell's part: the School in stencil caps, who the sheet was run for, a School switcher when the account reaches more than one, and sign-out. The switcher is a native `<details>` whose slip of the same stock hangs from the head on wide sheets and is struck in line on narrow ones, so it never lies over the tabs.
+### Navigation: the lifted tab and the seal
+Tabs sit in the band as report pages: label size 600, soft ink, 44px tall, 16px padding, 4px top corners. Hover lays the wash and inks the text. The current tab takes the page ground, a rule border on three sides, ink text, and the seal: a 3px seal bar along its top edge. There is only ever one seal; it is named for the view transition, so moving sections slides it to the new tab in 240ms on cubic-bezier(0.22, 1, 0.36, 1) while the page swaps in place without a fade. On a phone the tabs are a three-column grid of band cells separated by faint 1px gaps; the current cell takes the page ground and keeps its square seal.
 
-Inside a School, `.shell-nav` rules a row of tabs under the head: 0.78rem bold caps tracked 0.16em, each at least 2.75rem tall. The page being shown carries `aria-current="page"` and is struck with a strong wash and a 3px ink underline. It lists only the pages the actor's roles reach. Elsewhere, movement is by links in the record and in the `.foot` block. Links are ink-coloured with a 1px underline offset 0.22em, thickening to 2px over a strong-wash highlight on hover.
+### Switcher
+The way to another School: a field-ground button with rule border, 4px corner, 40px tall, label size 600, and a border-drawn chevron. Its list opens under it, right-aligned, 14 to 22rem wide, field ground, rule border, 4px corner; entries pad 8px by 16px and take the seal wash on hover; the last entry sits behind a faint rule. On a phone the list opens in the head's flow at full width.
 
-### Status Mark (signature component)
-State prints itself into the record instead of appearing as chrome. A mark is 0.72rem bold caps tracked 0.2em, `white-space: nowrap`, in one of three renditions: **held** — solid ink block with stock-coloured type, for a settled fact (CLAIMED, COPIED, MAY READ) — **open** — 1px dashed ink outline with ink type, padding reduced by the border width so both renditions sit on the same baseline grid, for a fact not yet settled (UNCLAIMED, OPEN) — or **unstruck** — the caps alone, no block and no outline, for a fact that is settled but negative (MAY NOT READ). A withheld permission takes the unstruck rendition and never the open one: dashed reads as not yet done, and a permission withheld is decided. Unstruck also leaves the record scannable for what *was* granted, since only those marks carry ink. An empty mark sets `display: none`, so a status with nothing to report is not a blank box waiting to be read.
+### Records
+- **Record table:** full width, tabular figures. Column heads in soft ink, label size 650, bottom-aligned over a rule. Cells pad 12px, divided by faint rules; rows take the wash on hover. Times never wrap; identifiers break only at hyphens. Actions align right. Below 52rem each row becomes a stacked entry, its field names printed above each value at small size.
+- **Roster:** a ruled list under a rule, rows at least 56px, name at lead size 600, a faint leader rule carrying the name across to its state (hidden on phone).
+- **Facts:** a two-column term and value list under a rule; terms in soft ink at label size 650.
+- **Identifier:** mono at small size in soft ink, set on its own line under the name it belongs to.
+- **Loading:** the record's shape (a wash title bar and faint ruled rows) pulsing between full and 45% opacity over 1.6s; no spinner.
 
-### Roster (signature component)
-The record itself: an unstyled `ul` opened with a 1px rule, each row a baseline-aligned flex line padded 0.875rem vertically and closed with a faint hairline. Name at the left in 1.05rem body type, a **dotted leader** (a 2px-on/4px-off repeating gradient, 1px tall, centred) filling the gap, and the state group pushed hard right with `margin-left: auto`. Rows wash on hover. The leader is hidden below 52rem. Its empty counterpart is an italic washed-violet line ruled top and bottom.
+### State marks
+State prints itself into the record as a word with a disc before it, label size 600.
+- **Filled:** solid seal disc, seal word. Done, claimed, permitted ("Claimed", "May read", "Copied").
+- **Open (ringed):** 2px seal ring, seal word. Open or still to come ("Open", "Unclaimed", "Starts later").
+- **Struck:** soft-ink ring with a diagonal rule through it, soft-ink word. Withheld or ended ("May not read").
+- **Bare:** a soft-ink word with a rule-coloured ring, neither.
+An empty mark keeps its box (a live status region must not vanish), but draws no disc.
 
-### Legend (signature component)
-A sticky `<dl>` strip beside the record: a "THIS SHEET" heading in label caps, an optional sentence of context, then term/definition pairs where the term is the mark as it appears in the record. It explains the sheet's marks and never names a record — and a sheet shown for a refusal carries no legend at all, so nothing about what exists can be read off it.
+### The key
+The narrow left column that explains the page's terms and marks: soft ink at label size, 1.5 line height, headed "Key" in ink at 700, terms in ink at 650. It never names a record.
 
-### Not built (block)
-What a sheet says it does not hold, ruled off below what it does: a 1px rule above, a label-caps heading and a sentence of body copy. It is struck like the foot because it is read last and is not part of the record. It names the glossary's own terms (Attendance, Term results) and never softens them into a promise.
+### Slip / Dialog
+A slip of record: field ground, 1px rule border, a 3px seal top edge, 24px padding, 12px internal gap, square corners. Inline it marks an issued Invitation; as the app's one overlay it is a native modal `<dialog>`, up to 34rem wide, centred, over a veil of near-black at 55%. A removal slip confirms with a stamp button.
 
-### Slip (signature component)
-The issued Invitation, torn off the sheet: a wash-filled block with a 2px solid ink border, 1.5rem padding, a stencil heading at 1.1rem, and inputs that reverse to the raw stock so the handed-over link reads as a fresh strip of paper.
+### Notice
+What a setting does or does not yet do, read before the record: seal wash ground, 25% seal border, 4px corner, 12px by 16px padding, ink text, 68ch measure.
 
-### Held slip (signature component)
-The same slip, lifted off the sheet and held over it: a native `<dialog>` opened with `showModal()`, and the only overlay in the system. It is a `min(34rem, 100vw − 2 × gutter)` block with the slip's 2px ink border and 1.5rem padding, centred, over a veil of 55% ink across the whole sheet. Its fill is the 9% wash *mixed into* the stock rather than laid over it, because a translucent slip would let the sheet read through the record it is holding.
+### Error
+A problem named in words: alarm text at 600, a 9% alarm wash behind and a 45% alarm border, 4px corner, 10px by 14px padding.
 
-Two shapes, and no third. **Acknowledge** holds something the server will never say again — an Invitation's link above all — and refuses both Escape and a click on the veil, so it cannot be dismissed by a stray keystroke; one control closes it. **Confirm** names what an action will do before it is done, in glossary language, and Cancel holds the focus on open so the consequence is read before the key that confirms it is under the hand; cancelling sends nothing.
-
-No component library supplies it, and none can: `style-src 'self'` has no inline exception and the build fails on a `style=` attribute, which is how every kit positions its overlays (ADR-0006). The element itself brings the inert page, the focus trap and the Escape handling.
-
-### Record (signature component)
-A record with more than one thing to say about each row, where `roster` carries the sheet's flat name-and-mark line. One `<table>` carries both renditions. Above 52rem it is a table: terms struck across the head in label caps over a 1px rule, rows ruled off with faint hairlines, the last column set hard right, rows washing on hover. Below 52rem the columns stack — the head is dropped, each row becomes an entry ruled off from the next, and every value is struck under its own term in caption caps — so a record that could not hold 360px is read down instead of scrolled across. A column of controls carries its term for a screen reader only, struck but never printed.
-
-### Facts (signature component)
-A typed two-column `max-content / 1fr` definition grid, ruled above, with terms in label caps and values in body type set to break anywhere. Used for provenance and record detail.
+### Empty
+An empty record says so in the place the record would be: a dashed rule border, 4px corner, 32px by 16px padding, centred soft-ink text.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** flood the frame with exactly one stock per sheet, set on `.sheet` via `--stock`, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in, School memberships and Audit, blue Schools, pink Invitation — both Invitations and Redeem, mint How this was built and Enrollments, buff Not available, salmon Your account and Guardian links).
-- **Do** keep every rule in `src/styles.css`: the CSP forbids inline `<style>`, `style=`, `on*=` and `data:` inlining, and the Vite build fails on any of them.
-- **Do** set records, names and figures in Courier Prime and reserve Stardos Stencil for the wordmark, the single `h1`, button labels and the slip heading.
-- **Do** draw structure with violet hairlines (`{colors.rule}`, `{colors.rule-faint}`) and 3px double rules; use washes (9% / 15%) for recessed fields.
-- **Do** print state as a struck mark — solid ink for settled, dashed outline for open. A mark with nothing to report prints nothing, but stays in the page: one of these is a `role="status"` region, and `display: none` would take it out of the accessibility tree so the word arriving goes unannounced.
-- **Do** put the primary action at the foot of the record, where a form's action sits on paper.
-- **Do** keep every interactive target at 2.75rem (2.25rem for quiet variants), with a visible 3px ink focus ring offset 2px, and keep ink and stamp above 4.5:1 on every stock.
-- **Do** use `CONTEXT.md` vocabulary verbatim in all UI copy — School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment.
+- **Do** name every colour through a token that has both a light and a dark value.
+- **Do** pair every state with a word and a filled, ringed or struck seal disc; the mark is never the only difference.
+- **Do** keep seal blue for action, the current place, links, focus and marks, and nothing else.
+- **Do** confine alarm red to errors and to actions that take something away, as text and outline.
+- **Do** separate with 1px hairlines (`rule` for sections, `rule-faint` between rows) and the band's one tonal step.
+- **Do** set identifiers in Atkinson Hyperlegible Mono and keep records in tabular figures.
+- **Do** keep controls at least 44px tall (40px for quiet and switcher), with the 3px seal focus outline.
+- **Do** draw a held control with a dashed rule border and softened words.
+- **Do** let things settle in 200ms on cubic-bezier(0.22, 1, 0.36, 1), and honour reduced motion by dropping transitions and the seal slide.
 
 ### Don't:
-- **Don't** put a white or grey panel, card or container on the stock. There is no cream and no grey ground in this system.
-- **Don't** add a `box-shadow` of any kind, including a hard offset one; this is not a neobrutalist world and nothing in it is raised.
-- **Don't** round a corner. `border-radius` is `0` outside the registration mark.
-- **Don't** introduce a third colour. Oxblood is for errors, refusals and revocation only, and never for a heading or a highlight.
-- **Don't** use a gradient to imply light, gloss or depth; gradients are printing artifacts and drawn marks only.
-- **Don't** add animation. The drum pass is the system's only entrance, and reduced-motion removes it.
-- **Don't** add a left nav rail, a floating top-right action bar, or any persistent chrome region beyond the head and, inside a School, its row of tabs.
-- **Don't** print a figure the app cannot source — a run number, a count, or a status the API did not give — in the same hand as its records.
-- **Don't** let a refusal sheet carry a legend, a reason, or any variation: one `NotAvailable` state, identical for absent, out-of-School and forbidden.
-- **Don't** add a kicker or eyebrow line above a heading. The head's sheet name is chrome in the head, not a device for the record column.
-- **Don't** use a glyph or icon font; the only marks in the world are the CSS-drawn staple and registration target.
+- **Don't** use shadows, or float cards in the reading plane; the switcher list and the slip dialog are the only things over the page.
+- **Don't** fill a control with alarm red, or use colour alone to carry state.
+- **Don't** introduce a second accent hue or status colours (green, amber).
+- **Don't** round role labels or tags into pills; they keep a 2px corner.
+- **Don't** scale type with the viewport.
+- **Don't** add a second typeface, uppercase tracked labels, or icon-font glyphs; draw small marks from borders.
+- **Don't** put more than one seal edge in the tab row.
+- **Don't** reach for an inline style; the Content Security Policy forbids it and the build fails on it.

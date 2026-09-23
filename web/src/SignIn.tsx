@@ -83,7 +83,7 @@ export function SignIn() {
 
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>Signing in to SchoolGrid.</p>
       <dl>
         <Key term="User account">
@@ -98,7 +98,6 @@ export function SignIn() {
 
   return (
     <Sheet
-      stock="canary"
       name="Sign in"
       legend={legend}
       foot={

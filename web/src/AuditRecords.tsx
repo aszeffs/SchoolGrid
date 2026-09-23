@@ -6,14 +6,8 @@ import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { namesOf } from "./standing.ts";
 
-/**
- * Which sheet this page is, named once so its states cannot drift apart.
- *
- * Run on canary, the stock for a sheet that names none of its own
- * (web/DESIGN.md): the trail is read, never worked in, and pairs with no
- * other sheet as two ends of one piece of business.
- */
-const SHEET: SheetKind = { stock: "canary", name: "Audit" };
+/** Which sheet this page is, named once so its states cannot drift apart. */
+const SHEET: SheetKind = { name: "Audit" };
 
 /** One page read so far: the cursor it was read from, and where in the trail it begins. */
 interface Reached {
@@ -121,7 +115,7 @@ function AuditSheet({
 }) {
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>
         Every change made in this School, and every request it refused, newest first. Nothing on it can be changed or
         removed.

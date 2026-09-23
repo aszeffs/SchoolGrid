@@ -7,14 +7,8 @@ import { RecordList } from "./RecordList.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
-/**
- * Which sheet this page is, named once so its states cannot drift apart.
- *
- * The Invitation's two sides run on the one stock (web/DESIGN.md): this sheet
- * and the one a human lands on when they follow a link are the same business
- * seen from its two ends.
- */
-const SHEET: SheetKind = { stock: "pink", name: "Invitations" };
+/** Which sheet this page is, named once so its states cannot drift apart. */
+const SHEET: SheetKind = { name: "Invitations" };
 
 const EXPIRY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
@@ -46,7 +40,7 @@ export function Invitations({ school }: { school: ReachedSchool }) {
 
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>Every Invitation this School is still holding open.</p>
       <dl>
         <Key term="Invitation">

@@ -6,7 +6,7 @@ import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
-const SHEET: SheetKind = { stock: "salmon", name: "Your account" };
+const SHEET: SheetKind = { name: "Your account" };
 
 const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
@@ -42,7 +42,7 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
   const holds = (role: Role) => school.roles.includes(role);
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>What this School holds for you, and nothing about anyone else.</p>
       <dl>
         <Key term="School membership">
@@ -55,8 +55,8 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
         )}
         {holds("guardian") && (
           <Key term="Access profile">
-            What your link to one Student lets you read of theirs, set for that link alone. May read is struck; May
-            not read is not.
+            What your link to one Student lets you read of theirs, set for that link alone. May read carries a filled
+            mark; May not read, a struck one.
           </Key>
         )}
       </dl>
@@ -143,12 +143,12 @@ function LinkedStudents({ account }: { account: OwnAccount }) {
 
 /**
  * One permission of an Access profile: whether this link lets you read that
- * record. What the link permits is struck solid, as a settled fact is; what it
- * does not is left unstruck. The open mark is not used here: dashed means not
- * yet done, and a permission withheld is decided, not pending.
+ * record. What the link permits carries the filled mark; what it withholds, the
+ * struck one. The open ring is not used here: it means not yet done, and a
+ * permission withheld is decided, not pending.
  */
 function Permits({ permitted }: { permitted: boolean }) {
   return (
-    <span className={permitted ? "mark mark--struck" : "mark"}>{permitted ? "May read" : "May not read"}</span>
+    <span className={permitted ? "mark mark--filled" : "mark mark--struck"}>{permitted ? "May read" : "May not read"}</span>
   );
 }

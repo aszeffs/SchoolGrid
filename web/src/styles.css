@@ -1,95 +1,119 @@
 /*
- * SchoolGrid is printed, not rendered: one violet ink struck onto coloured copy
- * stock, the way a school office ran off its own sheets. The stock floods the
- * frame; there is no card, no panel and no grey page behind it.
+ * SchoolGrid is set like an official school record: whom a page concerns, who
+ * is acting, and what was recorded, in that order. The reading field stays calm
+ * and nearly colourless; one seal blue marks what can be acted on and what is
+ * current, and state is always a word with a mark beside it, never a colour on
+ * its own.
+ *
+ * There are two renditions, light and dark, and the browser's own setting picks
+ * between them (ADR-0010). Every colour below is a token defined for both, so a
+ * rule that names a raw colour is a rule that breaks one of them.
  *
  * Every rule here lives in this file. The Content Security Policy allows no
  * inline style, and `vite.config.ts` fails the build on one, so a style
  * attribute is not a shortcut that happens to be discouraged: it does not ship.
  */
 
+/*
+ * Atkinson Hyperlegible was drawn for readers with low vision: every letter is
+ * told apart from its neighbours (I l 1, O 0, rn m), which is also what a
+ * register of names read between lessons needs. Its mono cut sets identifiers
+ * and figures, so a column of them lines up.
+ */
 @font-face {
-  font-family: "Courier Prime";
+  font-family: "Atkinson Hyperlegible Next";
   font-style: normal;
-  font-weight: 400;
+  font-weight: 200 800;
   font-display: swap;
-  src: url("./fonts/courier-prime-400.woff2") format("woff2");
+  src: url("./fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2");
 }
 
 @font-face {
-  font-family: "Courier Prime";
+  font-family: "Atkinson Hyperlegible Next";
   font-style: italic;
-  font-weight: 400;
+  font-weight: 200 800;
   font-display: swap;
-  src: url("./fonts/courier-prime-400-italic.woff2") format("woff2");
+  src: url("./fonts/atkinson-hyperlegible-next-latin-wght-italic.woff2") format("woff2");
 }
 
 @font-face {
-  font-family: "Courier Prime";
+  font-family: "Atkinson Hyperlegible Mono";
   font-style: normal;
-  font-weight: 700;
+  font-weight: 200 800;
   font-display: swap;
-  src: url("./fonts/courier-prime-700.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Stardos Stencil";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./fonts/stardos-stencil-400.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Stardos Stencil";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./fonts/stardos-stencil-700.woff2") format("woff2");
+  src: url("./fonts/atkinson-hyperlegible-mono-latin-wght-normal.woff2") format("woff2");
 }
 
 :root {
   /*
-   * One ink. A spirit duplicator carried a single aniline violet, and the
-   * office's rubber stamp was the only second colour it ever saw. Both are
-   * darkened until they clear 4.5:1 on every stock below, goldenrod included.
+   * Light: a cool near-white page under classroom strip lights, never cream and
+   * never pure white, which glares. The band that carries the School's heading
+   * and its sections is one step cooler than the page it sits over.
    */
-  --ink: #3b2a6b;
-  --ink-soft: #4f3d7a;
-  --stamp: #8e1e26;
+  --page: #f7f8fa;
+  --band: #eceff4;
+  --field: #ffffff;
+  --ink: #18202e;
+  --ink-soft: #4a5467;
+  --seal: #234aa6;
+  --seal-strong: #1a3a88;
+  --on-seal: #ffffff;
+  --alarm: #a3262d;
 
-  /*
-   * The stock each sheet is run on. Overridden per sheet, never per element.
-   * Canary is the default run, so it is named once and reached for by name.
-   */
-  --stock-canary: #f7e7a6;
-  --stock: var(--stock-canary);
+  --rule: color-mix(in srgb, var(--ink) 22%, transparent);
+  --rule-faint: color-mix(in srgb, var(--ink) 11%, transparent);
+  --wash: color-mix(in srgb, var(--ink) 5%, transparent);
+  --wash-seal: color-mix(in srgb, var(--seal) 8%, transparent);
 
-  --rule: color-mix(in srgb, var(--ink) 42%, transparent);
-  --rule-faint: color-mix(in srgb, var(--ink) 18%, transparent);
-  --wash: color-mix(in srgb, var(--ink) 9%, transparent);
-  --wash-strong: color-mix(in srgb, var(--ink) 15%, transparent);
+  --type-text: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  --type-figures: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
 
-  --type-strike: "Courier Prime", "Courier New", monospace;
-  --type-stencil: "Stardos Stencil", "Courier Prime", monospace;
+  /* One fixed scale, a fifth apart: a product's type does not grow with the window. */
+  --size-small: 0.8125rem;
+  --size-label: 0.875rem;
+  --size-body: 1rem;
+  --size-lead: 1.125rem;
+  --size-section: 1.375rem;
+  --size-title: 1.75rem;
 
   --step: 0.5rem;
-  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --gutter: clamp(1rem, 4vw, 2.5rem);
   --measure: 68ch;
+  --frame: 78rem;
+  --corner: 4px;
 
-  /* The drum turns once, fast, and settles. Nothing else in the app eases. */
-  --pass: 560ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Things settle quickly and do not bounce: a school day has no time for it. */
+  --settle: 200ms cubic-bezier(0.22, 1, 0.36, 1);
 
-  color-scheme: light;
-  font-family: var(--type-strike);
-  line-height: 1.6;
+  color-scheme: light dark;
+  font-family: var(--type-text);
+  font-size: 100%;
+  line-height: 1.55;
   -webkit-text-size-adjust: 100%;
 }
 
 /*
- * The sheet is paper. Paper does not invert, so there is no dark rendition of
- * this world; the stocks carry the whole range instead.
+ * Dark: deep slate rather than black, for a projector-dimmed room or a late
+ * evening of marking. The seal lightens so it still clears 4.5:1 as text.
  */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #12161d;
+    --band: #1a1f28;
+    --field: #0d1016;
+    --ink: #e5e8ee;
+    --ink-soft: #a4adbb;
+    --seal: #8eaefc;
+    --seal-strong: #b3c8ff;
+    --on-seal: #0d1321;
+    --alarm: #ff9d97;
+
+    --rule: color-mix(in srgb, var(--ink) 20%, transparent);
+    --rule-faint: color-mix(in srgb, var(--ink) 10%, transparent);
+    --wash: color-mix(in srgb, var(--ink) 6%, transparent);
+    --wash-seal: color-mix(in srgb, var(--seal) 12%, transparent);
+  }
+}
 
 *,
 *::before,
@@ -104,226 +128,250 @@ body {
 
 body {
   margin: 0;
-  background: var(--stock);
+  background: var(--page);
   color: var(--ink);
-  caret-color: var(--ink);
-  scrollbar-color: var(--ink) var(--stock);
+  caret-color: var(--seal);
+  scrollbar-color: var(--rule) var(--page);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: var(--ink);
-  color: var(--stock);
+  background: color-mix(in srgb, var(--seal) 28%, transparent);
+  color: var(--ink);
 }
 
-/* ---- The sheet ------------------------------------------------------- */
+/* ---- The page -------------------------------------------------------- */
 
 .sheet {
-  position: relative;
   display: grid;
   grid-template-rows: auto auto 1fr;
   min-height: 100vh;
   min-height: 100dvh;
-  background-color: var(--stock);
-  /*
-   * Drum wear: the ink lays down unevenly across the sheet, heavier at the
-   * left where the roller bites and washed out toward the tail.
-   */
-  background-image:
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--ink) 3%, transparent) 0 1px,
-      transparent 1px 3px
-    ),
-    linear-gradient(97deg, color-mix(in srgb, var(--ink) 5%, transparent) 0%, transparent 38%);
-}
-
-.sheet--goldenrod {
-  --stock: #f2c14e;
-}
-
-.sheet--blue {
-  --stock: #c9dae8;
-}
-
-.sheet--canary {
-  --stock: var(--stock-canary);
-}
-
-.sheet--pink {
-  --stock: #edd9e4;
-}
-
-.sheet--mint {
-  --stock: #cbe0ce;
-}
-
-.sheet--buff {
-  --stock: #e8cdb5;
-}
-
-.sheet--salmon {
-  --stock: #eab9a1;
+  background: var(--page);
+  color: var(--ink);
 }
 
 /*
- * The staple that held the run together, struck across the corner. It lives in
- * the gutter beside the mark, so it never crowds the head's type, and it is
- * dropped at widths where the gutter is too narrow to hold it.
+ * The report's head: which record system this is and, inside a School, which
+ * School, who is signed in and what they hold there. It runs the full width,
+ * and its contents keep to the same frame as the page below.
  */
-@media (min-width: 52rem) {
-  .sheet::before {
-    content: "";
-    position: absolute;
-    top: 1.15rem;
-    left: 0.35rem;
-    width: 2.6rem;
-    height: 5px;
-    background: var(--ink);
-    transform: rotate(-45deg);
-  }
-}
-
-/*
- * The drum pass: one wipe of ink travels down the sheet as it is run off. It
- * is an overlay, so nothing on the page is ever hidden waiting for it, and it
- * is the only animation in the app.
- */
-.sheet::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    color-mix(in srgb, var(--ink) 22%, transparent) 45%,
-    color-mix(in srgb, var(--ink) 4%, transparent) 60%,
-    transparent 72%
-  );
-  animation: drum-pass var(--pass) cubic-bezier(0.16, 1, 0.3, 1) 1;
-  opacity: 0;
-}
-
-@keyframes drum-pass {
-  from {
-    opacity: 1;
-    transform: translateY(-100%);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-}
-
 .sheet__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--step) calc(var(--step) * 3);
-  padding: calc(var(--step) * 2) var(--gutter) calc(var(--step) * 1.5);
-  border-bottom: 3px double var(--ink);
+  align-items: flex-start;
+  gap: calc(var(--step) * 1.5) calc(var(--step) * 4);
+  padding: calc(var(--step) * 2.5) max(var(--gutter), (100% - var(--frame)) / 2) calc(var(--step) * 2);
+  background: var(--band);
+}
+
+/* Outside a School the head closes over a hairline; inside one, the tabs close it. */
+.sheet__head:last-child,
+.sheet__head:not(:has(+ .shell-nav)) {
+  border-bottom: 1px solid var(--rule);
 }
 
 .sheet__group {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: calc(var(--step) * 2);
-}
-
-.sheet__mark {
-  margin: 0;
-  font-family: var(--type-stencil);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  gap: calc(var(--step) * 1.5);
+  min-width: 0;
 }
 
 /*
- * Two small lines struck in the head, tracked alike: which sheet this is
- * (`__no`), and who it was run for (`__who`).
+ * Inside a School the wordmark takes a line of its own, so the School's name
+ * below it starts at the frame's edge, level with the tabs and the key.
  */
-.sheet__no,
-.sheet__who {
-  margin: 0;
-  font-size: 0.8rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
+.sheet__group:has(+ .shell-head) {
+  flex-basis: 100%;
 }
 
 /*
- * The shell's part of the head: which School this sheet was run for and who
- * for, then the way to another School and the way out. It takes the rest of
- * the head's line, and wraps under the mark when there is not room.
+ * The wordmark. The grid in its name is the seal: a small ruled square set
+ * before it, drawn from a border so it needs no image.
+ */
+.sheet__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--step) * 0.875);
+  margin: 0;
+  font-size: var(--size-label);
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.sheet__mark::before {
+  content: "";
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--seal);
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--seal), var(--seal)) center / 2px 100% no-repeat,
+    linear-gradient(var(--seal), var(--seal)) center / 100% 2px no-repeat;
+}
+
+/* Which page this is, beside the wordmark, where no tab is there to say it. */
+.sheet__no {
+  margin: 0;
+  padding-left: calc(var(--step) * 1.5);
+  border-left: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+}
+
+.sheet__who {
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+}
+
+/*
+ * The shell's part of the head. Inside a School it takes the rest of the line:
+ * the School named large, and under it who is signed in; the way to another
+ * School and the way out sit at the right.
  */
 .shell-head {
   display: flex;
-  flex: 1 1 22rem;
+  flex: 1 1 24rem;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--step) calc(var(--step) * 3);
+  gap: calc(var(--step) * 1.5) calc(var(--step) * 3);
   min-width: 0;
+}
+
+.sheet__head > .actions {
+  margin-left: auto;
+}
+
+.sheet__head .actions button,
+.switcher summary {
+  white-space: nowrap;
 }
 
 .shell-head__who {
+  display: grid;
+  gap: calc(var(--step) * 0.5);
   min-width: 0;
 }
 
-.shell-head__who p {
+/* Whom the page concerns comes first, so the School's name is the largest type on it. */
+.shell-head__school {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
-.shell-head__school {
+.shell-head__actor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--step) * 0.5) calc(var(--step) * 1.25);
   margin: 0;
-  font-family: var(--type-stencil);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  max-width: none;
+}
+
+/* The roles held in this School, each a small seal-edged label. */
+.held {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--step) * 0.75);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.held li {
+  padding: 0.0625rem calc(var(--step) * 0.875);
+  border: 1px solid color-mix(in srgb, var(--seal) 45%, transparent);
+  border-radius: 2px;
+  color: var(--seal);
+  font-size: var(--size-small);
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 /*
- * The School's pages, ruled under the head like the tabs of a register. They
- * wrap rather than scroll, so every one stays reachable at 360px.
+ * The School's sections, as the pages of a report. The one being read is lifted
+ * onto the page: it takes the page's ground, the seal runs along its top edge,
+ * and the band's closing rule stops under it. Its neighbours stay in view.
  */
 .shell-nav {
-  padding: 0 var(--gutter);
+  padding: 0 max(var(--gutter), (100% - var(--frame)) / 2);
+  background: var(--band);
   border-bottom: 1px solid var(--rule);
 }
 
 .shell-nav ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 calc(var(--step) * 0.5);
-  margin: 0;
+  gap: 0 calc(var(--step) * 0.25);
+  margin: 0 0 -1px;
   padding: 0;
   list-style: none;
+}
+
+.shell-nav li {
+  position: relative;
 }
 
 .shell-nav a {
   display: inline-flex;
   align-items: center;
   min-height: 2.75rem;
-  padding: 0 calc(var(--step) * 1.5);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  padding: 0 calc(var(--step) * 2);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--corner) var(--corner) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 600;
   text-decoration: none;
-  text-transform: uppercase;
+  transition:
+    color var(--settle),
+    background-color var(--settle);
 }
 
-/* The page being shown is struck through with the double rule of the head. */
 .shell-nav a[aria-current="page"] {
-  background: var(--wash-strong);
-  box-shadow: inset 0 -3px 0 var(--ink);
+  background: var(--page);
+  border-color: var(--rule);
+  color: var(--ink);
 }
 
-/* The other Schools, dropped from the head on a slip of the same stock. */
+/*
+ * The seal along the lifted tab's top edge. There is only ever one, and it is
+ * named for the view transition, so moving to another section slides it across
+ * to the new tab while the rest of the page stays where it is.
+ */
+.shell-nav__seal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--corner) var(--corner) 0 0;
+  background: var(--seal);
+  pointer-events: none;
+  view-transition-name: seal;
+}
+
+::view-transition-group(seal) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Only the seal moves. The page itself is swapped in place, not faded. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* The other Schools, opened under the button that offers them. */
 .switcher {
   position: relative;
 }
@@ -331,42 +379,51 @@ body {
 .switcher summary {
   display: inline-flex;
   align-items: center;
-  min-height: 2.25rem;
-  padding: calc(var(--step) * 0.75) calc(var(--step) * 1.5);
-  border: 1px solid var(--ink);
+  gap: calc(var(--step) * 0.75);
+  min-height: 2.5rem;
+  padding: 0 calc(var(--step) * 1.75);
+  background: var(--field);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner);
   cursor: pointer;
-  font-family: var(--type-stencil);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: var(--size-label);
+  font-weight: 600;
   list-style: none;
-  text-transform: uppercase;
+  transition: border-color var(--settle);
 }
 
 .switcher summary::-webkit-details-marker {
   display: none;
 }
 
+/* A chevron drawn from two borders, turned to point the way the list opens. */
 .switcher summary::after {
-  content: "\25BE" / "";
-  margin-left: var(--step);
+  content: "";
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-0.125rem) rotate(45deg);
+  transition: transform var(--settle);
 }
 
 .switcher[open] summary::after {
-  content: "\25B4" / "";
+  transform: translateY(0.125rem) rotate(-135deg);
 }
 
 .switcher ul {
   position: absolute;
-  z-index: 1;
-  top: calc(100% + var(--step) * 0.5);
+  z-index: 3;
+  top: calc(100% + var(--step) * 0.75);
   right: 0;
   width: max-content;
+  min-width: 14rem;
   max-width: min(22rem, calc(100vw - var(--gutter) * 2));
   margin: 0;
   padding: calc(var(--step) * 0.5) 0;
-  background: color-mix(in srgb, var(--ink) 9%, var(--stock));
-  border: 2px solid var(--ink);
+  background: var(--field);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner);
   list-style: none;
 }
 
@@ -374,87 +431,62 @@ body {
   display: block;
   padding: var(--step) calc(var(--step) * 2);
   overflow-wrap: anywhere;
+  text-decoration: none;
 }
 
 .switcher li:last-child {
-  border-top: 1px solid var(--rule);
-}
-
-.sheet__foot {
-  align-self: start;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: calc(var(--step) * 1.5) var(--gutter);
-  border-top: 3px double var(--ink);
-}
-
-.sheet__foot::before {
-  content: "";
-  width: 1.5rem;
-  height: 1.5rem;
-  margin-right: auto;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-  background-image:
-    linear-gradient(to right, transparent 46%, var(--ink) 46% 54%, transparent 54%),
-    linear-gradient(to bottom, transparent 46%, var(--ink) 46% 54%, transparent 54%);
-}
-
-.sheet__foot p {
-  margin: 0;
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
+  margin-top: calc(var(--step) * 0.5);
+  padding-top: calc(var(--step) * 0.5);
+  border-top: 1px solid var(--rule-faint);
 }
 
 .sheet__body {
   display: grid;
-  grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
-  gap: 0 calc(var(--gutter) * 1.2);
+  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
+  gap: 0 calc(var(--step) * 6);
   align-items: start;
-  padding: calc(var(--step) * 4) var(--gutter) calc(var(--step) * 5);
+  width: 100%;
+  max-width: calc(var(--frame) + var(--gutter) * 2);
+  margin: 0 auto;
+  padding: calc(var(--step) * 5) var(--gutter) calc(var(--step) * 8);
 }
 
 .sheet__body--single {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* The legend is held level: it never scrolls away from the record it explains. */
+/*
+ * The key to the page's marks, held level at the edge: it never scrolls away
+ * from the record it explains, and it never names a record.
+ */
 .legend {
   position: sticky;
-  top: calc(var(--step) * 2);
-  padding-right: calc(var(--gutter) * 0.5);
-  border-right: 1px solid var(--rule-faint);
-  font-size: 0.82rem;
-  line-height: 1.55;
+  top: calc(var(--step) * 3);
+  padding-top: calc(var(--step) * 0.5);
   color: var(--ink-soft);
+  font-size: var(--size-label);
+  line-height: 1.5;
 }
 
 .legend h2 {
   margin: 0 0 calc(var(--step) * 1.5);
-  font-family: var(--type-strike);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
   color: var(--ink);
+  font-size: var(--size-label);
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .legend dl {
-  display: grid;
-  gap: calc(var(--step) * 1.25) 0;
   margin: 0;
 }
 
 .legend dt {
-  letter-spacing: 0.12em;
   color: var(--ink);
+  font-weight: 650;
 }
 
 .legend dd {
-  margin: 0;
+  margin: calc(var(--step) * 0.25) 0 calc(var(--step) * 2);
 }
 
 .legend p {
@@ -462,31 +494,64 @@ body {
 }
 
 .run {
+  min-width: 0;
   max-width: 62rem;
+}
+
+/*
+ * A page still being read from the server holds its place with the shape of a
+ * record: a title and a few ruled rows, which pulse faintly. It names nothing,
+ * so there is nothing in it to announce; `aria-busy` says the rest.
+ */
+.run[aria-busy="true"]::before {
+  content: "";
+  display: block;
+  height: 16rem;
+  background:
+    linear-gradient(var(--wash), var(--wash)) 0 0 / min(18rem, 60%) 2.25rem no-repeat,
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 3.5rem,
+      var(--rule-faint) 3.5rem calc(3.5rem + 1px),
+      transparent calc(3.5rem + 1px) 4rem
+    ) 0 4.5rem / 100% 11.5rem no-repeat;
+  animation: holding 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes holding {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
 }
 
 /* ---- Type ------------------------------------------------------------ */
 
 h1 {
   margin: 0 0 calc(var(--step) * 3);
-  padding-bottom: calc(var(--step) * 1.5);
-  border-bottom: 1px solid var(--rule);
-  font-family: var(--type-stencil);
-  font-size: clamp(2rem, 5.5vw, 3.25rem);
+  font-size: var(--size-title);
   font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
   text-wrap: balance;
 }
 
 h2 {
-  margin: calc(var(--step) * 6) 0 calc(var(--step) * 2);
-  font-size: 0.9rem;
+  margin: calc(var(--step) * 6) 0 calc(var(--step) * 1.5);
+  font-size: var(--size-section);
   font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
   text-wrap: balance;
+}
+
+h3 {
+  margin: calc(var(--step) * 4) 0 var(--step);
+  font-size: var(--size-lead);
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 p {
@@ -494,51 +559,45 @@ p {
 }
 
 a {
-  color: var(--ink);
+  color: var(--seal);
   text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--seal) 50%, transparent);
+  transition: text-decoration-color var(--settle), color var(--settle);
 }
 
 @media (hover: hover) {
   a:hover {
-    background: var(--wash-strong);
-    text-decoration-thickness: 2px;
+    color: var(--seal-strong);
+    text-decoration-color: currentColor;
   }
 }
 
-code {
-  font-family: var(--type-strike);
+code,
+kbd,
+samp {
+  font-family: var(--type-figures);
+  font-size: 0.925em;
   overflow-wrap: anywhere;
 }
 
 p > code,
 dd > code,
 li > code {
-  padding: 0.05em 0.35em;
+  padding: 0.0625em 0.375em;
   background: var(--wash);
-  border-bottom: 1px solid var(--rule);
+  border-radius: 2px;
 }
 
 pre code {
   padding: 0;
   background: none;
-  border: 0;
 }
 
-/* The marker is part of the sheet too, not the browser's grey disc. */
 .run ul:not([class]),
 .run ol:not([class]) {
   max-width: var(--measure);
   padding-left: 1.4em;
-}
-
-.run ul:not([class]) {
-  list-style: square;
-}
-
-/* A numbered run is a run of steps, so its marker counts them. */
-.run ol:not([class]) {
-  list-style: decimal;
 }
 
 .run ul:not([class]) li,
@@ -548,7 +607,7 @@ pre code {
 
 .run ul:not([class]) li::marker,
 .run ol:not([class]) li::marker {
-  color: var(--ink);
+  color: var(--ink-soft);
 }
 
 pre {
@@ -556,10 +615,10 @@ pre {
   margin: calc(var(--step) * 2) 0;
   padding: calc(var(--step) * 2);
   overflow-x: auto;
-  background: var(--wash);
-  border: 1px solid var(--rule);
-  border-left-width: 1px;
-  font-size: 0.85rem;
+  background: var(--band);
+  border: 1px solid var(--rule-faint);
+  border-radius: var(--corner);
+  font-size: var(--size-label);
   line-height: 1.7;
 }
 
@@ -567,36 +626,26 @@ strong {
   font-weight: 700;
 }
 
-/*
- * Every label in a record is struck the same way: bold and uppercase. How far
- * each is tracked, and at what size, stays with the label itself.
- */
-.legend dt,
-.facts dt,
-.mark {
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-/* Struck lighter than the record it sits beside. */
 .muted,
 .stamp-line {
   color: var(--ink-soft);
 }
 
+/* A problem, named in words, with the alarm colour behind the words rather than instead of them. */
 .error {
   margin: 0;
-  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.5);
-  border: 2px solid var(--stamp);
-  color: var(--stamp);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.75);
+  background: color-mix(in srgb, var(--alarm) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent);
+  border-radius: var(--corner);
+  color: var(--alarm);
+  font-weight: 600;
 }
 
-/* ---- Controls: struck, not rendered ---------------------------------- */
+/* ---- Controls -------------------------------------------------------- */
 
-:where(a, button, input, select, summary, [tabindex]):focus-visible {
-  outline: 3px solid var(--ink);
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--seal);
   outline-offset: 2px;
 }
 
@@ -616,64 +665,44 @@ form > .error {
 label {
   display: grid;
   gap: calc(var(--step) * 0.75);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: var(--size-label);
+  font-weight: 650;
 }
 
-input {
+input,
+select,
+textarea {
   min-height: 2.75rem;
-  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.25);
-  background: var(--wash);
-  border: 0;
-  border-bottom: 2px solid var(--ink);
-  border-radius: 0;
+  padding: calc(var(--step) * 1.125) calc(var(--step) * 1.5);
+  background: var(--field);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner);
   color: var(--ink);
   font: inherit;
-  font-size: 1rem;
-  letter-spacing: normal;
-  text-transform: none;
+  font-size: var(--size-body);
+  font-weight: 400;
+  transition: border-color var(--settle);
 }
 
-input:focus {
-  background: var(--wash-strong);
-  border-bottom-width: 3px;
-  outline-offset: 0;
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--seal);
+  outline-offset: 1px;
 }
 
-/* A choice from a list is a field like any other, struck the same way. */
-select {
-  min-height: 2.75rem;
-  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.25);
-  background: var(--wash);
-  border: 0;
-  border-bottom: 2px solid var(--ink);
-  border-radius: 0;
-  color: var(--ink);
-  font: inherit;
-  font-size: 1rem;
-  letter-spacing: normal;
-  text-transform: none;
+input::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
 }
 
-select:focus {
-  background: var(--wash-strong);
-  border-bottom-width: 3px;
-  outline-offset: 0;
-}
-
-/*
- * A box ticked in ink. It keeps the browser's own control, tinted, rather than
- * a drawn one, and is held to the 24px target WCAG 2.2 AA sets.
- */
 input[type="checkbox"] {
   width: 1.5rem;
   height: 1.5rem;
   min-height: 0;
   margin: 0;
   padding: 0;
-  accent-color: var(--ink);
+  accent-color: var(--seal);
   flex: none;
 }
 
@@ -686,11 +715,10 @@ input[type="checkbox"] {
 
 label.check {
   display: flex;
-  font-size: 0.9rem;
-  letter-spacing: 0.08em;
+  font-size: var(--size-body);
+  font-weight: 400;
 }
 
-/* A group of boxes, named once above them, and ruled like the record. */
 fieldset {
   display: grid;
   gap: calc(var(--step) * 0.5);
@@ -698,129 +726,131 @@ fieldset {
   margin: 0;
   padding: calc(var(--step) * 1.5) 0 0;
   border: 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--rule-faint);
 }
 
 fieldset legend {
-  padding: 0 calc(var(--step) * 1) 0 0;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  padding: 0 var(--step) 0 0;
+  font-size: var(--size-label);
+  font-weight: 650;
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--step);
   min-height: 2.75rem;
-  padding: calc(var(--step) * 1.25) calc(var(--step) * 3);
-  background: var(--ink);
-  border: 2px solid var(--ink);
-  border-radius: 0;
-  color: var(--stock);
+  padding: 0 calc(var(--step) * 2.5);
+  background: var(--seal);
+  border: 1px solid var(--seal);
+  border-radius: var(--corner);
+  color: var(--on-seal);
   cursor: pointer;
-  font-family: var(--type-stencil);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font: inherit;
+  font-size: var(--size-body);
+  font-weight: 650;
   transition:
-    background-color 140ms ease-out,
-    color 140ms ease-out,
+    background-color var(--settle),
+    border-color var(--settle),
+    color var(--settle),
     transform 90ms ease-out;
 }
 
 @media (hover: hover) {
   button:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--ink) 82%, #000);
+    background: var(--seal-strong);
+    border-color: var(--seal-strong);
   }
 
-  input:hover,
-  select:hover {
-    background: var(--wash-strong);
+  input:hover:not(:focus),
+  select:hover:not(:focus),
+  .switcher summary:hover {
+    border-color: color-mix(in srgb, var(--ink) 40%, transparent);
   }
 
   .button-ghost:hover:not(:disabled),
   .button-quiet:hover:not(:disabled) {
-    background: var(--ink);
-    color: var(--stock);
+    background: var(--wash-seal);
+    border-color: color-mix(in srgb, var(--seal) 55%, transparent);
+    color: var(--seal-strong);
   }
 
   .button-stamp:hover:not(:disabled) {
-    background: var(--stamp);
-    color: var(--stock);
+    background: color-mix(in srgb, var(--alarm) 10%, transparent);
+    border-color: var(--alarm);
   }
 
-  .roster > li:hover {
+  .shell-nav a:not([aria-current="page"]):hover {
+    background: var(--wash);
+    color: var(--ink);
+  }
+
+  .roster > li:hover,
+  .record tbody tr:hover {
     background: var(--wash);
   }
 
-  .switcher summary:hover {
-    background: var(--ink);
-    color: var(--stock);
+  .switcher li a:hover {
+    background: var(--wash-seal);
   }
 }
 
-/* The stamp meets the page. */
 button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-button:focus-visible {
-  outline-color: var(--ink);
-}
-
+/* Held: a dashed outline and softened words, so it never reads as a quiet button that works. */
 button:disabled {
   background: transparent;
   border-style: dashed;
-  color: var(--ink-soft);
+  border-color: var(--rule);
+  color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
   cursor: not-allowed;
 }
 
-/* Struck through the ink rather than filled: the office's second-choice action. */
+/* The second action beside a first: outlined, not filled. */
 .button-ghost {
   background: transparent;
-  color: var(--ink);
+  border-color: var(--rule);
+  color: var(--seal);
 }
 
+/* An action that takes something away. Named in the alarm colour, never filled with it. */
 .button-stamp {
-  padding-inline: calc(var(--step) * 2);
   background: transparent;
-  border-color: var(--stamp);
-  color: var(--stamp);
-  font-size: 0.8rem;
+  border-color: color-mix(in srgb, var(--alarm) 55%, transparent);
+  color: var(--alarm);
+  font-size: var(--size-label);
+  padding-inline: calc(var(--step) * 1.75);
 }
 
 .button-stamp:focus-visible {
-  outline-color: var(--stamp);
-}
-
-.sheet__head .button-quiet {
-  border-width: 1px;
+  outline-color: var(--alarm);
 }
 
 .button-quiet {
-  min-height: 2.25rem;
-  padding: calc(var(--step) * 0.75) calc(var(--step) * 1.5);
+  min-height: 2.5rem;
+  padding: 0 calc(var(--step) * 1.75);
   background: transparent;
+  border-color: var(--rule);
   color: var(--ink);
-  font-size: 0.78rem;
+  font-size: var(--size-label);
+  font-weight: 600;
 }
 
 /* ---- Finding one entry in a record ----------------------------------- */
 
-/*
- * The field that narrows a record to the entry being looked for. It sifts what
- * is already struck on the sheet and asks the server for nothing: a record of
- * a School's People is as long as a School is, and the whole of it is here.
- */
 .filter {
   display: block;
   max-width: 22rem;
   margin: calc(var(--step) * 3) 0 calc(var(--step) * 1.5);
 }
 
-/* The tally beneath it, which says how much of the record is in front of you. */
 .filter + p {
   margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
 }
 
 /* ---- Ruled records --------------------------------------------------- */
@@ -832,38 +862,32 @@ button:disabled {
   list-style: none;
 }
 
-h1 + .roster {
-  border-top: 0;
-}
-
 .roster > li {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: calc(var(--step) * 0.75) calc(var(--step) * 2);
-  padding: calc(var(--step) * 1.75) 0;
+  min-height: 3.5rem;
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1);
   border-bottom: 1px solid var(--rule-faint);
+  transition: background-color var(--settle);
 }
 
 .roster__name {
-  font-size: 1.05rem;
+  font-size: var(--size-lead);
+  font-weight: 600;
 }
 
 .roster__name a {
-  text-decoration-thickness: 1px;
+  text-decoration: none;
 }
 
-/* The dotted leader that runs a name across the sheet to its column. */
+/* A faint rule carrying the name across to its state, kept for the eye and nothing else. */
 .roster__leader {
   flex: 1 1 4rem;
   min-width: 2rem;
-  align-self: center;
   height: 1px;
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--rule) 0 2px,
-    transparent 2px 6px
-  );
+  background: var(--rule-faint);
 }
 
 .roster__state {
@@ -874,86 +898,116 @@ h1 + .roster {
 }
 
 /*
- * State prints itself into the record: a struck mark, never a coloured pill.
+ * State prints itself into the record: a word, and a seal mark before it. A
+ * filled mark is done or permitted, a ringed one is open or still to come, and
+ * a bare word is neither. The mark is never the only difference.
  *
  * A mark with nothing to report is not collapsed away. One of these is a
  * `role="status"` region, and `display: none` would take it out of the
  * accessibility tree, so the word arriving would land in a region that did not
- * exist a moment earlier and commonly go unannounced (WCAG 2.2 AA). Empty, it
- * prints nothing anyway, and holding its place stops the line shifting when
- * the word does arrive.
+ * exist a moment earlier and commonly go unannounced (WCAG 2.2 AA).
  */
 .mark {
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--step) * 0.75);
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 600;
   white-space: nowrap;
 }
 
-/* The mark struck solid: ink laid down, the stock showing through the letters. */
-.mark--struck {
-  padding: 0.2rem 0.55rem;
-  background: var(--ink);
-  color: var(--stock);
+.mark:not(:empty)::before {
+  content: "";
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 50%;
 }
 
+/* Filled: done, claimed, permitted. The seal laid down solid. */
+.mark--filled {
+  color: var(--seal);
+}
+
+.mark--filled:not(:empty)::before {
+  background: var(--seal);
+  border-color: var(--seal);
+}
+
+/* Ringed: open, or still to come. */
 .mark--open {
-  padding: calc(0.2rem - 1px) calc(0.55rem - 1px);
-  border: 1px dashed var(--ink);
-  color: var(--ink);
+  color: var(--seal);
+}
+
+.mark--open:not(:empty)::before {
+  border-color: var(--seal);
+  border-width: 2px;
+}
+
+/* Struck: withheld or ended. A ring with a rule through it, in the soft ink. */
+.mark--struck:not(:empty)::before {
+  border-color: var(--ink-soft);
+  background: linear-gradient(
+    135deg,
+    transparent calc(50% - 0.75px),
+    var(--ink-soft) calc(50% - 0.75px) calc(50% + 0.75px),
+    transparent calc(50% + 0.75px)
+  );
 }
 
 .stamp-line {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--size-label);
 }
 
+/* An empty record says so plainly, in the place the record would be. */
 .empty {
   max-width: none;
-  padding: calc(var(--step) * 3) 0;
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
+  padding: calc(var(--step) * 4) calc(var(--step) * 2);
+  border: 1px dashed var(--rule);
+  border-radius: var(--corner);
   color: var(--ink-soft);
-  font-style: italic;
+  text-align: center;
 }
 
-/*
- * A plain statement the sheet needs read before its record: what a setting on
- * it does, or does not yet do. Ruled in ink down its edge, as a margin note is.
- */
+/* What a setting on the page does, or does not yet do, read before the record. */
 .notice {
   max-width: var(--measure);
-  padding: calc(var(--step) * 0.5) 0 calc(var(--step) * 0.5) calc(var(--step) * 2);
-  border-left: 3px double var(--ink);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  background: var(--wash-seal);
+  border: 1px solid color-mix(in srgb, var(--seal) 25%, transparent);
+  border-radius: var(--corner);
 }
 
-/* What an action will also do, one consequence to a line. */
 .consequences {
   display: grid;
-  gap: calc(var(--step) * 1);
+  gap: var(--step);
   margin: 0;
   padding-left: calc(var(--step) * 2.5);
 }
 
-/* Several controls in one cell of a record, struck to its right edge. */
 .record__buttons {
   justify-content: flex-end;
-  gap: calc(var(--step) * 1);
+  gap: var(--step);
 }
 
-/* ---- Facts: a typed two-column entry --------------------------------- */
+/* ---- Facts: a two-column entry --------------------------------------- */
 
 .facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: calc(var(--step) * 1.5) calc(var(--step) * 3);
+  gap: calc(var(--step) * 1.5) calc(var(--step) * 4);
   margin: calc(var(--step) * 2) 0;
-  padding-top: calc(var(--step) * 2);
+  padding: calc(var(--step) * 2) 0 0;
   border-top: 1px solid var(--rule);
 }
 
 .facts dt {
-  font-size: 0.78rem;
-  letter-spacing: 0.18em;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 650;
 }
 
 .facts dd {
@@ -965,57 +1019,71 @@ h1 + .roster {
 
 /*
  * A record with more than one thing to say about each row. One table carries
- * both renditions: columns ruled across the sheet while there is width for
- * them, and — below the sheet's one breakpoint — the columns stacked, each
- * value struck under its own term so the record is read down instead of
- * scrolled across. `.roster` still carries the flat name-and-mark line.
+ * both renditions: columns ruled across the page while there is width for
+ * them and, below the page's one breakpoint, each row stacked into an entry
+ * whose values carry their own terms, read down instead of scrolled across.
  */
 .record {
   width: 100%;
   margin: calc(var(--step) * 2) 0 calc(var(--step) * 4);
   border-collapse: collapse;
   text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 .record th {
-  padding: 0 calc(var(--step) * 2) calc(var(--step) * 1.25) 0;
+  padding: 0 calc(var(--step) * 1.5) var(--step) var(--step);
   border-bottom: 1px solid var(--rule);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 650;
   vertical-align: bottom;
 }
 
 .record td {
-  padding: calc(var(--step) * 1.75) calc(var(--step) * 2) calc(var(--step) * 1.75) 0;
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 1.5) calc(var(--step) * 1.5) var(--step);
   border-bottom: 1px solid var(--rule-faint);
-  vertical-align: baseline;
+  vertical-align: middle;
   overflow-wrap: anywhere;
+  transition: background-color var(--settle);
 }
 
 .record th:last-child,
 .record td:last-child {
-  padding-right: 0;
+  padding-right: calc(var(--step) * 1);
 }
 
-/*
- * A column of controls is struck to the right edge, where the hand returns to
- * act. The last column is not enough to go on: a record of one column is its
- * own last, and a Person's name belongs at the margin it is read from.
- */
 .record .record__actions {
   text-align: right;
 }
 
-@media (hover: hover) {
-  .record tbody tr:hover {
-    background: var(--wash);
-  }
+/*
+ * Values are kept whole where they fit and broken only where they cannot: a
+ * moment stays on one line, and an identifier breaks at its hyphens, never
+ * inside a group of figures.
+ */
+.record td {
+  overflow-wrap: break-word;
 }
 
-/* Struck for a screen reader but never printed: a column of controls that
-   name themselves does not need its term set above them too. */
+.record time {
+  white-space: nowrap;
+}
+
+/* A record's last column of words is given room to say a short thing on one line. */
+.record td:last-child:not(.record__actions) {
+  min-width: 8rem;
+}
+
+.record code {
+  font-size: var(--size-small);
+  overflow-wrap: normal;
+}
+
+.record .identifier {
+  overflow-wrap: normal;
+}
+
 .unprinted {
   position: absolute;
   width: 1px;
@@ -1027,22 +1095,21 @@ h1 + .roster {
   white-space: nowrap;
 }
 
-/* ---- The issued Invitation: a slip torn off the sheet ---------------- */
+/* ---- The issued Invitation, and the one overlay ---------------------- */
 
 .slip {
   display: grid;
   gap: calc(var(--step) * 1.5);
   margin: calc(var(--step) * 4) 0;
   padding: calc(var(--step) * 3);
-  background: var(--wash);
-  border: 2px solid var(--ink);
+  background: var(--field);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--seal);
 }
 
 .slip h2 {
   margin: 0;
-  font-family: var(--type-stencil);
-  font-size: 1.1rem;
-  letter-spacing: 0.1em;
+  font-size: var(--size-section);
 }
 
 .slip p {
@@ -1055,10 +1122,6 @@ h1 + .roster {
   max-width: none;
 }
 
-.slip input {
-  background: var(--stock);
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -1067,13 +1130,9 @@ h1 + .roster {
 }
 
 /*
- * The same slip, held over the sheet: the app's one overlay, and a native
- * `<dialog>` rather than a kit's, because `style-src 'self'` has no inline
- * exception and every library positions its overlay with one (ADR-0006).
- *
- * Its fill is the wash mixed into the stock rather than laid over it: an
- * overlay has the veil behind it, and a translucent slip would let the sheet
- * read through the record it is holding.
+ * The same slip held over the page: the app's one overlay, a native `<dialog>`
+ * rather than a kit's, because `style-src 'self'` has no inline exception and
+ * every library positions its overlay with one (ADR-0006).
  */
 dialog.slip {
   display: none;
@@ -1084,7 +1143,6 @@ dialog.slip {
   max-height: calc(100dvh - var(--gutter) * 2);
   margin: auto;
   overflow: auto;
-  background: color-mix(in srgb, var(--ink) 9%, var(--stock));
   color: var(--ink);
 }
 
@@ -1092,13 +1150,8 @@ dialog.slip[open] {
   display: grid;
 }
 
-/*
- * The veil: ink laid over the whole sheet while the slip is held above it.
- * `::backdrop` inherits the element's custom properties only in newer engines,
- * so the ink is named again here for the ones where it does not.
- */
 dialog.slip::backdrop {
-  background: color-mix(in srgb, var(--ink, #3b2a6b) 55%, transparent);
+  background: color-mix(in srgb, #0b0f17 55%, transparent);
 }
 
 /* ---- Try a role ------------------------------------------------------ */
@@ -1106,19 +1159,13 @@ dialog.slip::backdrop {
 .demo {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 3);
-  border-top: 3px double var(--ink);
+  border-top: 1px solid var(--rule);
 }
 
 .demo h2 {
   margin-top: 0;
 }
 
-/*
- * One entry per role, ruled off from the next the way a roster's rows are: the
- * action struck first, then the line saying what that role sees, then the
- * sign-in itself. Four buttons in a row would say which roles exist; this says
- * what each of them is.
- */
 .demo .roles {
   display: grid;
   margin: calc(var(--step) * 3) 0 0;
@@ -1129,7 +1176,7 @@ dialog.slip::backdrop {
 
 .demo .roles li {
   display: grid;
-  gap: calc(var(--step) * 1.5);
+  gap: calc(var(--step) * 1.25);
   justify-items: start;
   padding: calc(var(--step) * 3) 0;
   border-bottom: 1px solid var(--rule-faint);
@@ -1137,23 +1184,18 @@ dialog.slip::backdrop {
 
 .demo .roles li button {
   min-width: 20rem;
-  text-align: left;
+  justify-content: flex-start;
 }
 
-/*
- * The role's line and its sign-in are both struck as data, at body size: a
- * username and a password are values to be read and typed, so they are not
- * shrunk into a label's caps and tracking the way the sheet's small type is.
- */
 .roles__sees,
 .roles__account {
   margin: 0;
 }
 
-/*
- * What the sheet says it does not hold, ruled off below what it does. Struck
- * like the foot, because it is read last and is not part of the record.
- */
+.roles__account {
+  color: var(--ink-soft);
+}
+
 .not-built {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 2);
@@ -1164,31 +1206,32 @@ dialog.slip::backdrop {
   margin-top: 0;
 }
 
-/* A record's identifier, printed under the name it is given. */
+/* A record's identifier, set in figures under the name it is given. */
 .identifier {
   display: block;
+  margin-top: 0.125rem;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-family: var(--type-figures);
+  font-size: var(--size-small);
+  font-weight: 400;
 }
 
 /* ---- Paging through a record ---------------------------------------- */
 
-/*
- * The way through a record read a page at a time: newer to the left, older to
- * the right, as the record runs, and between them which page is struck.
- */
 .pager {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: calc(var(--step) * 1) calc(var(--step) * 2);
+  gap: var(--step) calc(var(--step) * 2);
   margin-bottom: calc(var(--step) * 2);
 }
 
 .pager p {
   flex: 1 1 12rem;
+  max-width: none;
   margin: 0;
-  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
 }
 
 /*
@@ -1201,7 +1244,8 @@ dialog.slip::backdrop {
 .pager button[aria-disabled="true"]:active {
   background: transparent;
   border-style: dashed;
-  color: var(--ink-soft);
+  border-color: var(--rule);
+  color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
   cursor: not-allowed;
   transform: none;
 }
@@ -1211,36 +1255,119 @@ dialog.slip::backdrop {
 .foot {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 2);
-  border-top: 1px solid var(--rule);
-  font-size: 0.85rem;
+  border-top: 1px solid var(--rule-faint);
+  font-size: var(--size-label);
 }
 
 .foot p {
   margin: 0;
 }
 
-/* ---- Narrow sheets --------------------------------------------------- */
+/* ---- Narrow pages ---------------------------------------------------- */
 
 @media (max-width: 52rem) {
+  .sheet__head {
+    padding-top: calc(var(--step) * 2);
+  }
+
+  /* The School's name keeps its line, with the way out held at its right. */
+  .shell-head {
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+
+  .shell-head__who {
+    flex: 1 1 auto;
+  }
+
+  .shell-head > .actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--step);
+  }
+
+  .shell-head__school {
+    font-size: var(--size-section);
+  }
+
   /*
-   * On a narrow sheet the slip is struck in line, pushing the navigation down
-   * rather than lying over it, where it would hide the links beneath.
+   * The other Schools open inside the head rather than over it: the list takes
+   * the head's full width and pushes the sections down, so it covers nothing
+   * and the page never scrolls sideways.
    */
-  .switcher ul {
+  .shell-head:has(.switcher[open]) {
+    flex-wrap: wrap;
+  }
+
+  .shell-head:has(.switcher[open]) > .actions {
+    flex-basis: 100%;
+    align-items: stretch;
+  }
+
+  .switcher[open] ul {
     position: static;
-    margin-top: calc(var(--step) * 0.5);
+    width: auto;
+    max-width: none;
+    margin-top: var(--step);
+  }
+
+  /*
+   * On a phone the sections stop being tabs and become ruled rows of pages,
+   * three to a row and running edge to edge, every one in reach and the page
+   * title still in the first screen. The page being read keeps its seal.
+   */
+  .shell-nav {
+    padding: 0;
+  }
+
+  .shell-nav ul {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 0;
+    background: var(--rule-faint);
+    border-top: 1px solid var(--rule-faint);
+  }
+
+  .shell-nav a {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 0 var(--step);
+    border: 0;
+    border-radius: 0;
+    background: var(--band);
+    text-align: center;
+  }
+
+  .shell-nav a[aria-current="page"] {
+    background: var(--page);
+  }
+
+  /* A short last row stretches to the edge rather than leaving a hole. */
+  .shell-nav li:last-child:nth-child(3n + 1) {
+    grid-column: 1 / -1;
+  }
+
+  .shell-nav li:last-child:nth-child(3n + 2) {
+    grid-column: span 2;
+  }
+
+  .shell-nav__seal {
+    border-radius: 0;
   }
 
   .sheet__body {
     grid-template-columns: minmax(0, 1fr);
     gap: calc(var(--step) * 4) 0;
+    padding-top: calc(var(--step) * 4);
   }
 
   .legend {
     position: static;
     order: 2;
-    padding: calc(var(--step) * 3) 0 0;
-    border-right: 0;
+    padding-top: calc(var(--step) * 3);
     border-top: 1px solid var(--rule);
   }
 
@@ -1253,10 +1380,6 @@ dialog.slip::backdrop {
     justify-items: stretch;
   }
 
-  .legend dl {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .roster__leader {
     display: none;
   }
@@ -1265,10 +1388,6 @@ dialog.slip::backdrop {
     flex: 1 1 8rem;
   }
 
-  /*
-   * The record's columns stack. The head is dropped, because each value now
-   * carries its own term; the row becomes the entry, ruled off from the next.
-   */
   .record,
   .record tbody,
   .record tr,
@@ -1281,7 +1400,7 @@ dialog.slip::backdrop {
   }
 
   .record tr {
-    padding: calc(var(--step) * 1.75) 0;
+    padding: calc(var(--step) * 1.75) calc(var(--step) * 0.5);
     border-bottom: 1px solid var(--rule-faint);
   }
 
@@ -1301,11 +1420,9 @@ dialog.slip::backdrop {
   .record td[data-head]::before {
     content: attr(data-head);
     display: block;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
     color: var(--ink-soft);
+    font-size: var(--size-small);
+    font-weight: 650;
   }
 
   .record td:last-child {
@@ -1318,11 +1435,16 @@ dialog.slip::backdrop {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sheet::after {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation: none !important;
   }
 
-  button {
-    transition: none;
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
