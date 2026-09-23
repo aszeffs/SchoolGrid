@@ -46,6 +46,27 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return { ok: true, body: sent.body as T };
 }
 
+/** What an answer carries when it is answered. */
+type BodyOf<A> = A extends { ok: true; body: infer B } ? B : never;
+
+/**
+ * Several requests, sent together and answered as one: answered only when
+ * every one of them was, so a screen that reads more than one record has the
+ * same one way of failing as a screen that reads one.
+ */
+export async function readAll<const R extends readonly Promise<ApiResult<unknown>>[]>(
+  reads: R,
+): Promise<ApiResult<{ -readonly [K in keyof R]: BodyOf<Awaited<R[K]>> }>> {
+  const bodies: unknown[] = [];
+  for (const answer of await Promise.all(reads)) {
+    if (!answer.ok) {
+      return { ok: false };
+    }
+    bodies.push(answer.body);
+  }
+  return { ok: true, body: bodies as { -readonly [K in keyof R]: BodyOf<Awaited<R[K]>> } };
+}
+
 /** A role a Person holds in their School, imported rather than restated. */
 export type { Role };
 
@@ -116,6 +137,38 @@ export interface Invitation {
   expiresAt: string;
 }
 
+/** One role held by one Person between its own bounds. A Person holding several holds several of these. */
+export interface Membership {
+  id: string;
+  personId: string;
+  role: Role;
+  startsAt: string;
+  /** Null while it has no end. */
+  endsAt: string | null;
+}
+
+/** One Student's participation in the School, from when it was recorded until it ended. */
+export interface Enrollment {
+  id: string;
+  studentPersonId: string;
+  startedAt: string;
+  /** Null while it is open. */
+  endedAt: string | null;
+  /** Why it ended; null while it is open. */
+  endReason: string | null;
+}
+
+/** A Guardian's link to one Student, and the Access profile it carries. */
+export interface GuardianLink {
+  id: string;
+  guardianPersonId: string;
+  studentPersonId: string;
+  accessProfile: AccessProfile;
+  createdAt: string;
+  /** Null while it is in force. */
+  endedAt: string | null;
+}
+
 /** What the running site was built from. Either is absent when the server does not know it. */
 export interface BuildInfo {
   commit?: string;
@@ -178,6 +231,53 @@ export const api = {
     request<{ invitation: Invitation }>(
       "DELETE",
       inSchool(schoolId, `/invitations/${encodeURIComponent(invitationId)}`),
+    ),
+  memberships: (schoolId: string) =>
+    request<{ memberships: Membership[] }>("GET", inSchool(schoolId, "/memberships")),
+  /** Starts now. A missing `endsAt` leaves it with no end. */
+  grantMembership: (schoolId: string, grant: { personId: string; role: Role; endsAt?: string }) =>
+    request<{ membership: Membership }>("POST", inSchool(schoolId, "/memberships"), grant),
+  /** Only a membership's end can change, and not into the past. */
+  narrowMembership: (schoolId: string, membershipId: string, endsAt: string) =>
+    request<{ membership: Membership }>(
+      "PATCH",
+      inSchool(schoolId, `/memberships/${encodeURIComponent(membershipId)}`),
+      { endsAt },
+    ),
+  revokeMembership: (schoolId: string, membershipId: string) =>
+    request<{ membership: Membership }>(
+      "DELETE",
+      inSchool(schoolId, `/memberships/${encodeURIComponent(membershipId)}`),
+    ),
+  enrollments: (schoolId: string) =>
+    request<{ enrollments: Enrollment[] }>("GET", inSchool(schoolId, "/enrollments")),
+  enroll: (schoolId: string, studentPersonId: string) =>
+    request<{ enrollment: Enrollment }>("POST", inSchool(schoolId, "/enrollments"), { studentPersonId }),
+  /** An Enrollment does not end without a reason. Every Guardian link to the Student ends with it. */
+  endEnrollment: (schoolId: string, enrollmentId: string, reason: string) =>
+    request<{ enrollment: Enrollment }>(
+      "DELETE",
+      inSchool(schoolId, `/enrollments/${encodeURIComponent(enrollmentId)}`),
+      { reason },
+    ),
+  guardianLinks: (schoolId: string) =>
+    request<{ guardianLinks: GuardianLink[] }>("GET", inSchool(schoolId, "/guardian-links")),
+  /** Both permissions are stated: a profile is never left to a default. */
+  linkGuardian: (
+    schoolId: string,
+    link: { guardianPersonId: string; studentPersonId: string; accessProfile: AccessProfile },
+  ) => request<{ guardianLink: GuardianLink }>("POST", inSchool(schoolId, "/guardian-links"), link),
+  /** Changes only the permissions named; the other stays as it stands. */
+  setAccessProfile: (schoolId: string, guardianLinkId: string, accessProfile: Partial<AccessProfile>) =>
+    request<{ guardianLink: GuardianLink }>(
+      "PATCH",
+      inSchool(schoolId, `/guardian-links/${encodeURIComponent(guardianLinkId)}`),
+      { accessProfile },
+    ),
+  endGuardianLink: (schoolId: string, guardianLinkId: string) =>
+    request<{ guardianLink: GuardianLink }>(
+      "DELETE",
+      inSchool(schoolId, `/guardian-links/${encodeURIComponent(guardianLinkId)}`),
     ),
   inspectInvitation: (secret: string) =>
     request<InvitationInspection>("POST", "/invitations/inspect", { secret }),

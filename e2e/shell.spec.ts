@@ -9,9 +9,9 @@ const SECTIONS = [
   { label: "Your account", path: "account", heading: "Your account" },
   { label: "People", path: "persons", heading: "Persons" },
   { label: "Invitations", path: "invitations", heading: "Invitations" },
-  { label: "Memberships", path: "memberships", heading: "Memberships" },
+  { label: "Roles", path: "memberships", heading: "School memberships" },
   { label: "Enrollments", path: "enrollments", heading: "Enrollments" },
-  { label: "Guardians", path: "guardian-links", heading: "Guardians" },
+  { label: "Guardians", path: "guardian-links", heading: "Guardian links" },
   { label: "Audit", path: "audit-records", heading: "Audit" },
 ];
 
@@ -171,7 +171,7 @@ test("a session that has ended sends the next step to sign in", async ({ page, c
 
   // Ended elsewhere: the page still holds what it drew, but the server holds no session.
   await context.clearCookies();
-  await navLinks(page).filter({ hasText: "Memberships" }).click();
+  await navLinks(page).filter({ hasText: "Roles" }).click();
   await expect(page).toHaveURL("/sign-in");
 });
 

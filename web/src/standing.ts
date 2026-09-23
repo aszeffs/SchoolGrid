@@ -1,0 +1,58 @@
+import type { ListedPerson, Membership, Role } from "./api.ts";
+
+/**
+ * What the Roles, Enrollments and Guardians sheets each read off the records
+ * the server sent, so the three cannot come to disagree about it.
+ *
+ * None of it is a decision. Which Person may be enrolled or linked is the
+ * server's to say; this only keeps a form from offering a choice the server is
+ * certain to refuse, and a refusal still shows the one "not available" state.
+ */
+
+/** Each Person's display name, by id, for records that name Persons only by id. */
+export function namesOf(persons: readonly ListedPerson[]): (personId: string) => string {
+  const names = new Map(persons.map((person) => [person.id, person.displayName]));
+  // A Person the School holds is always listed to its School Administrator;
+  // the fallback is for a record read a moment before the Person was.
+  return (personId) => names.get(personId) ?? "A Person";
+}
+
+/** Whether a membership is over: its end has passed, or it was revoked before it began. */
+export function hasEnded({ startsAt, endsAt }: Membership, now: Date): boolean {
+  return endsAt !== null && (new Date(endsAt) <= now || new Date(endsAt) <= new Date(startsAt));
+}
+
+/** The Persons holding this role now, or from a start still to come. */
+export function holdingNowOrLater(memberships: readonly Membership[], role: Role, now: Date): Set<string> {
+  return new Set(
+    memberships
+      .filter((membership) => membership.role === role && !hasEnded(membership, now))
+      .map((membership) => membership.personId),
+  );
+}
+
+/** Orders records by the name of the Person each is about, as a reader looks one up. */
+export function byName<T>(nameOf: (row: T) => string): (a: T, b: T) => number {
+  return (a, b) => nameOf(a).localeCompare(nameOf(b));
+}
+
+/** A moment as a reader expects it: a date, and a time of day. */
+export const MOMENT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+/** A day as a reader expects it. */
+export const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+
+/**
+ * The day after this moment's, as a date field writes it. The earliest day an
+ * end can be set for: the start of today has already gone by.
+ */
+export function dayAfter(moment: Date): string {
+  const next = new Date(moment.getFullYear(), moment.getMonth(), moment.getDate() + 1);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+}
+
+/** The start of a day a date field names, in the reader's own time zone, as the API takes a moment. */
+export function startOfDay(day: string): string {
+  return new Date(`${day}T00:00`).toISOString();
+}

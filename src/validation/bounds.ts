@@ -2,8 +2,8 @@
  * The bounds a caller-supplied value is held to, in the one place the service
  * and the web app both read them from.
  *
- * Only the bounds both hold to. One the service alone enforces, such as an
- * Audit record's reason, stays beside the check that enforces it.
+ * Only the bounds both hold to. One the service alone enforces stays beside
+ * the check that enforces it.
  *
  * The web app restates none of them. A form whose `maxLength` drifted from the
  * bound the service enforces would let someone type a value that is refused
@@ -21,6 +21,12 @@
  * name.
  */
 export const MAX_NAME_LENGTH = 200;
+
+/**
+ * The reason a change is made for, as written to its Audit record. Ending an
+ * Enrollment requires one, and the web app's form for it holds to this.
+ */
+export const MAX_REASON_LENGTH = 1000;
 
 /**
  * Bounds a malformed sign-in rather than an honest one. Credentials longer
