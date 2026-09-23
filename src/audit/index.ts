@@ -147,14 +147,48 @@ export async function recordRefusal(database: Queryable, refusal: Refusal): Prom
   );
 }
 
+/** One page of a School's trail, and where the next begins. */
+export interface AuditPage {
+  auditRecords: AuditRecord[];
+  /**
+   * Names the last record on this page, from which the next page is read; null
+   * when there is none. The record's own identifier rather than its position,
+   * which counts every School's records and would let one School watch how
+   * busy the others are.
+   */
+  nextCursor: string | null;
+}
+
 /**
- * One School's trail, newest first. Whether the caller may read it is the
- * Access module's decision, made before this is reached.
+ * One page of one School's trail, newest first, beginning after the record the
+ * cursor names or at the newest when there is none. Whether the caller may
+ * read it is the Access module's decision, made before this is reached.
+ *
+ * Ordered by the position a record was appended at, never by time, so the
+ * order is total and stable: a record appended while someone pages is newer
+ * than every cursor already issued, and lands on a first page rather than
+ * shifting the pages behind it (ADR-0008).
+ *
+ * Null when the cursor names no record in this School's trail. A record in
+ * another School's trail is looked for in this one and not found, so it is
+ * answered exactly as a cursor naming nothing at all.
  */
 export async function readAuditRecords(
   database: Queryable,
   schoolId: string,
-): Promise<AuditRecord[]> {
+  { cursor, limit }: { cursor: string | null; limit: number },
+): Promise<AuditPage | null> {
+  let after: string | null = null;
+  if (cursor !== null) {
+    const { rows } = await database.query<{ position: string }>(
+      "SELECT position FROM app.audit_record WHERE school_id = $1 AND id = $2",
+      [schoolId, cursor],
+    );
+    if (rows[0] === undefined) {
+      return null;
+    }
+    after = rows[0].position;
+  }
   const { rows } = await database.query<{
     id: string;
     occurred_at: Date;
@@ -170,19 +204,26 @@ export async function readAuditRecords(
     `SELECT id, occurred_at, actor_person_id, actor_platform_administrator_id, action, target_type, target_id, reason,
             before_value, after_value
      FROM app.audit_record
-     WHERE school_id = $1
-     ORDER BY position DESC`,
-    [schoolId],
+     WHERE school_id = $1 AND ($2::bigint IS NULL OR position < $2::bigint)
+     ORDER BY position DESC
+     LIMIT $3`,
+    // One more than the page holds, to learn whether there is a next page
+    // without a second round trip.
+    [schoolId, after, limit + 1],
   );
-  return rows.map((row) => ({
-    id: row.id,
-    occurredAt: row.occurred_at.toISOString(),
-    actorPersonId: row.actor_person_id,
-    actorPlatformAdministratorId: row.actor_platform_administrator_id,
-    action: row.action,
-    target: { type: row.target_type, id: row.target_id },
-    reason: row.reason,
-    before: row.before_value,
-    after: row.after_value,
-  }));
+  const page = rows.slice(0, limit);
+  return {
+    auditRecords: page.map((row) => ({
+      id: row.id,
+      occurredAt: row.occurred_at.toISOString(),
+      actorPersonId: row.actor_person_id,
+      actorPlatformAdministratorId: row.actor_platform_administrator_id,
+      action: row.action,
+      target: { type: row.target_type, id: row.target_id },
+      reason: row.reason,
+      before: row.before_value,
+      after: row.after_value,
+    })),
+    nextCursor: rows.length > limit ? page.at(-1)!.id : null,
+  };
 }

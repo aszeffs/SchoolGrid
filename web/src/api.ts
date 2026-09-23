@@ -169,6 +169,29 @@ export interface GuardianLink {
   endedAt: string | null;
 }
 
+/**
+ * One entry in a School's trail. It names who acted and what was acted on by
+ * identifier alone; a screen puts names to them from what it already reads.
+ */
+export interface AuditRecord {
+  id: string;
+  occurredAt: string;
+  /** Null when no Person acted: an unauthenticated caller, a Platform Administrator, or the platform. */
+  actorPersonId: string | null;
+  actorPlatformAdministratorId: string | null;
+  /** What happened, as `<subject>.<verb>`, such as `school.provisioned`. */
+  action: string;
+  target: { type: string; id: string | null };
+  reason: string | null;
+}
+
+/** One page of a School's trail, newest first, and the cursor the next page is read from. */
+export interface AuditPage {
+  auditRecords: AuditRecord[];
+  /** Null on the last page. */
+  nextCursor: string | null;
+}
+
 /** What the running site was built from. Either is absent when the server does not know it. */
 export interface BuildInfo {
   commit?: string;
@@ -278,6 +301,15 @@ export const api = {
     request<{ guardianLink: GuardianLink }>(
       "DELETE",
       inSchool(schoolId, `/guardian-links/${encodeURIComponent(guardianLinkId)}`),
+    ),
+  /**
+   * One page of the School's trail: the newest, or the one after the record a
+   * cursor from an earlier page names. Never the whole trail (ADR-0008).
+   */
+  auditRecords: (schoolId: string, cursor: string | null) =>
+    request<AuditPage>(
+      "GET",
+      inSchool(schoolId, `/audit-records${cursor === null ? "" : `?cursor=${encodeURIComponent(cursor)}`}`),
     ),
   inspectInvitation: (secret: string) =>
     request<InvitationInspection>("POST", "/invitations/inspect", { secret }),

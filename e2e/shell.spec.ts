@@ -114,12 +114,13 @@ test("an account reaching one School goes straight into it, and sees only what i
     expect(links).toEqual(["Your account", "People"]);
   }
 
-  // Asked for by its URL, a page their roles do not reach still opens: its
-  // records are the server's to refuse, not the navigation's (ADR-0007).
+  // Asked for by its URL, a page their roles do not reach still asks for its
+  // records: they are the server's to refuse, not the navigation's (ADR-0007).
   const schoolId = new URL(page.url()).pathname.split("/")[2]!;
+  const asked = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/schools/${schoolId}/audit-records`);
   await page.goto(`/schools/${schoolId}/audit-records`);
-  await expect(page.getByRole("heading", { level: 1, name: "Audit" })).toBeVisible();
-  await expect(navLinks(page)).toHaveText(["Your account", "People"]);
+  expect((await asked).ok()).toBe(false);
+  await expect(page.getByRole("heading", { level: 1, name: "Not available" })).toBeVisible();
 });
 
 test("every page within a School opens from its URL", async ({ page, audit }) => {

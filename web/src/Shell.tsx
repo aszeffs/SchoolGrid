@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Account } from "./Account.tsx";
 import { api, type ReachedSchool, type Session } from "./api.ts";
+import { AuditRecords } from "./AuditRecords.tsx";
 import { Enrollments } from "./Enrollments.tsx";
 import { GuardianLinks } from "./GuardianLinks.tsx";
 import { Invitations } from "./Invitations.tsx";
@@ -8,7 +9,6 @@ import { Link } from "./Link.tsx";
 import { Memberships } from "./Memberships.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { NotBuilt } from "./NotBuilt.tsx";
 import { Persons } from "./Persons.tsx";
 import { href, landing, sectionOf, sectionsFor, type Route, type SchoolRoute } from "./routes.ts";
 import { Schools } from "./Schools.tsx";
@@ -183,8 +183,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <Enrollments school={school} />;
     case "guardianLinks":
       return <GuardianLinks school={school} />;
-    default:
-      return <NotBuilt name={sectionOf(route).label} />;
+    case "auditRecords":
+      return <AuditRecords school={school} />;
   }
 }
 
