@@ -4,6 +4,7 @@ import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { createAuthenticator, registerAuthenticationRoutes } from "./authentication/index.ts";
+import { registerCalendarRoutes } from "./calendar/routes.ts";
 import type { Database } from "./db/pool.ts";
 import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
@@ -143,6 +144,7 @@ export function buildServer({
       registerIdentityRoutes(api, database, authenticator, publicOrigin);
       registerAccessRoutes(api, database, authenticator);
       registerAuditRoutes(api, database, authenticator);
+      registerCalendarRoutes(api, database, authenticator);
       registerPlatformRoutes(api, database, authenticator);
     },
     { prefix: API_PREFIX },

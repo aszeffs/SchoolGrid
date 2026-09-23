@@ -192,6 +192,12 @@ export interface AuditPage {
   nextCursor: string | null;
 }
 
+/** What a School Administrator configures about their School. */
+export interface SchoolSettings {
+  /** An IANA timezone identifier, such as `America/New_York`: where the School's days begin and end. */
+  timezone: string;
+}
+
 /** What the running site was built from. Either is absent when the server does not know it. */
 export interface BuildInfo {
   commit?: string;
@@ -311,6 +317,11 @@ export const api = {
       "GET",
       inSchool(schoolId, `/audit-records${cursor === null ? "" : `?cursor=${encodeURIComponent(cursor)}`}`),
     ),
+  /** The School's settings, with the timezones worth offering when changing its own. */
+  schoolSettings: (schoolId: string) =>
+    request<{ settings: SchoolSettings; timezones: string[] }>("GET", inSchool(schoolId, "/settings")),
+  setTimezone: (schoolId: string, timezone: string) =>
+    request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { timezone }),
   inspectInvitation: (secret: string) =>
     request<InvitationInspection>("POST", "/invitations/inspect", { secret }),
   redeemInvitation,

@@ -9,7 +9,8 @@ const BOB = { username: "bob", password: "yet another staple, longer" };
 const SAM = { username: "sam", password: "a different staple entirely" };
 
 describe("Platform Administrator", () => {
-  const server = useTestServer();
+  // The route enumeration below makes more requests than the default limit allows.
+  const server = useTestServer({ rateLimit: { max: 10_000, windowMs: 60_000 } });
 
   describe("provisioning a School", () => {
     it("creates a School whose first School Administrator can then act in it", async () => {
@@ -19,24 +20,28 @@ describe("Platform Administrator", () => {
 
       const provisioned = await pat.post("/api/platform/schools", {
         name: "Northside",
+        timezone: "America/New_York",
         schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
       });
 
       expect(provisioned.status).toBe(201);
       const { school, schoolAdministrator } = provisioned.body as {
-        school: { id: string; name: string };
+        school: { id: string; name: string; timezone: string };
         schoolAdministrator: { id: string; displayName: string };
       };
       expect(provisioned.body).toEqual({
-        school: { id: expect.any(String), name: "Northside" },
+        school: { id: expect.any(String), name: "Northside", timezone: "America/New_York" },
         schoolAdministrator: { id: expect.any(String), displayName: "Alice Administrator" },
       });
 
       const alice = await server().signIn(ALICE);
-      expect((await alice.get("/api/schools")).body).toEqual({ schools: [school] });
+      expect((await alice.get("/api/schools")).body).toEqual({ schools: [{ id: school.id, name: school.name }] });
       expect((await alice.inSchool(school.id).get("/persons")).body).toEqual({
         persons: [{ ...schoolAdministrator, claimed: true }],
       });
+      expect((await alice.inSchool(school.id).get("/settings")).body).toEqual(
+        expect.objectContaining({ settings: { timezone: "America/New_York" } }),
+      );
     });
 
     it("is recorded in the School's own trail, naming the Platform Administrator, for its School Administrator to read", async () => {
@@ -48,6 +53,7 @@ describe("Platform Administrator", () => {
 
       const provisioned = await pat.post("/api/platform/schools", {
         name: "Northside",
+        timezone: "Asia/Manila",
         schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
       });
       const { school, schoolAdministrator } = provisioned.body as {
@@ -68,8 +74,31 @@ describe("Platform Administrator", () => {
         target: { type: "school", id: school.id },
         reason: null,
         before: null,
-        after: { name: "Northside", schoolAdministratorPersonId: schoolAdministrator.id },
+        after: { name: "Northside", timezone: "Asia/Manila", schoolAdministratorPersonId: schoolAdministrator.id },
       });
+    });
+
+    it.each([
+      ["no timezone", {}],
+      ["a timezone that is no IANA identifier", { timezone: "Mars/Olympus_Mons" }],
+      ["a timezone in the wrong letter case", { timezone: "asia/manila" }],
+      ["an empty timezone", { timezone: "" }],
+      ["a timezone that is not text", { timezone: 8 }],
+    ])("requires a timezone the database knows, creating nothing given %s", async (_case, timezone) => {
+      await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
+      await server().createAccount(ALICE);
+      const pat = await server().signIn(PAT);
+
+      const refused = await pat.post("/api/platform/schools", {
+        name: "Northside",
+        ...timezone,
+        schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
+      });
+
+      expect(refused.status).toBe(400);
+      expect(refused.body).toEqual({ status: "invalid_request" });
+      const { rows } = await server().database.query("SELECT id FROM app.school");
+      expect(rows).toEqual([]);
     });
 
     it.each([
@@ -83,6 +112,7 @@ describe("Platform Administrator", () => {
 
       const refused = await pat.post("/api/platform/schools", {
         name: "Northside",
+        timezone: "UTC",
         schoolAdministrator: { username, displayName: "Northside Administrator" },
       });
 
@@ -104,6 +134,7 @@ describe("Platform Administrator", () => {
       await server().provisionSchool({ name: "Westbrook", administrator: await server().createAccount(BOB) });
       const request = {
         name: "Northside",
+        timezone: "UTC",
         schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
       };
 
@@ -242,6 +273,9 @@ describe("Platform Administrator", () => {
           { method: "POST", url: "/api/schools/:schoolId/invitations" },
           { method: "GET", url: "/api/schools/:schoolId/invitations" },
           { method: "DELETE", url: "/api/schools/:schoolId/invitations/:invitationId" },
+          { method: "GET", url: "/api/schools/:schoolId/settings" },
+          { method: "PATCH", url: "/api/schools/:schoolId/settings" },
+          { method: "GET", url: "/api/schools/:schoolId/school-date" },
         ]),
       );
 

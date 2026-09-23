@@ -13,6 +13,7 @@ const SECTIONS = [
   { label: "Enrollments", path: "enrollments", heading: "Enrollments" },
   { label: "Guardians", path: "guardian-links", heading: "Guardian links" },
   { label: "Audit", path: "audit-records", heading: "Audit" },
+  { label: "Settings", path: "settings", heading: "School settings" },
 ];
 
 function navLinks(page: Page) {
@@ -234,7 +235,7 @@ test("the shell is reached from the keyboard, with focus shown", async ({ page }
   }
   expect(reached).toEqual(expected);
 
-  // And followed from it.
+  // And followed from it, to the last page it reached.
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { level: 1, name: "Audit" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: SECTIONS.at(-1)!.heading })).toBeVisible();
 });

@@ -78,7 +78,8 @@ describe("migrations", () => {
   // How the service starts without the schema owner's credentials: it cannot
   // migrate, so it checks, as the application's role, that someone else did.
   describe("checking without migrating", () => {
-    const LATEST = "0011_migration_record_readable.sql";
+    const LATEST = "0012_school_timezone.sql";
+    const RECORD_READABLE = "0011_migration_record_readable.sql";
 
     it("passes, as the application's role, against a fully migrated database", async () => {
       await expect(assertMigrated(server().database)).resolves.toBeUndefined();
@@ -99,7 +100,7 @@ describe("migrations", () => {
       await server().ownerDatabase.query("DROP TABLE public.schema_migrations");
 
       await expect(assertMigrated(server().database)).rejects.toThrow(
-        /missing migration\(s\) 0001_initial\.sql, .*0011/,
+        /missing migration\(s\) 0001_initial\.sql, .*0012/,
       );
     });
 
@@ -111,12 +112,12 @@ describe("migrations", () => {
         "REVOKE SELECT ON public.schema_migrations FROM schoolgrid_app",
       );
       await server().ownerDatabase.query(
-        "DELETE FROM public.schema_migrations WHERE name = $1",
-        [LATEST],
+        "DELETE FROM public.schema_migrations WHERE name >= $1",
+        [RECORD_READABLE],
       );
 
       await expect(assertMigrated(server().database)).rejects.toThrow(
-        `missing migration(s) ${LATEST}`,
+        `missing migration(s) ${RECORD_READABLE}`,
       );
     });
 
@@ -174,6 +175,44 @@ describe("migrations", () => {
         );
       },
     );
+  });
+
+  describe("giving Schools a timezone", () => {
+    const MIGRATION = "0012_school_timezone.sql";
+
+    // Returns the database to where it stood before the migration, when a
+    // School had a name and nothing else.
+    async function undoMigration() {
+      const owner = server().ownerDatabase;
+      await owner.query(`ALTER TABLE app.school DROP COLUMN timezone`);
+      await owner.query(`DROP TABLE app.timezone`);
+      await owner.query(`GRANT UPDATE, DELETE ON app.school TO schoolgrid_app`);
+      await owner.query(`DELETE FROM public.schema_migrations WHERE name = $1`, [MIGRATION]);
+    }
+
+    it("gives every existing School the fixed default, UTC", async () => {
+      await undoMigration();
+      await server().ownerDatabase.query(`INSERT INTO app.school (name) VALUES ('Northside'), ('Westbrook')`);
+
+      const result = await migrate(server().ownerDatabase);
+
+      expect(result.applied).toEqual([MIGRATION]);
+      const { rows } = await server().ownerDatabase.query(
+        `SELECT name, timezone FROM app.school ORDER BY name`,
+      );
+      expect(rows).toEqual([
+        { name: "Northside", timezone: "UTC" },
+        { name: "Westbrook", timezone: "UTC" },
+      ]);
+    });
+
+    // The image one deploy behind still creates a School by name alone (#92).
+    it("still accepts a School created by name alone, as the previous image creates one", async () => {
+      await server().database.query(`INSERT INTO app.school (name) VALUES ('Eastfield')`);
+
+      const { rows } = await server().database.query(`SELECT timezone FROM app.school WHERE name = 'Eastfield'`);
+      expect(rows).toEqual([{ timezone: "UTC" }]);
+    });
   });
 
   describe("normalising usernames", () => {

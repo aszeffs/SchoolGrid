@@ -12,6 +12,7 @@ import { NotAvailable } from "./NotAvailable.tsx";
 import { ROLE_NAMES } from "./roles.ts";
 import { Persons } from "./Persons.tsx";
 import { href, landing, sectionOf, sectionsFor, type Route, type SchoolRoute } from "./routes.ts";
+import { SchoolSettings } from "./SchoolSettings.tsx";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
@@ -195,6 +196,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <GuardianLinks school={school} />;
     case "auditRecords":
       return <AuditRecords school={school} />;
+    case "settings":
+      return <SchoolSettings school={school} />;
   }
 }
 
