@@ -123,7 +123,7 @@ gh secret set VERCEL_TOKEN --env production --repo "$REPO"
 
 ## Deploying
 
-Deploys come only from the container workflow's `deploy` job on `main`, which calls [`scripts/deploy.sh`](../scripts/deploy.sh). It verifies the digest's provenance, migrates as the owner with that image, deploys, and waits for health, each step only if the one before succeeded. It deploys nothing if a newer commit has reached `main` since, so a slow older run cannot roll production back. The job runs in the `production` concurrency group, one deploy at a time; the nightly reset the spec plans will share it.
+Deploys come only from the container workflow's `deploy` job on `main`, which calls [`scripts/deploy.sh`](../scripts/deploy.sh). It verifies the digest's provenance, migrates as the owner with that image, deploys, and waits for health, each step only if the one before succeeded. It deploys nothing if a newer commit has reached `main` since, so a slow older run cannot roll production back. The job runs in the `production` concurrency group, one deploy at a time, and the nightly demo reset below shares it.
 
 The script writes two files into a temporary directory outside the repository and deploys from there, so nothing else is uploaded and neither is committed:
 
@@ -147,6 +147,16 @@ FROM ghcr.io/aszeffs/schoolgrid@sha256:<digest>
 Then `vercel deploy --prod --env IMAGE_DIGEST=<digest>`, and `/api/health` is retried until it answers `200`.
 
 Vercel copies the image into its own registry and serves it under a new manifest digest. What runs is still what the `FROM` pins; `/api/build-info` reports the GHCR digest, the one the attestations cover.
+
+## Resetting the demo
+
+The demo publishes a sign-in for every School role, so any visitor can change anything in it. The [Demo reset](../.github/workflows/demo-reset.yml) workflow puts it back nightly, at 02:00 Asia/Manila, by calling [`scripts/reset-demo.sh`](../scripts/reset-demo.sh). Run it by hand from the Actions tab (**Demo reset → Run workflow**) to clean up sooner.
+
+It reads the digest from the live `/api/build-info` rather than being told one, so it migrates with the image already serving the database. It then verifies that digest's provenance exactly as the deploy does, drops the `app` schema and the migration record as the owner, migrates with the same image, applies `demo/seed.sql`, and finally checks the database holds only seeded data and that every account the demo publishes signs in. Nothing is dropped unless the read and the verification both succeeded.
+
+Dropping the schema deletes the demo's Audit records. That is deliberate and true of the demo alone: the trigger that refuses `TRUNCATE` on `app.audit_record` does not stop a `DROP SCHEMA`, and only the owner can drop it. The Audit records there are invented, made by visitors trying a role.
+
+The reset runs in the `production` environment, for the owner's connection string, and in the `production` concurrency group, so it never overlaps a deploy in either direction. Neither job cancels the other: a reset stopped halfway would leave the demo with no data at all.
 
 ## Checking it
 

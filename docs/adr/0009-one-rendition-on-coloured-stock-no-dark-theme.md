@@ -1,0 +1,14 @@
+# One rendition on coloured stock, and no dark theme
+
+Superseded by [ADR-0010](0010-light-and-dark-renditions-follow-the-browser.md): the ditto-sheet design system this protected was replaced, and the app now follows the browser's light or dark setting.
+
+SchoolGrid has a single rendition. `web/src/styles.css` sets `color-scheme: light` and declares no `prefers-color-scheme: dark` block, and the app never inverts: one aniline violet ink is struck onto six saturated copy stocks, and the stock floods the frame. We rejected the paired light and dark token sets the admin console was first specified with. The design system's range lives in the paper rather than in the ink — a sheet is goldenrod because it is the Persons roster, canary because it is Sign in — and an inverted rendition has no paper, so it would have to re-map six stocks onto dark grounds that mean nothing, re-derive both inks against them, and re-check every contrast pair. What came back would be a second design system wearing the first one's names, and the one thing the stocks exist to say — which sheet is in front of you, before a word is read — is exactly what it could not carry. A dark mode is a real comfort, but it is not free of meaning here, and the meaning is the system.
+
+## Consequences
+
+- `color-scheme: light` is a decision, not an oversight. It tells the browser to keep its own form controls, scrollbars and caret in the light rendition, so nothing the user agent draws inverts underneath a sheet that does not.
+- A `prefers-color-scheme: dark` block anywhere in `web/src/styles.css` contradicts this ADR. Where a dark browser must be accounted for, it is accounted for by the sheet printing the same, not by a second set of values.
+- The bar is held in the rendition that ships. WCAG 2.2 AA is checked once, with both inks clearing 4.5:1 on all six stocks, rather than twice against two grounds; `e2e/public-pages.spec.ts` asserts a sheet prints the same in a dark browser as in a light one and still passes `axe-core` there.
+- `body` carries the default stock while each sheet overrides `--stock` on itself, so a dark browser cannot be the reason a page looks wrong: there is one set of values and every sheet is drawn from it.
+- Someone will ask for a dark mode, and a user who prefers one does not get it. That cost is accepted here and should be answered with this ADR rather than with a token set. A manual light/dark toggle was already out of scope; this closes the automatic one too.
+- Spec #127 was written before the ditto-sheet design system landed and specified paired token sets and a `prefers-color-scheme` story. It is superseded on this point by this ADR, and its Out of Scope list names dark themes outright.

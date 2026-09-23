@@ -1,3 +1,4 @@
+import { MAX_NAME_LENGTH, MAX_REASON_LENGTH } from "../validation/bounds.ts";
 import { InvalidRequest } from "./invalid-request.ts";
 
 /**
@@ -5,9 +6,6 @@ import { InvalidRequest } from "./invalid-request.ts";
  * InvalidRequest, so it runs only once the Access decision has permitted the
  * caller: see InvalidRequest.
  */
-
-const MAX_REASON_LENGTH = 1000;
-const MAX_TEXT_LENGTH = 200;
 
 /** The body's fields, refusing a body that is not an object or names a field not allowed. */
 export function fieldsOf(body: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -43,8 +41,8 @@ export function reasonOnly(body: unknown): string | null {
  * shares.
  */
 export function boundedText(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim().length === 0 || value.length > MAX_TEXT_LENGTH) {
-    throw new InvalidRequest(`${field} must be text of at most ${MAX_TEXT_LENGTH} characters`);
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > MAX_NAME_LENGTH) {
+    throw new InvalidRequest(`${field} must be text of at most ${MAX_NAME_LENGTH} characters`);
   }
   return value;
 }

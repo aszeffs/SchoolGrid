@@ -1,3 +1,5 @@
+import type { Role } from "../../src/access/roles.ts";
+
 /**
  * The API, reached on the page's own origin.
  *
@@ -44,9 +46,80 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return { ok: true, body: sent.body as T };
 }
 
-export interface School {
-  id: string;
+/** What an answer carries when it is answered. */
+type BodyOf<A> = A extends { ok: true; body: infer B } ? B : never;
+
+/**
+ * Several requests, sent together and answered as one: answered only when
+ * every one of them was, so a screen that reads more than one record has the
+ * same one way of failing as a screen that reads one.
+ */
+export async function readAll<const R extends readonly Promise<ApiResult<unknown>>[]>(
+  reads: R,
+): Promise<ApiResult<{ -readonly [K in keyof R]: BodyOf<Awaited<R[K]>> }>> {
+  const bodies: unknown[] = [];
+  for (const answer of await Promise.all(reads)) {
+    if (!answer.ok) {
+      return { ok: false };
+    }
+    bodies.push(answer.body);
+  }
+  return { ok: true, body: bodies as { -readonly [K in keyof R]: BodyOf<Awaited<R[K]>> } };
+}
+
+/** A role a Person holds in their School, imported rather than restated. */
+export type { Role };
+
+/**
+ * One School the signed-in account reaches: the Person it resolves to there
+ * and the roles that Person holds.
+ *
+ * Facts about the actor, never permissions (ADR-0007). Roles say what to put
+ * in the navigation, so a caller is not led into a refusal; they never say
+ * whether an action will be allowed. The server alone decides that, and an
+ * action it refuses still shows the one "not available" state.
+ */
+export interface ReachedSchool {
+  schoolId: string;
+  /** The School's name; the Person's is `displayName`. */
   name: string;
+  personId: string;
+  displayName: string;
+  roles: Role[];
+}
+
+/** Whoever holds the session: the account, and each School it reaches. */
+export interface Session {
+  account: { id: string; username: string };
+  /** Empty for an account reaching no School, which is not a refusal. */
+  schools: ReachedSchool[];
+}
+
+/** What a Guardian link permits, each permission independent of the other. */
+export interface AccessProfile {
+  attendanceRead: boolean;
+  resultsRead: boolean;
+}
+
+/** One Student the actor reaches as their Guardian, and what that link permits. */
+export interface LinkedStudent {
+  student: { id: string; displayName: string };
+  accessProfile: AccessProfile;
+}
+
+/**
+ * What the actor holds in one School beyond what the session already says: the
+ * Enrollment they hold as a Student, and the Students they reach as a
+ * Guardian.
+ *
+ * The Person, the School and the roles are the session's (see `ReachedSchool`)
+ * and are not restated here: one fact with two sources is a fact that can
+ * disagree with itself.
+ */
+export interface OwnAccount {
+  /** Null for a Person holding no Student membership, and for a Student never enrolled. */
+  enrollment: { startedAt: string; endedAt: string | null } | null;
+  linkedStudents: LinkedStudent[];
 }
 
 export interface ListedPerson {
@@ -64,6 +137,61 @@ export interface Invitation {
   expiresAt: string;
 }
 
+/** One role held by one Person between its own bounds. A Person holding several holds several of these. */
+export interface Membership {
+  id: string;
+  personId: string;
+  role: Role;
+  startsAt: string;
+  /** Null while it has no end. */
+  endsAt: string | null;
+}
+
+/** One Student's participation in the School, from when it was recorded until it ended. */
+export interface Enrollment {
+  id: string;
+  studentPersonId: string;
+  startedAt: string;
+  /** Null while it is open. */
+  endedAt: string | null;
+  /** Why it ended; null while it is open. */
+  endReason: string | null;
+}
+
+/** A Guardian's link to one Student, and the Access profile it carries. */
+export interface GuardianLink {
+  id: string;
+  guardianPersonId: string;
+  studentPersonId: string;
+  accessProfile: AccessProfile;
+  createdAt: string;
+  /** Null while it is in force. */
+  endedAt: string | null;
+}
+
+/**
+ * One entry in a School's trail. It names who acted and what was acted on by
+ * identifier alone; a screen puts names to them from what it already reads.
+ */
+export interface AuditRecord {
+  id: string;
+  occurredAt: string;
+  /** Null when no Person acted: an unauthenticated caller, a Platform Administrator, or the platform. */
+  actorPersonId: string | null;
+  actorPlatformAdministratorId: string | null;
+  /** What happened, as `<subject>.<verb>`, such as `school.provisioned`. */
+  action: string;
+  target: { type: string; id: string | null };
+  reason: string | null;
+}
+
+/** One page of a School's trail, newest first, and the cursor the next page is read from. */
+export interface AuditPage {
+  auditRecords: AuditRecord[];
+  /** Null on the last page. */
+  nextCursor: string | null;
+}
+
 /** What the running site was built from. Either is absent when the server does not know it. */
 export interface BuildInfo {
   commit?: string;
@@ -72,7 +200,7 @@ export interface BuildInfo {
 
 /** A sign-in the public demo publishes. Every other deployment publishes none. */
 export interface DemoAccount {
-  role: "school_administrator" | "faculty" | "student" | "guardian";
+  role: Role;
   username: string;
   password: string;
 }
@@ -112,9 +240,9 @@ export const api = {
   demo: () => request<{ accounts: DemoAccount[] }>("GET", "/demo"),
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
-  session: () => request<{ account: { id: string; username: string } }>("GET", "/session"),
+  session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
-  schools: () => request<{ schools: School[] }>("GET", "/schools"),
+  account: (schoolId: string) => request<{ account: OwnAccount }>("GET", inSchool(schoolId, "/account")),
   persons: (schoolId: string) => request<{ persons: ListedPerson[] }>("GET", inSchool(schoolId, "/persons")),
   createPerson: (schoolId: string, person: { displayName: string }) =>
     request<{ person: ListedPerson }>("POST", inSchool(schoolId, "/persons"), person),
@@ -126,6 +254,62 @@ export const api = {
     request<{ invitation: Invitation }>(
       "DELETE",
       inSchool(schoolId, `/invitations/${encodeURIComponent(invitationId)}`),
+    ),
+  memberships: (schoolId: string) =>
+    request<{ memberships: Membership[] }>("GET", inSchool(schoolId, "/memberships")),
+  /** Starts now. A missing `endsAt` leaves it with no end. */
+  grantMembership: (schoolId: string, grant: { personId: string; role: Role; endsAt?: string }) =>
+    request<{ membership: Membership }>("POST", inSchool(schoolId, "/memberships"), grant),
+  /** Only a membership's end can change, and not into the past. */
+  narrowMembership: (schoolId: string, membershipId: string, endsAt: string) =>
+    request<{ membership: Membership }>(
+      "PATCH",
+      inSchool(schoolId, `/memberships/${encodeURIComponent(membershipId)}`),
+      { endsAt },
+    ),
+  revokeMembership: (schoolId: string, membershipId: string) =>
+    request<{ membership: Membership }>(
+      "DELETE",
+      inSchool(schoolId, `/memberships/${encodeURIComponent(membershipId)}`),
+    ),
+  enrollments: (schoolId: string) =>
+    request<{ enrollments: Enrollment[] }>("GET", inSchool(schoolId, "/enrollments")),
+  enroll: (schoolId: string, studentPersonId: string) =>
+    request<{ enrollment: Enrollment }>("POST", inSchool(schoolId, "/enrollments"), { studentPersonId }),
+  /** An Enrollment does not end without a reason. Every Guardian link to the Student ends with it. */
+  endEnrollment: (schoolId: string, enrollmentId: string, reason: string) =>
+    request<{ enrollment: Enrollment }>(
+      "DELETE",
+      inSchool(schoolId, `/enrollments/${encodeURIComponent(enrollmentId)}`),
+      { reason },
+    ),
+  guardianLinks: (schoolId: string) =>
+    request<{ guardianLinks: GuardianLink[] }>("GET", inSchool(schoolId, "/guardian-links")),
+  /** Both permissions are stated: a profile is never left to a default. */
+  linkGuardian: (
+    schoolId: string,
+    link: { guardianPersonId: string; studentPersonId: string; accessProfile: AccessProfile },
+  ) => request<{ guardianLink: GuardianLink }>("POST", inSchool(schoolId, "/guardian-links"), link),
+  /** Changes only the permissions named; the other stays as it stands. */
+  setAccessProfile: (schoolId: string, guardianLinkId: string, accessProfile: Partial<AccessProfile>) =>
+    request<{ guardianLink: GuardianLink }>(
+      "PATCH",
+      inSchool(schoolId, `/guardian-links/${encodeURIComponent(guardianLinkId)}`),
+      { accessProfile },
+    ),
+  endGuardianLink: (schoolId: string, guardianLinkId: string) =>
+    request<{ guardianLink: GuardianLink }>(
+      "DELETE",
+      inSchool(schoolId, `/guardian-links/${encodeURIComponent(guardianLinkId)}`),
+    ),
+  /**
+   * One page of the School's trail: the newest, or the one after the record a
+   * cursor from an earlier page names. Never the whole trail (ADR-0008).
+   */
+  auditRecords: (schoolId: string, cursor: string | null) =>
+    request<AuditPage>(
+      "GET",
+      inSchool(schoolId, `/audit-records${cursor === null ? "" : `?cursor=${encodeURIComponent(cursor)}`}`),
     ),
   inspectInvitation: (secret: string) =>
     request<InvitationInspection>("POST", "/invitations/inspect", { secret }),

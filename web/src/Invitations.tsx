@@ -1,92 +1,125 @@
-import { useRef, useState } from "react";
-import type { Invitation } from "./api.ts";
+import { useState } from "react";
+import { api, type Invitation, type ReachedSchool } from "./api.ts";
+import { ConfirmDialog } from "./Dialog.tsx";
+import { Link } from "./Link.tsx";
+import { NotAvailable } from "./NotAvailable.tsx";
+import { RecordList } from "./RecordList.tsx";
+import { useScreen } from "./screen.ts";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
-/** An Invitation just issued: the only time its link is ever known to the page. */
-export interface IssuedInvitation {
-  invitation: Invitation;
-  link: string;
-}
-
-/**
- * The link to an Invitation just issued, with a way to copy it. It lives only
- * in this page's memory: the API never serves it again, so once the School
- * Administrator leaves the page it is gone, and a fresh Invitation replaces it.
- */
-export function IssuedLink({ issued, onDone }: { issued: IssuedInvitation; onDone: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const field = useRef<HTMLInputElement>(null);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(issued.link);
-      setCopied(true);
-    } catch {
-      // Without clipboard access, the link is selected for copying by hand.
-      field.current?.select();
-    }
-  };
-
-  return (
-    <section aria-labelledby="issued-invitation" className="issued">
-      <h2 id="issued-invitation">Invitation for {issued.invitation.person.displayName}</h2>
-      <p>Hand this link to them yourself. It is shown only now, and works once.</p>
-      <label>
-        Invitation link
-        <input ref={field} readOnly value={issued.link} onFocus={(event) => event.currentTarget.select()} />
-      </label>
-      <div className="actions">
-        <button type="button" onClick={copy}>
-          Copy link
-        </button>
-        <button type="button" onClick={onDone}>
-          Done
-        </button>
-        <span role="status" className="muted">
-          {copied ? "Copied" : ""}
-        </span>
-      </div>
-    </section>
-  );
-}
+/** Which sheet this page is, named once so its states cannot drift apart. */
+const SHEET: SheetKind = { name: "Invitations" };
 
 const EXPIRY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-/** The School's pending Invitations, each of which can be revoked. */
-export function PendingInvitations({
-  invitations,
-  busy,
-  onRevoke,
-}: {
-  invitations: Invitation[];
-  busy: boolean;
-  onRevoke: (invitation: Invitation) => void;
-}) {
-  return (
-    <section aria-labelledby="pending-invitations">
-      <h2 id="pending-invitations">Pending Invitations</h2>
-      {invitations.length === 0 ? (
-        <p className="muted">No Invitations are pending.</p>
-      ) : (
-        <ul aria-label="Pending Invitations" className="persons">
-          {invitations.map((invitation) => (
-            <li key={invitation.id}>
-              <span>
-                {invitation.person.displayName}
-                <br />
-                <span className="muted">Expires {EXPIRY.format(new Date(invitation.expiresAt))}</span>
-              </span>
+/**
+ * Every Invitation this School has pending, when each expires, and the way to
+ * revoke one.
+ *
+ * A screen of its own rather than a panel on Persons, because an Invitation
+ * outlives the moment it was issued in: it is something the School is holding,
+ * and what is held needs somewhere to be looked at. Issuing one stays on
+ * Persons, beside the Person it is for.
+ *
+ * Nothing here can show a link. `issueInvitation` returned it once and the API
+ * will not say it again, so the only route to a working link for a Person whose
+ * link was lost is to revoke the Invitation and issue a fresh one.
+ */
+export function Invitations({ school }: { school: ReachedSchool }) {
+  const { schoolId } = school;
+  const { showing, busy, change } = useScreen(schoolId, api.invitations);
+  const [confirming, setConfirming] = useState<Invitation | null>(null);
+
+  /**
+   * Revokes the Invitation, then lists what is pending afterwards. Nothing is
+   * struck off the page before the server says it is gone: a refusal the actor
+   * cannot see is indistinguishable from a success, so a row removed
+   * optimistically could be a live link still in someone's hands.
+   */
+  const revoke = (invitation: Invitation) => change(() => api.revokeInvitation(schoolId, invitation.id));
+
+  const legend = (
+    <>
+      <h2>Key</h2>
+      <p>Every Invitation this School is still holding open.</p>
+      <dl>
+        <Key term="Invitation">
+          An offer that lets one human claim a Person not yet attached to a User account. It grants no role, and it
+          works once.
+        </Key>
+        <Key term="Expires">
+          When the link stops working of its own accord. Until then the Invitation stays listed here.
+        </Key>
+        <Key term="Revoke">
+          Stops the link working before it expires. The Person stays Unclaimed, and a new Invitation can be issued.
+        </Key>
+      </dl>
+    </>
+  );
+
+  // Named for the sheet it opens, which the navigation lists as People.
+  const persons = <Link to={{ name: "persons", schoolId }}>Persons</Link>;
+
+  const sheet = (invitations: Invitation[]) => (
+    <Sheet {...SHEET} legend={legend}>
+      <h1>Invitations</h1>
+      <RecordList
+        label="Pending Invitations"
+        rows={invitations}
+        keyOf={(invitation) => invitation.id}
+        empty={<>No Invitation is pending. Issue one from {persons}, beside the Person it is for.</>}
+        columns={[
+          { head: "Person", cell: (invitation) => invitation.person.displayName },
+          { head: "Expires", cell: (invitation) => EXPIRY.format(new Date(invitation.expiresAt)) },
+          {
+            head: "Revoke",
+            actions: true,
+            cell: (invitation) => (
               <button
                 type="button"
+                className="button-stamp"
                 disabled={busy}
                 aria-label={`Revoke the Invitation for ${invitation.person.displayName}`}
-                onClick={() => onRevoke(invitation)}
+                onClick={() => setConfirming(invitation)}
               >
                 Revoke
               </button>
-            </li>
-          ))}
-        </ul>
+            ),
+          },
+        ]}
+      />
+      <p className="muted">
+        A link is shown once, when the Invitation is issued, and never again. Where one has been lost, revoke the
+        Invitation and issue a new one from {persons}.
+      </p>
+      {confirming !== null && (
+        <ConfirmDialog
+          title="Revoke this Invitation?"
+          confirm="Revoke the Invitation"
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            const invitation = confirming;
+            setConfirming(null);
+            void revoke(invitation);
+          }}
+        >
+          <p>
+            The link issued for {confirming.person.displayName} stops working, whoever is holding it.{" "}
+            {confirming.person.displayName} stays Unclaimed, and nothing else about the Person changes.
+          </p>
+          <p>To let someone claim this Person after this, issue a new Invitation and hand out the new link.</p>
+        </ConfirmDialog>
       )}
-    </section>
+    </Sheet>
   );
+
+  switch (showing.kind) {
+    case "loading":
+      return <Sheet {...SHEET} busy />;
+    case "not-available":
+      return <NotAvailable />;
+    case "ready":
+      return sheet(showing.records.invitations);
+  }
 }

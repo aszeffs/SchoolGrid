@@ -1,6 +1,7 @@
 import type { Authentication, AuthenticationFailure, UserAccount } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import {
+  findPersons,
   personFor,
   platformAdministratorFor,
   schoolsReachedBy,
@@ -10,10 +11,11 @@ import {
   type School,
 } from "../identity/index.ts";
 import { invitationState, type Invitation, type InvitationState } from "../identity/invitations.ts";
-import { hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
-import { linkedStudentIds, type GuardianLink } from "./guardian-links.ts";
+import { currentEnrollmentOf, hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
+import { guardianLinksHeldBy, linkedStudentIds, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 import {
   activeRoles,
+  ROLES,
   schoolIdsWithActiveMembership,
   type Membership,
   type Role,
@@ -28,7 +30,7 @@ import {
  */
 export { grantMembership, ROLES, type Membership, type Role } from "./memberships.ts";
 export { recordEnrollment, type Enrollment } from "./enrollments.ts";
-export type { AccessProfile, GuardianLink } from "./guardian-links.ts";
+export { linkGuardian, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 
 /**
  * Why a request was refused. It is written to the Audit record, where a School
@@ -202,6 +204,124 @@ export async function reachableSchools(
   const schools = await schoolsReachedBy(database, account.id);
   const active = await schoolIdsWithActiveMembership(database, account.id);
   return schools.filter((school) => active.has(school.id));
+}
+
+/**
+ * One School an account reaches, the Person it resolves to there, and the
+ * roles that Person holds at this moment.
+ */
+export interface ReachedSchool {
+  schoolId: string;
+  /** The School's name; the Person's is `displayName`. */
+  name: string;
+  personId: string;
+  displayName: string;
+  roles: Role[];
+}
+
+/**
+ * What the account holding a Session can be told about itself: every School it
+ * reaches, named with the Person and roles that are its own facts.
+ *
+ * Facts, never a decision (ADR-0007). Roles are here because they are the
+ * actor's own; whether a role may do a given thing stays in this module's
+ * decisions, where it is enforced. Nothing about any other Person appears, and
+ * each School names only what belongs to it (ADR-0001).
+ */
+export async function actorInEachSchool(
+  database: Queryable,
+  account: UserAccount,
+): Promise<ReachedSchool[]> {
+  const reached: ReachedSchool[] = [];
+  for (const school of await reachableSchools(database, account)) {
+    const person = await personFor(database, { userAccountId: account.id, schoolId: school.id });
+    // A School is reachable only through the Person the account resolves to in
+    // it, so this cannot be null; skipped rather than asserted, because an
+    // account losing its Person between the two queries is not worth failing on.
+    if (person === null) {
+      continue;
+    }
+    const held = await activeRoles(database, person);
+    reached.push({
+      schoolId: school.id,
+      name: school.name,
+      personId: person.id,
+      displayName: person.displayName,
+      // In the order ROLES declares, so the response does not vary with what
+      // the database happened to return first.
+      roles: ROLES.filter((role) => held.has(role)),
+    });
+  }
+  return reached;
+}
+
+/**
+ * One Student an actor reaches as their Guardian, and what that link's Access
+ * profile permits. Read-only: changing a profile is a School Administrator's,
+ * through the Guardian link routes.
+ */
+export interface LinkedStudent {
+  student: { id: string; displayName: string };
+  accessProfile: AccessProfile;
+}
+
+/**
+ * What an actor holds in the School they are acting in, beyond what the
+ * session already says: the Enrollment they hold as a Student, and the
+ * Students they reach as a Guardian.
+ *
+ * Who the actor is here and which roles they hold are the session's to name
+ * (see actorInEachSchool), and are not restated: one fact with two sources is
+ * a fact that can disagree with itself.
+ */
+export interface OwnAccount {
+  /** The Enrollment as it stands, for an actor holding a Student membership; null otherwise. */
+  enrollment: { startedAt: string; endedAt: string | null } | null;
+  /** Empty for an actor who is not a Guardian, and for one linked to no Student. */
+  linkedStudents: LinkedStudent[];
+}
+
+/**
+ * What the actor can be told about themselves within one School.
+ *
+ * Every actor reaches this, and only about themselves: a Person's own record
+ * is never withheld from them, and nothing here reads beyond what their own
+ * memberships, Enrollment and links already say. The Students a Guardian is
+ * named are exactly the ones their links reach, which is what
+ * `decideReadRecordOf` already permits them to read.
+ *
+ * Facts, never a decision (ADR-0007). An Access profile appears because it is
+ * the actor's own standing, not so a page can act on it: the slices whose
+ * records it gates, Attendance and Term results, enforce it themselves.
+ */
+export async function ownAccount(database: Queryable, actor: Actor): Promise<OwnAccount> {
+  const enrollment = holds(actor, "student")
+    ? await currentEnrollmentOf(database, actor.person)
+    : null;
+  const links = holds(actor, "guardian") ? await guardianLinksHeldBy(database, actor.person) : [];
+  // Read through the Identity module rather than joined onto the links, so a
+  // Person is still only ever read where Persons are owned.
+  const students = await findPersons(
+    database,
+    links.map((link) => link.studentPersonId),
+  );
+  return {
+    enrollment:
+      enrollment === null
+        ? null
+        : {
+            startedAt: enrollment.startedAt.toISOString(),
+            endedAt: enrollment.endedAt?.toISOString() ?? null,
+          },
+    linkedStudents: links.flatMap((link) => {
+      const student = students.get(link.studentPersonId);
+      // A link's Student cannot be absent; skipped rather than asserted, for
+      // the same reason actorInEachSchool skips a School without its Person.
+      return student === undefined
+        ? []
+        : [{ student: { id: student.id, displayName: student.displayName }, accessProfile: link.accessProfile }];
+    }),
+  };
 }
 
 function holds(actor: Actor, role: Role): boolean {

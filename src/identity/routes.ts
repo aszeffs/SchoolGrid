@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  actorInEachSchool,
   authorizeCreatePerson,
   authorizeReadPerson,
   mayReadClaimedState,
@@ -46,6 +47,23 @@ export function registerIdentityRoutes(
   authenticator: Authenticator,
   publicOrigin: PublicOrigin,
 ): void {
+  // Who the caller is, as the web app needs it on first paint: the account,
+  // and in each School it reaches, the Person it resolves to and the roles
+  // that Person holds. Facts about the actor, never a permission (ADR-0007);
+  // the server stays the only thing that decides what any of them may do.
+  //
+  // Registered here rather than beside the rest of `/session` in
+  // authentication/, which owns credentials alone and may return no School,
+  // Person or role. An account reaching no School is answered with an empty
+  // list: there is nothing to refuse, only nothing to name.
+  app.get(
+    "/session",
+    forAccount(
+      (request) => authenticator.authenticate(request),
+      async (account) => ({ account, schools: await actorInEachSchool(database, account) }),
+    ),
+  );
+
   // Not School-scoped: it answers which Schools a caller may choose to act in.
   // A School the account does not reach, or reaches only through memberships
   // that are not in force, is simply not listed.

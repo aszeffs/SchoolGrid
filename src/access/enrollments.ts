@@ -125,6 +125,27 @@ export async function hasOpenEnrollment(database: Queryable, student: Person): P
   return rows[0]!.open;
 }
 
+/**
+ * The Student's own Enrollment as it now stands: the one open, or the last to
+ * have ended when none is, and null for a Person never enrolled.
+ *
+ * Open ones sort first, then the latest ending, so a Student who left and
+ * returned is described by the stay they are in rather than by an older one.
+ */
+export async function currentEnrollmentOf(
+  database: Queryable,
+  student: Person,
+): Promise<Enrollment | null> {
+  const { rows } = await database.query<Enrollment>(
+    `SELECT ${ENROLLMENT_COLUMNS} FROM app.enrollment
+     WHERE school_id = $1 AND student_person_id = $2
+     ORDER BY ended_at IS NOT NULL, ended_at DESC, started_at DESC
+     LIMIT 1`,
+    [student.schoolId, student.id],
+  );
+  return rows[0] ?? null;
+}
+
 /** Every Enrollment in the School, ended ones included, oldest first. */
 export async function enrollmentsInSchool(
   database: Queryable,

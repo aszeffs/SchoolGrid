@@ -1,92 +1,46 @@
-import { useEffect, useState, type MouseEvent } from "react";
-import { api, type School } from "./api.ts";
-import { navigate } from "./navigation.ts";
-import { NotAvailable } from "./NotAvailable.tsx";
+import type { ReachedSchool } from "./api.ts";
+import { Link } from "./Link.tsx";
+import { landing } from "./routes.ts";
+import { Key, Sheet } from "./Sheet.tsx";
 
-function personsPath(school: School): string {
-  return `/schools/${encodeURIComponent(school.id)}/persons`;
-}
-
-function open(event: MouseEvent<HTMLAnchorElement>, school: School): void {
-  event.preventDefault();
-  navigate(personsPath(school));
-}
-
-type State =
-  | { kind: "loading" }
-  | { kind: "not-available" }
-  | { kind: "ready"; username: string; schools: School[] };
-
-export function Schools() {
-  const [state, setState] = useState<State>({ kind: "loading" });
-
-  useEffect(() => {
-    let current = true;
-    void (async () => {
-      const session = await api.session();
-      if (!current) {
-        return;
-      }
-      // Without a live session, whether it expired, was ended elsewhere or
-      // never existed, the way on is to sign in again.
-      if (!session.ok) {
-        navigate("/sign-in", { replace: true });
-        return;
-      }
-      const schools = await api.schools();
-      if (!current) {
-        return;
-      }
-      setState(
-        schools.ok
-          ? { kind: "ready", username: session.body.account.username, schools: schools.body.schools }
-          : { kind: "not-available" },
-      );
-    })();
-    return () => {
-      current = false;
-    };
-  }, []);
-
-  const signOut = async () => {
-    // A sign-out that did not work leaves the session live, and the sign-in
-    // page would send a live session straight back here as if nothing happened.
-    if ((await api.signOut()).ok) {
-      navigate("/sign-in", { replace: true });
-    } else {
-      setState({ kind: "not-available" });
-    }
-  };
-
-  switch (state.kind) {
-    case "loading":
-      return <main className="panel" aria-busy="true" />;
-    case "not-available":
-      return <NotAvailable />;
-    case "ready":
-      return (
-        <main className="panel">
-          <header className="bar">
-            <span>Signed in as {state.username}</span>
-            <button type="button" onClick={signOut}>
-              Sign out
-            </button>
-          </header>
-          <h1>Your Schools</h1>
-          {state.schools.length === 0 ? (
-            <p>Your account does not reach any School yet.</p>
-          ) : (
-            <ul aria-label="Schools">
-              {state.schools.map((school) => (
-                <li key={school.id}>
-                  <a href={personsPath(school)} onClick={(event) => open(event, school)}>
-                    {school.name}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </main>
-      );
-  }
+/**
+ * The Schools the account reaches, to pick one from. Shown only for none or
+ * several: an account reaching exactly one goes straight into it.
+ */
+export function Schools({ schools }: { schools: ReachedSchool[] }) {
+  const legend = (
+    <>
+      <h2>Key</h2>
+      <p>The Schools your account reaches.</p>
+      <dl>
+        <Key term="School">
+          The boundary every record belongs to. No record is shared between Schools, and the same human at two Schools
+          is two unrelated Persons.
+        </Key>
+        <Key term="Reach">
+          Your account resolves to at most one Person per School. A School you cannot reach is not listed.
+        </Key>
+      </dl>
+    </>
+  );
+  return (
+    <Sheet name="Schools" legend={legend}>
+      <h1>Your Schools</h1>
+      {schools.length === 0 ? (
+        <p className="empty">Your account does not reach any School yet.</p>
+      ) : (
+        <ul aria-label="Schools" className="roster">
+          {schools.map((school) => (
+            <li key={school.schoolId}>
+              <span className="roster__name">
+                <Link to={landing(school.schoolId, school.roles)}>{school.name}</Link>
+              </span>
+              {/* The leader carries no text: a listed School reads as its name and nothing else. */}
+              <span className="roster__leader" />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Sheet>
+  );
 }

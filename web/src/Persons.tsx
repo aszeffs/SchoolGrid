@@ -1,103 +1,37 @@
-import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
-import { api, type ApiResult, type Invitation, type ListedPerson } from "./api.ts";
-import { IssuedLink, PendingInvitations, type IssuedInvitation } from "./Invitations.tsx";
-import { navigate } from "./navigation.ts";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { MAX_NAME_LENGTH } from "../../src/validation/bounds.ts";
+import { api, type ListedPerson, type ReachedSchool } from "./api.ts";
+import { IssuedLink, type IssuedInvitation } from "./IssuedLink.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { RecordList, type Column } from "./RecordList.tsx";
+import { useScreen } from "./screen.ts";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
-type State =
-  | { kind: "loading" }
-  | { kind: "not-available" }
-  | {
-      kind: "ready";
-      persons: ListedPerson[];
-      /** Pending Invitations, listed only for a School Administrator; null for anyone else. */
-      invitations: Invitation[] | null;
-    };
-
-type Ready = Extract<State, { kind: "ready" }>;
-
-/** The same bound the API holds a display name to. */
-const MAX_DISPLAY_NAME_LENGTH = 200;
+/** Which sheet this page is, named once so its states cannot drift apart. */
+const SHEET: SheetKind = { name: "Persons" };
 
 /**
- * Whether the caller administers the School. The API includes whether a Person
- * is claimed only for a School Administrator, who is also the only caller who
- * may add a Person or manage Invitations. Anyone else would be refused, so they
- * are not offered either.
+ * Every Person in one School that the actor may read, and — for a School
+ * Administrator — whether each has been claimed yet, with the way to add one
+ * and the way to invite one.
+ *
+ * An Invitation is issued from here, beside the Person it is for, because this
+ * is the only sheet where the choice of Person is in front of you. Where it
+ * goes afterwards is the Invitations sheet's; this page does not list it.
  */
-function administers(persons: ListedPerson[]): boolean {
-  return persons.some((person) => person.claimed !== undefined);
-}
-
-/** The page as the API now describes it, or a failure. */
-async function load(schoolId: string): Promise<ApiResult<Ready>> {
-  const listed = await api.persons(schoolId);
-  if (!listed.ok) {
-    return listed;
-  }
-  const { persons } = listed.body;
-  if (!administers(persons)) {
-    return { ok: true, body: { kind: "ready", persons, invitations: null } };
-  }
-  const invitations = await api.invitations(schoolId);
-  return invitations.ok
-    ? { ok: true, body: { kind: "ready", persons, invitations: invitations.body.invitations } }
-    : invitations;
-}
-
-/** Every Person in one School that the caller may read. */
-export function Persons({ schoolId }: { schoolId: string }) {
-  const [state, setState] = useState<State>({ kind: "loading" });
-  const [busy, setBusy] = useState(false);
-  const [issued, setIssued] = useState<IssuedInvitation | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    void (async () => {
-      const session = await api.session();
-      if (!current) {
-        return;
-      }
-      // Without a live session, whether it expired, was ended elsewhere or
-      // never existed, the way on is to sign in again.
-      if (!session.ok) {
-        navigate("/sign-in", { replace: true });
-        return;
-      }
-      const loaded = await load(schoolId);
-      if (!current) {
-        return;
-      }
-      setState(loaded.ok ? loaded.body : { kind: "not-available" });
-    })();
-    return () => {
-      current = false;
-    };
-  }, [schoolId]);
-
-  /**
-   * Sends a change, then shows the page as it stands afterwards, and returns
-   * what was answered. A change that was refused or failed leaves the page in
-   * the one state for that. A change that was made stays shown even if the
-   * page cannot be listed again straight away: an Invitation's link, above
-   * all, can never be asked for twice.
+export function Persons({ school }: { school: ReachedSchool }) {
+  const { schoolId } = school;
+  /*
+   * Whether to offer adding a Person and inviting one, from the roles the
+   * session names (ADR-0007). Anyone else would be refused, so they are not
+   * offered either; the server still decides every request. It also decides
+   * whether `claimed` is sent at all, and this page shows it only where the
+   * session says the actor administers the School — never by sniffing the
+   * payload for the field.
    */
-  const sendThenReload = async <T,>(send: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> => {
-    setBusy(true);
-    const sent = await send();
-    const loaded = sent.ok ? await load(schoolId) : null;
-    setBusy(false);
-    if (loaded?.ok) {
-      setState(loaded.body);
-    } else if (!(await api.session()).ok) {
-      // A session that ended while the page was open, whether the change itself
-      // was refused or the reload after a change that succeeded was.
-      navigate("/sign-in", { replace: true });
-    } else if (!sent.ok) {
-      setState({ kind: "not-available" });
-    }
-    return sent;
-  };
+  const administering = school.roles.includes("school_administrator");
+  const { showing, busy, change } = useScreen(schoolId, api.persons);
+  const [issued, setIssued] = useState<IssuedInvitation | null>(null);
 
   const add = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -106,83 +40,203 @@ export function Persons({ schoolId }: { schoolId: string }) {
     if (displayName.trim() === "") {
       return;
     }
-    if ((await sendThenReload(() => api.createPerson(schoolId, { displayName }))).ok) {
+    if ((await change(() => api.createPerson(schoolId, { displayName }))).ok) {
       form.reset();
     }
   };
 
   const invite = async (person: ListedPerson) => {
-    const sent = await sendThenReload(() => api.issueInvitation(schoolId, person.id));
+    const sent = await change(() => api.issueInvitation(schoolId, person.id));
     setIssued(sent.ok ? sent.body : null);
   };
 
-  const revoke = async (invitation: Invitation) => {
-    if ((await sendThenReload(() => api.revokeInvitation(schoolId, invitation.id))).ok) {
-      // A link to a revoked Invitation is no use to anyone.
-      setIssued((shown) => (shown?.invitation.id === invitation.id ? null : shown));
+  const sheet = (): ReactNode => {
+    switch (showing.kind) {
+      case "loading":
+        return <Sheet {...SHEET} busy />;
+      case "not-available":
+        return <NotAvailable />;
+      case "ready":
+        return (
+          <PersonsSheet
+            persons={showing.records.persons}
+            administering={administering}
+            busy={busy}
+            onAdd={add}
+            onInvite={invite}
+          />
+        );
     }
   };
 
-  const home = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigate("/");
-  };
+  /*
+   * The issued link is held beside the sheet rather than on it. It is the one
+   * thing here the API will never say again, so it must not be torn up by the
+   * sheet behind it changing state — including to the not-available state a
+   * failed listing brings, which would otherwise strand the Invitation.
+   */
+  return (
+    <>
+      {sheet()}
+      {issued !== null && <IssuedLink issued={issued} onDone={() => setIssued(null)} />}
+    </>
+  );
+}
 
-  switch (state.kind) {
-    case "loading":
-      return <main className="panel" aria-busy="true" />;
-    case "not-available":
-      return <NotAvailable />;
-    case "ready": {
-      const administering = administers(state.persons);
-      return (
-        <main className="panel">
-          <p>
-            <a href="/" onClick={home}>
-              Your Schools
-            </a>
+/** The Persons as they stand, narrowed to the one being looked for. */
+function PersonsSheet({
+  persons,
+  administering,
+  busy,
+  onAdd,
+  onInvite,
+}: {
+  persons: ListedPerson[];
+  administering: boolean;
+  busy: boolean;
+  onAdd: (event: FormEvent<HTMLFormElement>) => void;
+  onInvite: (person: ListedPerson) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const looking = query.trim();
+  const shown = looking === "" ? persons : persons.filter((person) => matches(person, looking));
+
+  const legend = (
+    <>
+      <h2>Key</h2>
+      <p>Every Person in this School that you may read.</p>
+      <dl>
+        <Key term="Person">
+          An individual as known to this School. A Person need not be attached to a User account; one who never signs
+          in is still a full Person.
+        </Key>
+        {administering && (
+          <Key term="Claimed">A Person already attached to a User account. Nothing more to do here.</Key>
+        )}
+        {administering && (
+          <Key term="Unclaimed">
+            Not yet attached. Issuing an Invitation lets one human claim this Person; you hand them the link yourself,
+            and the Invitation is listed on Invitations until it is used.
+          </Key>
+        )}
+      </dl>
+    </>
+  );
+
+  return (
+    <Sheet {...SHEET} legend={legend}>
+      <h1>Persons</h1>
+      {persons.length > 0 && (
+        <>
+          <search className="filter">
+            <label>
+              Find by name
+              <input
+                type="search"
+                name="find"
+                value={query}
+                autoComplete="off"
+                onChange={(event) => setQuery(event.currentTarget.value)}
+              />
+            </label>
+          </search>
+          <p className="muted" role="status">
+            {tally(shown.length, persons.length, looking)}
           </p>
-          <h1>Persons</h1>
-          <ul aria-label="Persons" className="persons">
-            {state.persons.map((person) => (
-              <li key={person.id}>
-                <span>{person.displayName}</span>
-                {person.claimed !== undefined && (
-                  <span className="actions">
-                    <span className="muted">{person.claimed ? "Claimed" : "Unclaimed"}</span>
-                    {!person.claimed && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        aria-label={`Invite ${person.displayName}`}
-                        onClick={() => invite(person)}
-                      >
-                        Invite
-                      </button>
-                    )}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-          {issued !== null && <IssuedLink issued={issued} onDone={() => setIssued(null)} />}
-          {state.invitations !== null && (
-            <PendingInvitations invitations={state.invitations} busy={busy} onRevoke={revoke} />
-          )}
-          {administering && (
-            <form onSubmit={add} aria-label="Add a Person">
-              <h2>Add a Person</h2>
-              <label>
-                Display name
-                <input name="displayName" required maxLength={MAX_DISPLAY_NAME_LENGTH} autoComplete="off" />
-              </label>
-              <button type="submit" disabled={busy}>
-                Add Person
-              </button>
-            </form>
-          )}
-        </main>
-      );
-    }
+        </>
+      )}
+      <RecordList
+        label="Persons"
+        rows={shown}
+        keyOf={(person) => person.id}
+        empty={emptyFor(persons.length, looking, administering)}
+        columns={columnsFor(administering, busy, onInvite)}
+      />
+      {administering && (
+        <form onSubmit={onAdd} aria-label="Add a Person">
+          <h2>Add a Person</h2>
+          <label>
+            Display name
+            <input name="displayName" required maxLength={MAX_NAME_LENGTH} autoComplete="off" />
+          </label>
+          <button type="submit" disabled={busy}>
+            Add Person
+          </button>
+        </form>
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * Whether a Person is the one being looked for, by any part of their display
+ * name. Matched here rather than asked of the server: the record is a School's
+ * Persons, which is as long as a School is, and the whole of it is already on
+ * the page.
+ */
+function matches(person: ListedPerson, looking: string): boolean {
+  return person.displayName.toLocaleLowerCase().includes(looking.toLocaleLowerCase());
+}
+
+/** How much of the record is in front of you, said so a screen reader hears it change. */
+function tally(shown: number, total: number, looking: string): string {
+  const persons = `${total} ${total === 1 ? "Person" : "Persons"}`;
+  return looking === "" ? persons : `${shown} of ${persons} shown`;
+}
+
+/**
+ * What the sheet says where no Person is listed. A School with none and a name
+ * that matched none are different situations and read differently: the first
+ * offers the first action, and the second says what was looked for.
+ */
+function emptyFor(total: number, looking: string, administering: boolean): string {
+  if (total > 0) {
+    return `No Person's name contains “${looking}”.`;
   }
+  return administering
+    ? "No Person is recorded in this School yet. Add the first one below, then issue them an Invitation."
+    : "There is no Person in this School for you to read.";
+}
+
+/**
+ * The columns of the record. A Person's name is on every actor's sheet; whether
+ * they have been claimed, and the offer to invite them, are on a School
+ * Administrator's alone, and no other role's rendition carries either.
+ */
+function columnsFor(
+  administering: boolean,
+  busy: boolean,
+  onInvite: (person: ListedPerson) => void,
+): Column<ListedPerson>[] {
+  const name: Column<ListedPerson> = { head: "Person", cell: (person) => person.displayName };
+  if (!administering) {
+    return [name];
+  }
+  return [
+    name,
+    {
+      head: "State",
+      cell: (person) => (
+        <span className={person.claimed === true ? "mark mark--filled" : "mark mark--open"}>
+          {person.claimed === true ? "Claimed" : "Unclaimed"}
+        </span>
+      ),
+    },
+    {
+      head: "Invite",
+      actions: true,
+      cell: (person) =>
+        person.claimed === true ? null : (
+          <button
+            type="button"
+            className="button-ghost"
+            disabled={busy}
+            aria-label={`Invite ${person.displayName}`}
+            onClick={() => onInvite(person)}
+          >
+            Invite
+          </button>
+        ),
+    },
+  ];
 }

@@ -162,6 +162,24 @@ export async function linkedStudentIds(database: Queryable, guardian: Person): P
   return new Set(rows.map((row) => row.studentPersonId));
 }
 
+/**
+ * The links this Person holds in force as a Guardian, oldest first. Ended ones
+ * are left out: a link that has ended reaches its Student no longer, so it is
+ * not among what the Guardian holds.
+ */
+export async function guardianLinksHeldBy(
+  database: Queryable,
+  guardian: Person,
+): Promise<GuardianLink[]> {
+  const { rows } = await database.query<GuardianLink>(
+    `SELECT ${LINK_COLUMNS} FROM app.guardian_link
+     WHERE school_id = $1 AND guardian_person_id = $2 AND ended_at IS NULL
+     ORDER BY created_at, id`,
+    [guardian.schoolId, guardian.id],
+  );
+  return rows;
+}
+
 /** Every link in the School, ended ones included, oldest first. */
 export async function guardianLinksInSchool(
   database: Queryable,

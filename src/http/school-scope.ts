@@ -13,6 +13,12 @@ export interface SchoolScopedRequest {
    * yet validated: validate it after the Access decision, never before.
    */
   body: unknown;
+  /**
+   * The query string, parsed: a name given more than once holds each value
+   * given. Not yet validated, and validated only after the Access decision,
+   * like the body.
+   */
+  query: Readonly<Record<string, string | string[] | undefined>>;
 }
 
 export type SchoolScopedHandler = (actor: Actor, request: SchoolScopedRequest) => Promise<unknown>;
@@ -67,7 +73,11 @@ export function registerSchoolScope(
         let actor: Actor | null = null;
         try {
           actor = await resolveActor(database, authentication, schoolId);
-          const answer = await handler(actor, { params, body: request.body });
+          const answer = await handler(actor, {
+            params,
+            body: request.body,
+            query: request.query as Record<string, string | string[] | undefined>,
+          });
           return reply.status(method === "POST" ? 201 : 200).send(answer);
         } catch (error) {
           if (!(error instanceof Refused)) {

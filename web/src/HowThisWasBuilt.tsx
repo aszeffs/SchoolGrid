@@ -1,6 +1,10 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 import { api, type BuildInfo } from "./api.ts";
-import { navigate } from "./navigation.ts";
+import { Link } from "./Link.tsx";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
+
+/** Which sheet this page is, named once so the two states cannot drift apart. */
+const SHEET: SheetKind = { name: "How this was built" };
 
 const REPOSITORY = "aszeffs/SchoolGrid";
 const IMAGE = "ghcr.io/aszeffs/schoolgrid";
@@ -55,29 +59,62 @@ export function HowThisWasBuilt() {
     };
   }, []);
 
-  const home = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigate("/");
-  };
-
   if (state.kind === "loading") {
-    return <main className="panel" aria-busy="true" />;
+    return <Sheet {...SHEET} busy />;
   }
 
   const build = state.kind === "ready" ? state.build : undefined;
   const digest = build?.digest;
   const commit = build?.commit;
 
+  const legend = (
+    <>
+      <h2>Key</h2>
+      <p>What the running site was built from, and how to check it yourself.</p>
+      <dl>
+        <Key term="Digest">
+          A hash of an image&apos;s contents. Unlike a tag, it cannot be moved to point at something else later.
+        </Key>
+        <Key term="Attestation">
+          A signed record of the workflow and source that produced an image, checkable by anyone.
+        </Key>
+      </dl>
+    </>
+  );
+
   return (
-    <main className="panel wide">
+    <Sheet
+      {...SHEET}
+      legend={legend}
+      foot={
+        <p>
+          <Link to={{ name: "schools" }}>
+            Go to SchoolGrid
+          </Link>
+        </p>
+      }
+    >
       <h1>How this was built</h1>
       <p>
-        Every change to SchoolGrid is tested before it merges. On a merge to <code>{RELEASE_BRANCH}</code>,
-        GitHub Actions builds one container image and never rebuilds it: those same bytes are scanned for known
-        vulnerabilities, started against a real database, and driven in a browser. Only an image that passes
-        all of it is published, and it is signed with a record of the workflow and commit that built it.
-        An image's digest is a hash of its contents, so the digest below names exactly those bytes, and the
-        command further down lets you check that signature against them yourself.
+        Nothing here asks to be taken on trust. Every SchoolGrid image goes through the same run, this
+        server names the one it is running, and the command at the foot checks that claim against the
+        signature rather than against this page.
+      </p>
+
+      <h2>What every image goes through</h2>
+      <ol>
+        <li>Every change is tested before it merges.</li>
+        <li>
+          On a merge to <code>{RELEASE_BRANCH}</code>, GitHub Actions builds one container image and never
+          rebuilds it.
+        </li>
+        <li>Those same bytes are scanned for known vulnerabilities.</li>
+        <li>Those same bytes are started against a real database and driven in a browser.</li>
+        <li>Only an image that passed all of it is published, signed with the workflow and commit that built it.</li>
+      </ol>
+      <p>
+        An image&apos;s digest is a hash of its contents, so a digest names exactly one set of bytes and
+        cannot be moved to another later.
       </p>
 
       <h2>What this site is running</h2>
@@ -134,12 +171,6 @@ export function HowThisWasBuilt() {
           </pre>
         </>
       )}
-
-      <p>
-        <a href="/" onClick={home}>
-          Go to SchoolGrid
-        </a>
-      </p>
-    </main>
+    </Sheet>
   );
 }

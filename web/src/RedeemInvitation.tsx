@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { MAX_PASSWORD_LENGTH } from "../../src/validation/bounds.ts";
 import { api } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
-// The same bound sign-in holds a password to.
-const MAX_PASSWORD_LENGTH = 1024;
+/** Which sheet this page is, named once so the two states cannot drift apart. */
+const SHEET: SheetKind = { name: "Invitation" };
 
 /** Whether the invited person is creating an account or signing in to one they have. */
 type AccountChoice = "new" | "existing";
@@ -85,7 +87,7 @@ export function RedeemInvitation() {
     setSubmitting(false);
     switch (result.status) {
       case "redeemed":
-        navigate("/", { replace: true });
+        navigate({ name: "schools" }, { replace: true });
         return;
       case "username_unavailable":
         setState({ ...state, usernameTaken: true });
@@ -110,7 +112,7 @@ export function RedeemInvitation() {
     const redeemed = await api.redeemInvitationSignedIn(secret);
     setSubmitting(false);
     if (redeemed.ok) {
-      navigate("/", { replace: true });
+      navigate({ name: "schools" }, { replace: true });
     } else {
       refused();
     }
@@ -124,12 +126,29 @@ export function RedeemInvitation() {
 
   switch (state.kind) {
     case "loading":
-      return <main className="panel" aria-busy="true" />;
+      return <Sheet {...SHEET} busy />;
     case "not-available":
       return <NotAvailable />;
     case "ready":
       return (
-        <main className="panel">
+        <Sheet
+          {...SHEET}
+          legend={
+            <>
+              <h2>Key</h2>
+              <p>Claiming the Person this Invitation names.</p>
+              <dl>
+                <Key term="Once">
+                  An Invitation is redeemable once and expires. A School Administrator may revoke it before then.
+                </Key>
+                <Key term="No role">
+                  Redeeming attaches you to this Person. It grants no role: memberships, Enrollments and Guardian
+                  links are granted separately.
+                </Key>
+              </dl>
+            </>
+          }
+        >
           <h1>Join {state.schoolName}</h1>
           <p>
             This Invitation is for <strong>{state.personDisplayName}</strong>.
@@ -160,7 +179,7 @@ export function RedeemInvitation() {
                   Redeem Invitation
                 </button>
               </form>
-              <button type="button" onClick={() => choose("existing")} disabled={submitting}>
+              <button type="button" className="button-ghost" onClick={() => choose("existing")} disabled={submitting}>
                 I already have an account
               </button>
             </>
@@ -185,12 +204,12 @@ export function RedeemInvitation() {
                   Sign in and redeem
                 </button>
               </form>
-              <button type="button" onClick={() => choose("new")} disabled={submitting}>
+              <button type="button" className="button-ghost" onClick={() => choose("new")} disabled={submitting}>
                 Create a new account instead
               </button>
             </>
           )}
-        </main>
+        </Sheet>
       );
   }
 }
