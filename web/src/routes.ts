@@ -13,6 +13,7 @@ const PATHS = {
   signIn: "/sign-in",
   invitation: "/invitation",
   howThisWasBuilt: "/how-this-was-built",
+  account: "/schools/:schoolId/account",
   persons: "/schools/:schoolId/persons",
   invitations: "/schools/:schoolId/invitations",
   memberships: "/schools/:schoolId/memberships",
@@ -104,6 +105,7 @@ export interface Section {
  * available" state.
  */
 export const SECTIONS: readonly Section[] = [
+  { name: "account", label: "Your account", reachedBy: null },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
   { name: "memberships", label: "Memberships", reachedBy: ["school_administrator"] },
@@ -124,7 +126,14 @@ export function sectionOf(route: SchoolRoute): Section {
   return SECTIONS.find((section) => section.name === route.name)!;
 }
 
-/** Where a School opens: the first page its navigation lists. */
-export function landing(schoolId: string): SchoolRoute {
-  return { name: "persons", schoolId };
+/**
+ * Where a School opens for a Person holding these roles.
+ *
+ * A School Administrator opens on the School itself, which is what they are
+ * there to run. Everyone else opens on their own account: a Faculty member, a
+ * Student and a Guardian are each there for what they hold, not for a list of
+ * other Persons.
+ */
+export function landing(schoolId: string, roles: readonly Role[]): SchoolRoute {
+  return roles.includes("school_administrator") ? { name: "persons", schoolId } : { name: "account", schoolId };
 }

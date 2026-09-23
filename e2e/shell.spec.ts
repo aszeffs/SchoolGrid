@@ -6,6 +6,7 @@ import { expect, test } from "./test.ts";
 
 /** Every page within a School, as the navigation names it, and where it is. */
 const SECTIONS = [
+  { label: "Your account", path: "account", heading: "Your account" },
   { label: "People", path: "persons", heading: "Persons" },
   { label: "Invitations", path: "invitations", heading: "Invitations" },
   { label: "Memberships", path: "memberships", heading: "Memberships" },
@@ -98,11 +99,12 @@ test("an account reaching one School goes straight into it, and sees only what i
   await recordEveryNavigation(page);
 
   await signIn(page, faculty);
-  await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
+  // Not a School Administrator, so the School opens on their own account.
+  await expect(page).toHaveURL(/\/schools\/[^/]+\/account$/);
   const header = page.getByRole("banner");
   await expect(header.getByText(schools[0]!, { exact: true })).toBeVisible();
   await expect(header.getByText(`Signed in as ${faculty.displayName}`)).toBeVisible();
-  await expect(navLinks(page)).toHaveText(["People"]);
+  await expect(navLinks(page)).toHaveText(["Your account", "People"]);
   // With nowhere else to go, no switcher is offered.
   await expect(header.getByText("Switch School")).toHaveCount(0);
 
@@ -110,7 +112,7 @@ test("an account reaching one School goes straight into it, and sees only what i
   const seen = await navigationsSeen(page);
   expect(seen.length).toBeGreaterThan(0);
   for (const links of seen) {
-    expect(links).toEqual(["People"]);
+    expect(links).toEqual(["Your account", "People"]);
   }
 
   // Asked for by its URL, a page their roles do not reach still opens: its
@@ -118,7 +120,7 @@ test("an account reaching one School goes straight into it, and sees only what i
   const schoolId = new URL(page.url()).pathname.split("/")[2]!;
   await page.goto(`/schools/${schoolId}/audit-records`);
   await expect(page.getByRole("heading", { level: 1, name: "Audit" })).toBeVisible();
-  await expect(navLinks(page)).toHaveText(["People"]);
+  await expect(navLinks(page)).toHaveText(["Your account", "People"]);
 });
 
 test("every page within a School opens from its URL", async ({ page, audit }) => {

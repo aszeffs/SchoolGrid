@@ -94,6 +94,27 @@ export async function findPerson(database: Queryable, personId: string): Promise
   return rows[0] ?? null;
 }
 
+/**
+ * The Persons with these identifiers, in whichever Schools hold them, by
+ * identifier. One read rather than one per identifier, for a caller holding a
+ * handful of them already; an identifier naming no Person is simply absent
+ * from the map.
+ */
+export async function findPersons(
+  database: Queryable,
+  personIds: readonly string[],
+): Promise<Map<string, Person>> {
+  const identifiable = personIds.filter(couldIdentify);
+  if (identifiable.length === 0) {
+    return new Map();
+  }
+  const { rows } = await database.query<Person>(
+    `SELECT ${PERSON_COLUMNS} FROM app.person WHERE id = ANY($1)`,
+    [identifiable],
+  );
+  return new Map(rows.map((person) => [person.id, person]));
+}
+
 /** A Person, and whether a User account is attached to them. */
 export interface ListedPerson extends Person {
   claimed: boolean;

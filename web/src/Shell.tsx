@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Account } from "./Account.tsx";
 import { api, type ReachedSchool, type Session } from "./api.ts";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
@@ -52,7 +53,8 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
   useEffect(() => {
     if (reachesOne) {
       // Nobody is asked to pick from a list of one.
-      navigate(landing(state.session.schools[0]!.schoolId), { replace: true });
+      const only = state.session.schools[0]!;
+      navigate(landing(only.schoolId, only.roles), { replace: true });
     }
   }, [reachesOne, state]);
 
@@ -165,6 +167,8 @@ function reached(session: Session, route: SchoolRoute): ReachedSchool | undefine
  */
 function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSchool }) {
   switch (route.name) {
+    case "account":
+      return <Account school={school} />;
     case "persons":
       return <Persons school={school} />;
     case "invitations":
@@ -190,7 +194,7 @@ function Switcher({ current, schools }: { current: ReachedSchool; schools: Reach
       <ul aria-label="Your other Schools">
         {others.map((school) => (
           <li key={school.schoolId}>
-            <Link to={landing(school.schoolId)}>{school.name}</Link>
+            <Link to={landing(school.schoolId, school.roles)}>{school.name}</Link>
           </li>
         ))}
         <li>

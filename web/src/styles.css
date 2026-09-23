@@ -161,6 +161,10 @@ body {
   --stock: #e8cdb5;
 }
 
+.sheet--salmon {
+  --stock: #eab9a1;
+}
+
 /*
  * The staple that held the run together, struck across the corner. It lives in
  * the gutter beside the mark, so it never crowds the head's type, and it is
@@ -1026,6 +1030,20 @@ dialog.slip::backdrop {
 .roles__sees,
 .roles__account {
   margin: 0;
+}
+
+/*
+ * What the sheet says it does not hold, ruled off below what it does. Struck
+ * like the foot, because it is read last and is not part of the record.
+ */
+.not-built {
+  margin-top: calc(var(--step) * 6);
+  padding-top: calc(var(--step) * 2);
+  border-top: 1px solid var(--rule);
+}
+
+.not-built h2 {
+  margin-top: 0;
 }
 
 /* ---- Foot ------------------------------------------------------------ */

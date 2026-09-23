@@ -11,6 +11,7 @@ colors:
   stock-pink: "#edd9e4"
   stock-mint: "#cbe0ce"
   stock-buff: "#e8cdb5"
+  stock-salmon: "#eab9a1"
   rule: "color-mix(in srgb, #3b2a6b 42%, transparent)"
   rule-faint: "color-mix(in srgb, #3b2a6b 18%, transparent)"
   wash: "color-mix(in srgb, #3b2a6b 9%, transparent)"
@@ -168,11 +169,11 @@ SchoolGrid is printed, not rendered. Every screen is one run off a spirit duplic
 
 Density is a working document's, not a dashboard's: hairline-ruled rosters, a two-column head separated by a 3px double rule, a legend held level beside the record, and a foot that closes the sheet with a registration mark and the words "End of sheet". Chrome is limited to three devices, all of them printer's marks: the stapled corner struck across the top-left gutter, the registration target at the foot, and the drum-wear texture in the stock itself. State prints itself into the record as a struck mark rather than appearing as coloured product chrome.
 
-The system is bound by three constraints that outrank expression, and the build honours all three. The Content Security Policy permits no inline `<style>`, no `style=` attribute, no `on*=` handler and no `data:` inlining, and `vite.config.ts` fails the build on any of them — every rule in this document lives in `src/styles.css` and nowhere else. UI copy uses `CONTEXT.md` domain vocabulary verbatim (School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment). WCAG 2.2 AA is binding: both inks clear 4.5:1 on all six stocks, every interactive target is at least 2.25rem tall, and focus is a 3px solid ink outline offset 2px.
+The system is bound by three constraints that outrank expression, and the build honours all three. The Content Security Policy permits no inline `<style>`, no `style=` attribute, no `on*=` handler and no `data:` inlining, and `vite.config.ts` fails the build on any of them — every rule in this document lives in `src/styles.css` and nowhere else. UI copy uses `CONTEXT.md` domain vocabulary verbatim (School Administrator, Faculty, Class Offering, Person, Invitation, Enrollment). WCAG 2.2 AA is binding: both inks clear 4.5:1 on all seven stocks, every interactive target is at least 2.25rem tall, and focus is a 3px solid ink outline offset 2px.
 
 **Key Characteristics:**
 - One ink (violet) plus one stamp (oxblood red) for refusal and revocation only
-- Six saturated copy stocks, one per sheet, flooding the whole viewport
+- Seven saturated copy stocks, one per sheet, flooding the whole viewport
 - Typewriter strike for every record and figure; stencil caps for heads and actions
 - Zero shadows, zero rounded corners, zero floating panels
 - Violet hairlines and 3px double rules carry all structure
@@ -180,7 +181,7 @@ The system is bound by three constraints that outrank expression, and the build 
 
 ## Colors
 
-A one-ink press with a six-stock paper drawer: the colour range lives in the paper, never in the ink.
+A one-ink press with a seven-stock paper drawer: the colour range lives in the paper, never in the ink.
 
 ### Primary
 - **Aniline Violet** (`{colors.ink}`): the only ink in the system. Body copy, headings, rules, borders, roster text, the filled primary button, list markers, the caret and the selection highlight are all this one value. Darkened from a true duplicator violet until it clears 4.5:1 on every stock, goldenrod included.
@@ -190,13 +191,14 @@ A one-ink press with a six-stock paper drawer: the colour range lives in the pap
 - **Office Stamp Oxblood** (`{colors.stamp}`): the rubber stamp, the only second colour the office ever saw. Used exclusively for destructive and failed states — the error block's border and text, and the revoke action. It is never decorative and never a heading colour.
 
 ### Tertiary
-The six copy stocks. One stock is assigned per kind of sheet so a School Administrator knows which sheet is in front of them before reading a word. The stock is set once on `.sheet` and inherited; it is never set on an element inside the sheet.
+The seven copy stocks. One stock is assigned per kind of sheet so a School Administrator knows which sheet is in front of them before reading a word. The stock is set once on `.sheet` and inherited; it is never set on an element inside the sheet.
 - **Goldenrod** (`{colors.stock-goldenrod}`): Persons — the roster sheet, the system's first viewport.
 - **Canary** (`{colors.stock-canary}`): Sign in. Also the default stock for any sheet that does not name one.
 - **Duplicator Blue** (`{colors.stock-blue}`): Schools.
 - **Carbon Pink** (`{colors.stock-pink}`): Redeem Invitation.
 - **Ledger Mint** (`{colors.stock-mint}`): How this was built.
 - **Manila Buff** (`{colors.stock-buff}`): Not available.
+- **Duplicator Salmon** (`{colors.stock-salmon}`): Your account — what one Person holds in one School.
 
 ### Neutral
 There are no neutrals. Where a lighter or darker plane is needed, the ink is mixed into the stock rather than a grey being introduced.
@@ -295,13 +297,16 @@ The head carries identity (wordmark, sheet name) and, on a signed-in sheet, the 
 Inside a School, `.shell-nav` rules a row of tabs under the head: 0.78rem bold caps tracked 0.16em, each at least 2.75rem tall. The page being shown carries `aria-current="page"` and is struck with a strong wash and a 3px ink underline. It lists only the pages the actor's roles reach. Elsewhere, movement is by links in the record and in the `.foot` block. Links are ink-coloured with a 1px underline offset 0.22em, thickening to 2px over a strong-wash highlight on hover.
 
 ### Status Mark (signature component)
-State prints itself into the record instead of appearing as chrome. A mark is 0.72rem bold caps tracked 0.2em, `white-space: nowrap`, in one of two renditions: **held** — solid ink block with stock-coloured type, for a settled fact (CLAIMED, COPIED) — or **open** — 1px dashed ink outline with ink type, padding reduced by the border width so both renditions sit on the same baseline grid (UNCLAIMED). An empty mark sets `display: none`, so a status with nothing to report is not a blank box waiting to be read.
+State prints itself into the record instead of appearing as chrome. A mark is 0.72rem bold caps tracked 0.2em, `white-space: nowrap`, in one of three renditions: **held** — solid ink block with stock-coloured type, for a settled fact (CLAIMED, COPIED, MAY READ) — **open** — 1px dashed ink outline with ink type, padding reduced by the border width so both renditions sit on the same baseline grid, for a fact not yet settled (UNCLAIMED, OPEN) — or **unstruck** — the caps alone, no block and no outline, for a fact that is settled but negative (MAY NOT READ). A withheld permission takes the unstruck rendition and never the open one: dashed reads as not yet done, and a permission withheld is decided. Unstruck also leaves the record scannable for what *was* granted, since only those marks carry ink. An empty mark sets `display: none`, so a status with nothing to report is not a blank box waiting to be read.
 
 ### Roster (signature component)
 The record itself: an unstyled `ul` opened with a 1px rule, each row a baseline-aligned flex line padded 0.875rem vertically and closed with a faint hairline. Name at the left in 1.05rem body type, a **dotted leader** (a 2px-on/4px-off repeating gradient, 1px tall, centred) filling the gap, and the state group pushed hard right with `margin-left: auto`. Rows wash on hover. The leader is hidden below 52rem. Its empty counterpart is an italic washed-violet line ruled top and bottom.
 
 ### Legend (signature component)
 A sticky `<dl>` strip beside the record: a "THIS SHEET" heading in label caps, an optional sentence of context, then term/definition pairs where the term is the mark as it appears in the record. It explains the sheet's marks and never names a record — and a sheet shown for a refusal carries no legend at all, so nothing about what exists can be read off it.
+
+### Not built (block)
+What a sheet says it does not hold, ruled off below what it does: a 1px rule above, a label-caps heading and a sentence of body copy. It is struck like the foot because it is read last and is not part of the record. It names the glossary's own terms (Attendance, Term results) and never softens them into a promise.
 
 ### Slip (signature component)
 The issued Invitation, torn off the sheet: a wash-filled block with a 2px solid ink border, 1.5rem padding, a stencil heading at 1.1rem, and inputs that reverse to the raw stock so the handed-over link reads as a fresh strip of paper.
@@ -322,7 +327,7 @@ A typed two-column `max-content / 1fr` definition grid, ruled above, with terms 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** flood the frame with exactly one stock per sheet, set on `.sheet` via `--stock`, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in, blue Schools, pink Redeem, mint How this was built, buff Not available).
+- **Do** flood the frame with exactly one stock per sheet, set on `.sheet` via `--stock`, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in, blue Schools, pink Redeem, mint How this was built, buff Not available, salmon Your account).
 - **Do** keep every rule in `src/styles.css`: the CSP forbids inline `<style>`, `style=`, `on*=` and `data:` inlining, and the Vite build fails on any of them.
 - **Do** set records, names and figures in Courier Prime and reserve Stardos Stencil for the wordmark, the single `h1`, button labels and the slip heading.
 - **Do** draw structure with violet hairlines (`{colors.rule}`, `{colors.rule-faint}`) and 3px double rules; use washes (9% / 15%) for recessed fields.
