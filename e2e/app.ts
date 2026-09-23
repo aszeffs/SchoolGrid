@@ -19,9 +19,9 @@ export function schoolsList(page: Page) {
   return page.getByRole("list", { name: "Schools" }).getByRole("listitem");
 }
 
-/** The People as rows of the record; the head row names no Person. */
-export function peopleRecord(page: Page) {
-  return page.getByRole("table", { name: "People" }).getByRole("row");
+/** The Persons as rows of the record; the head row names no Person. */
+export function personsRecord(page: Page) {
+  return page.getByRole("table", { name: "Persons" }).getByRole("row");
 }
 
 /** The pending Invitations as rows of the record; the head row names no Person. */
@@ -44,7 +44,7 @@ export async function addPerson(page: Page, displayName: string) {
 }
 
 /**
- * Issues the Person's Invitation from the People sheet, leaving its link on the
+ * Issues the Person's Invitation from the Persons sheet, leaving its link on the
  * screen. The link is held in a dialog that only the acknowledgement closes, so
  * a spec that has read it goes on through `acknowledgeIssuedLink`.
  */

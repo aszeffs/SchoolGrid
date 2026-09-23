@@ -1,27 +1,25 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { MAX_NAME_LENGTH } from "../../src/validation/bounds.ts";
-import { api, type ApiResult, type ListedPerson, type ReachedSchool } from "./api.ts";
-import { afterFailure } from "./failed.ts";
+import { api, type ListedPerson, type ReachedSchool } from "./api.ts";
 import { IssuedLink, type IssuedInvitation } from "./IssuedLink.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList, type Column } from "./RecordList.tsx";
+import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
-type State = { kind: "loading" } | { kind: "not-available" } | { kind: "ready"; persons: ListedPerson[] };
-
 /** Which sheet this page is, named once so its states cannot drift apart. */
-const SHEET: SheetKind = { stock: "goldenrod", name: "People" };
+const SHEET: SheetKind = { stock: "goldenrod", name: "Persons" };
 
 /**
  * Every Person in one School that the actor may read, and — for a School
  * Administrator — whether each has been claimed yet, with the way to add one
  * and the way to invite one.
  *
- * An Invitation is issued from here, beside the Person it is for, because that
- * is the only place the choice of Person is in front of you. Where it goes
- * afterwards is the Invitations sheet's; this page does not list it.
+ * An Invitation is issued from here, beside the Person it is for, because this
+ * is the only sheet where the choice of Person is in front of you. Where it
+ * goes afterwards is the Invitations sheet's; this page does not list it.
  */
-export function People({ school }: { school: ReachedSchool }) {
+export function Persons({ school }: { school: ReachedSchool }) {
   const { schoolId } = school;
   /*
    * Whether to offer adding a Person and inviting one, from the roles the
@@ -32,50 +30,8 @@ export function People({ school }: { school: ReachedSchool }) {
    * payload for the field.
    */
   const administering = school.roles.includes("school_administrator");
-  const [state, setState] = useState<State>({ kind: "loading" });
-  const [busy, setBusy] = useState(false);
+  const { showing, busy, change } = useScreen(schoolId, api.persons);
   const [issued, setIssued] = useState<IssuedInvitation | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    void (async () => {
-      const listed = await api.persons(schoolId);
-      if (!current) {
-        return;
-      }
-      if (listed.ok) {
-        setState({ kind: "ready", persons: listed.body.persons });
-      } else if ((await afterFailure()) === "not-available" && current) {
-        setState({ kind: "not-available" });
-      }
-    })();
-    return () => {
-      current = false;
-    };
-  }, [schoolId]);
-
-  /**
-   * Sends a change, then lists the People as they stand afterwards, and returns
-   * what was answered. Nothing is applied to the page before the server has
-   * confirmed it: a refusal the actor cannot see is indistinguishable from a
-   * success, so a change shown optimistically could be a change that never
-   * happened.
-   *
-   * A change that was made stays made even where the listing afterwards fails.
-   * An Invitation's link, above all, can never be asked for twice.
-   */
-  const sendThenList = async <T,>(send: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> => {
-    setBusy(true);
-    const sent = await send();
-    const listed = sent.ok ? await api.persons(schoolId) : null;
-    setBusy(false);
-    if (listed?.ok) {
-      setState({ kind: "ready", persons: listed.body.persons });
-    } else if ((await afterFailure()) === "not-available" && !sent.ok) {
-      setState({ kind: "not-available" });
-    }
-    return sent;
-  };
 
   const add = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,53 +40,62 @@ export function People({ school }: { school: ReachedSchool }) {
     if (displayName.trim() === "") {
       return;
     }
-    if ((await sendThenList(() => api.createPerson(schoolId, { displayName }))).ok) {
+    if ((await change(() => api.createPerson(schoolId, { displayName }))).ok) {
       form.reset();
     }
   };
 
   const invite = async (person: ListedPerson) => {
-    const sent = await sendThenList(() => api.issueInvitation(schoolId, person.id));
+    const sent = await change(() => api.issueInvitation(schoolId, person.id));
     setIssued(sent.ok ? sent.body : null);
   };
 
-  switch (state.kind) {
-    case "loading":
-      return <Sheet {...SHEET} busy />;
-    case "not-available":
-      return <NotAvailable />;
-    case "ready":
-      return (
-        <PeopleSheet
-          persons={state.persons}
-          administering={administering}
-          busy={busy}
-          issued={issued}
-          onAdd={add}
-          onInvite={invite}
-          onAcknowledgeIssued={() => setIssued(null)}
-        />
-      );
-  }
+  const sheet = (): ReactNode => {
+    switch (showing.kind) {
+      case "loading":
+        return <Sheet {...SHEET} busy />;
+      case "not-available":
+        return <NotAvailable />;
+      case "ready":
+        return (
+          <PersonsSheet
+            persons={showing.records.persons}
+            administering={administering}
+            busy={busy}
+            onAdd={add}
+            onInvite={invite}
+          />
+        );
+    }
+  };
+
+  /*
+   * The issued link is held beside the sheet rather than on it. It is the one
+   * thing here the API will never say again, so it must not be torn up by the
+   * sheet behind it changing state — including to the not-available state a
+   * failed listing brings, which would otherwise strand the Invitation.
+   */
+  return (
+    <>
+      {sheet()}
+      {issued !== null && <IssuedLink issued={issued} onDone={() => setIssued(null)} />}
+    </>
+  );
 }
 
-/** The People as they stand, narrowed to the one being looked for. */
-function PeopleSheet({
+/** The Persons as they stand, narrowed to the one being looked for. */
+function PersonsSheet({
   persons,
   administering,
   busy,
-  issued,
   onAdd,
   onInvite,
-  onAcknowledgeIssued,
 }: {
   persons: ListedPerson[];
   administering: boolean;
   busy: boolean;
-  issued: IssuedInvitation | null;
   onAdd: (event: FormEvent<HTMLFormElement>) => void;
   onInvite: (person: ListedPerson) => void;
-  onAcknowledgeIssued: () => void;
 }) {
   const [query, setQuery] = useState("");
   const looking = query.trim();
@@ -160,7 +125,7 @@ function PeopleSheet({
 
   return (
     <Sheet {...SHEET} legend={legend}>
-      <h1>People</h1>
+      <h1>Persons</h1>
       {persons.length > 0 && (
         <>
           <search className="filter">
@@ -181,7 +146,7 @@ function PeopleSheet({
         </>
       )}
       <RecordList
-        label="People"
+        label="Persons"
         rows={shown}
         keyOf={(person) => person.id}
         empty={emptyFor(persons.length, looking, administering)}
@@ -199,7 +164,6 @@ function PeopleSheet({
           </button>
         </form>
       )}
-      {issued !== null && <IssuedLink issued={issued} onDone={onAcknowledgeIssued} />}
     </Sheet>
   );
 }
@@ -207,7 +171,7 @@ function PeopleSheet({
 /**
  * Whether a Person is the one being looked for, by any part of their display
  * name. Matched here rather than asked of the server: the record is a School's
- * People, which is as long as a School is, and the whole of it is already on
+ * Persons, which is as long as a School is, and the whole of it is already on
  * the page.
  */
 function matches(person: ListedPerson, looking: string): boolean {
@@ -216,8 +180,8 @@ function matches(person: ListedPerson, looking: string): boolean {
 
 /** How much of the record is in front of you, said so a screen reader hears it change. */
 function tally(shown: number, total: number, looking: string): string {
-  const people = `${total} ${total === 1 ? "Person" : "People"}`;
-  return looking === "" ? people : `${shown} of ${people} shown`;
+  const persons = `${total} ${total === 1 ? "Person" : "Persons"}`;
+  return looking === "" ? persons : `${shown} of ${persons} shown`;
 }
 
 /**
@@ -225,7 +189,7 @@ function tally(shown: number, total: number, looking: string): string {
  * that matched none are different situations and read differently: the first
  * offers the first action, and the second says what was looked for.
  */
-function emptyFor(total: number, looking: string, administering: boolean) {
+function emptyFor(total: number, looking: string, administering: boolean): string {
   if (total > 0) {
     return `No Person's name contains “${looking}”.`;
   }

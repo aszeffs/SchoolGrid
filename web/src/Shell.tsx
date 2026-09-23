@@ -6,7 +6,7 @@ import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { NotBuilt } from "./NotBuilt.tsx";
-import { People } from "./People.tsx";
+import { Persons } from "./Persons.tsx";
 import { href, landing, sectionOf, sectionsFor, type Route, type SchoolRoute } from "./routes.ts";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
@@ -171,7 +171,7 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
     case "account":
       return <Account school={school} />;
     case "persons":
-      return <People school={school} />;
+      return <Persons school={school} />;
     case "invitations":
       return <Invitations school={school} />;
     default:

@@ -1,20 +1,18 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, type Invitation, type ReachedSchool } from "./api.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
-import { afterFailure } from "./failed.ts";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
+import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-
-type State = { kind: "loading" } | { kind: "not-available" } | { kind: "ready"; invitations: Invitation[] };
 
 /**
  * Which sheet this page is, named once so its states cannot drift apart.
  *
- * The Invitation's two sides run on the one stock: this sheet and the one a
- * human lands on when they follow a link are the same business seen from its
- * two ends.
+ * The Invitation's two sides run on the one stock (web/DESIGN.md): this sheet
+ * and the one a human lands on when they follow a link are the same business
+ * seen from its two ends.
  */
 const SHEET: SheetKind = { stock: "pink", name: "Invitations" };
 
@@ -24,10 +22,10 @@ const EXPIRY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeSty
  * Every Invitation this School has pending, when each expires, and the way to
  * revoke one.
  *
- * A screen of its own rather than a panel on People, because an Invitation
+ * A screen of its own rather than a panel on Persons, because an Invitation
  * outlives the moment it was issued in: it is something the School is holding,
  * and what is held needs somewhere to be looked at. Issuing one stays on
- * People, beside the Person it is for.
+ * Persons, beside the Person it is for.
  *
  * Nothing here can show a link. `issueInvitation` returned it once and the API
  * will not say it again, so the only route to a working link for a Person whose
@@ -35,50 +33,16 @@ const EXPIRY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeSty
  */
 export function Invitations({ school }: { school: ReachedSchool }) {
   const { schoolId } = school;
-  const [state, setState] = useState<State>({ kind: "loading" });
-  const [busy, setBusy] = useState(false);
+  const { showing, busy, change } = useScreen(schoolId, api.invitations);
   const [confirming, setConfirming] = useState<Invitation | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    void (async () => {
-      const listed = await api.invitations(schoolId);
-      if (!current) {
-        return;
-      }
-      if (listed.ok) {
-        setState({ kind: "ready", invitations: listed.body.invitations });
-      } else if ((await afterFailure()) === "not-available" && current) {
-        setState({ kind: "not-available" });
-      }
-    })();
-    return () => {
-      current = false;
-    };
-  }, [schoolId]);
 
   /**
    * Revokes the Invitation, then lists what is pending afterwards. Nothing is
    * struck off the page before the server says it is gone: a refusal the actor
    * cannot see is indistinguishable from a success, so a row removed
    * optimistically could be a live link still in someone's hands.
-   *
-   * Where the listing afterwards cannot be had either, the sheet goes to the
-   * one not-available state rather than keeping the rows it drew before. A
-   * pending list that may be a revocation out of date is worse than no list:
-   * it would name a link as live that is not.
    */
-  const revoke = async (invitation: Invitation) => {
-    setBusy(true);
-    const sent = await api.revokeInvitation(schoolId, invitation.id);
-    const listed = sent.ok ? await api.invitations(schoolId) : null;
-    setBusy(false);
-    if (listed?.ok) {
-      setState({ kind: "ready", invitations: listed.body.invitations });
-    } else if ((await afterFailure()) === "not-available") {
-      setState({ kind: "not-available" });
-    }
-  };
+  const revoke = (invitation: Invitation) => change(() => api.revokeInvitation(schoolId, invitation.id));
 
   const legend = (
     <>
@@ -99,7 +63,8 @@ export function Invitations({ school }: { school: ReachedSchool }) {
     </>
   );
 
-  const people = <Link to={{ name: "persons", schoolId }}>People</Link>;
+  // Named for the sheet it opens, which the navigation lists as People.
+  const persons = <Link to={{ name: "persons", schoolId }}>Persons</Link>;
 
   const sheet = (invitations: Invitation[]) => (
     <Sheet {...SHEET} legend={legend}>
@@ -108,7 +73,7 @@ export function Invitations({ school }: { school: ReachedSchool }) {
         label="Pending Invitations"
         rows={invitations}
         keyOf={(invitation) => invitation.id}
-        empty={<>No Invitation is pending. Issue one from {people}, beside the Person it is for.</>}
+        empty={<>No Invitation is pending. Issue one from {persons}, beside the Person it is for.</>}
         columns={[
           { head: "Person", cell: (invitation) => invitation.person.displayName },
           { head: "Expires", cell: (invitation) => EXPIRY.format(new Date(invitation.expiresAt)) },
@@ -131,7 +96,7 @@ export function Invitations({ school }: { school: ReachedSchool }) {
       />
       <p className="muted">
         A link is shown once, when the Invitation is issued, and never again. Where one has been lost, revoke the
-        Invitation and issue a new one from {people}.
+        Invitation and issue a new one from {persons}.
       </p>
       {confirming !== null && (
         <ConfirmDialog
@@ -155,12 +120,12 @@ export function Invitations({ school }: { school: ReachedSchool }) {
     </Sheet>
   );
 
-  switch (state.kind) {
+  switch (showing.kind) {
     case "loading":
       return <Sheet {...SHEET} busy />;
     case "not-available":
       return <NotAvailable />;
     case "ready":
-      return sheet(state.invitations);
+      return sheet(showing.records.invitations);
   }
 }

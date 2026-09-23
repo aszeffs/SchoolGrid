@@ -6,7 +6,7 @@ import {
   issueInvitationFor,
   openSchool,
   openSection,
-  peopleRecord,
+  personsRecord,
   pendingInvitations,
   revokeInvitationFor,
   signIn,
@@ -16,7 +16,7 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
  * Invitations: what the School is holding open, when each expires, and the way
- * to revoke one. Issuing stays on People, beside the Person it is for.
+ * to revoke one. Issuing stays on Persons, beside the Person it is for.
  *
  * The link is the whole point of the sheet. `issueInvitation` returns it in the
  * one response that will ever carry it, so what is asserted here is that it
@@ -24,7 +24,7 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  */
 
 /** A School Administrator in the first School, with a Person of this run's own. */
-async function onPeople(page: Page): Promise<string> {
+async function onPersons(page: Page): Promise<string> {
   const { schoolAdministrator, schools } = seeded();
   const displayName = `Casey ${randomUUID().slice(0, 8)}`;
   await signIn(page, schoolAdministrator);
@@ -40,7 +40,7 @@ test("an issued link is shown once, must be acknowledged, and is gone for good a
   audit,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  const displayName = await onPeople(page);
+  const displayName = await onPersons(page);
   await issueInvitationFor(page, displayName);
 
   const field = page.getByLabel("Invitation link");
@@ -73,7 +73,7 @@ test("an issued link is shown once, must be acknowledged, and is gone for good a
 test("a pending Invitation names the Person and when it expires, and revoking it is confirmed", async ({
   page,
 }) => {
-  const displayName = await onPeople(page);
+  const displayName = await onPersons(page);
   await issueInvitationFor(page, displayName);
   await acknowledgeIssuedLink(page);
   await openSection(page, "Invitations");
@@ -102,8 +102,32 @@ test("a pending Invitation names the Person and when it expires, and revoking it
   await expect(pendingInvitations(page).filter({ hasText: displayName })).toHaveCount(0);
 
   // Revoking left the Person, who is Unclaimed and can be invited afresh.
+  // Reached by the navigation, which lists the sheet as People.
   await openSection(page, "People");
-  await expect(peopleRecord(page).filter({ hasText: displayName })).toContainText("Unclaimed");
+  await expect(personsRecord(page).filter({ hasText: displayName })).toContainText("Unclaimed");
+});
+
+test("a link that was issued survives the listing the server then refuses", async ({ page }) => {
+  const displayName = await onPersons(page);
+  // Waited for before anything is refused: adding the Person lists the Persons
+  // again itself, and a refusal installed over that listing would empty the
+  // sheet before there were a Person on it to invite.
+  await expect(personsRecord(page).filter({ hasText: displayName })).toHaveCount(1);
+
+  // The Invitation is issued, and the listing that should follow it is not
+  // given. The sheet behind goes to the one not-available state, because a
+  // record it cannot refresh is a record it must not keep showing. The link
+  // is held beside that sheet rather than on it, and must not go with it: the
+  // API will never say it again, and losing it strands the Invitation.
+  await page.route("**/api/schools/*/persons", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ status: 503 }) : route.fallback(),
+  );
+  await page.getByRole("button", { name: `Invite ${displayName}` }).click();
+
+  await expect(page.getByLabel("Invitation link")).toHaveValue(/\/invitation#[A-Za-z0-9_-]{43}$/);
+  await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
+  await acknowledgeIssuedLink(page);
+  await expect(page.getByLabel("Invitation link")).toHaveCount(0);
 });
 
 test("with nothing pending the sheet says so and offers the first action", async ({ page, audit }) => {
@@ -124,9 +148,9 @@ test("with nothing pending the sheet says so and offers the first action", async
   await expect(page.getByRole("main")).toContainText("No Invitation is pending");
   await audit(page);
 
-  // The first action is offered as a way to People, where an Invitation is issued.
-  await page.getByRole("main").getByRole("link", { name: "People" }).first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "People" })).toBeVisible();
+  // The first action is offered as a way to Persons, where an Invitation is issued.
+  await page.getByRole("main").getByRole("link", { name: "Persons" }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
 });
 
 test("a listing the server will not give is the one not-available sheet", async ({ page }) => {
@@ -145,7 +169,7 @@ test.describe("on a phone", () => {
   test.use({ viewport: { width: 360, height: 740 } });
 
   test("the slip holding the link is readable, and the link still copyable", async ({ page, audit }) => {
-    const displayName = await onPeople(page);
+    const displayName = await onPersons(page);
     await issueInvitationFor(page, displayName);
 
     // The one thing that cannot be had twice, at the width most of the demo's

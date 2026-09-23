@@ -1,12 +1,9 @@
-import { useEffect, useState } from "react";
 import { api, type OwnAccount, type ReachedSchool, type Role } from "./api.ts";
-import { afterFailure } from "./failed.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES } from "./roles.ts";
+import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-
-type State = { kind: "loading" } | { kind: "not-available" } | { kind: "ready"; account: OwnAccount };
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { stock: "salmon", name: "Your account" };
@@ -24,34 +21,15 @@ const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
  * School Administrator's to change, and this page offers no way to.
  */
 export function Account({ school }: { school: ReachedSchool }) {
-  const { schoolId } = school;
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const { showing } = useScreen(school.schoolId, api.account);
 
-  useEffect(() => {
-    let current = true;
-    void (async () => {
-      const loaded = await api.account(schoolId);
-      if (!current) {
-        return;
-      }
-      if (loaded.ok) {
-        setState({ kind: "ready", account: loaded.body.account });
-      } else if ((await afterFailure()) === "not-available" && current) {
-        setState({ kind: "not-available" });
-      }
-    })();
-    return () => {
-      current = false;
-    };
-  }, [schoolId]);
-
-  switch (state.kind) {
+  switch (showing.kind) {
     case "loading":
       return <Sheet {...SHEET} busy />;
     case "not-available":
       return <NotAvailable />;
     case "ready":
-      return <AccountSheet account={state.account} school={school} />;
+      return <AccountSheet account={showing.records.account} school={school} />;
   }
 }
 

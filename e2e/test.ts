@@ -19,7 +19,7 @@ export { expect };
  * stands when the test ends, and a test that passes through a state worth
  * holding to the bar — a dialog open, a record at 360px, a page in a context
  * of its own — audits it there and then. Between them the suite covers every
- * sheet the app has: Sign in, Schools, Your account, People, Invitations,
+ * sheet the app has: Sign in, Schools, Your account, Persons, Invitations,
  * Redeem Invitation, How this was built and Not available.
  *
  * And every test requires that nothing it sent was throttled. The whole suite

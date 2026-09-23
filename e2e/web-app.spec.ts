@@ -6,7 +6,7 @@ import {
   issueInvitationFor,
   openSchool,
   openSection,
-  peopleRecord,
+  personsRecord,
   revokeInvitationFor,
   schoolsList,
   signIn,
@@ -101,7 +101,7 @@ test("a deep link opens the app at that page", async ({ page }) => {
   };
 
   await page.goto(`/schools/${schools[0]!.id}/persons`);
-  await expect(page.getByRole("heading", { level: 1, name: "People" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
 
   await page.goto("/schools/no-such-school/persons");
   await expect(page.getByRole("heading", { name: "Not available" })).toBeVisible();
@@ -214,7 +214,7 @@ test("a person with an account at one School redeems an Invitation into a second
   ] as const) {
     await page.goto("/");
     await openSchool(page, school);
-    const listed = peopleRecord(page).filter({ hasText: displayName });
+    const listed = personsRecord(page).filter({ hasText: displayName });
     await expect(listed).toHaveCount(1);
     await expect(listed).not.toContainText("Unclaimed");
   }
