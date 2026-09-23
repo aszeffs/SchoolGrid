@@ -8,7 +8,7 @@ import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
-const SHEET: SheetKind = { stock: "goldenrod", name: "Persons" };
+const SHEET: SheetKind = { name: "Persons" };
 
 /**
  * Every Person in one School that the actor may read, and — for a School
@@ -103,7 +103,7 @@ function PersonsSheet({
 
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>Every Person in this School that you may read.</p>
       <dl>
         <Key term="Person">
@@ -217,7 +217,7 @@ function columnsFor(
     {
       head: "State",
       cell: (person) => (
-        <span className={person.claimed === true ? "mark mark--struck" : "mark mark--open"}>
+        <span className={person.claimed === true ? "mark mark--filled" : "mark mark--open"}>
           {person.claimed === true ? "Claimed" : "Unclaimed"}
         </span>
       ),
@@ -229,7 +229,7 @@ function columnsFor(
         person.claimed === true ? null : (
           <button
             type="button"
-            className="button-stamp"
+            className="button-ghost"
             disabled={busy}
             aria-label={`Invite ${person.displayName}`}
             onClick={() => onInvite(person)}

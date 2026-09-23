@@ -8,14 +8,8 @@ import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { byName, DAY, holdingNowOrLater, namesOf } from "./standing.ts";
 
-/**
- * Which sheet this page is, named once so its states cannot drift apart.
- *
- * Run on Your account's stock (web/DESIGN.md): a Guardian link and its Access
- * profile are set here and read there, the same business seen from its two
- * ends, as the Invitation's two sheets are.
- */
-const SHEET: SheetKind = { stock: "salmon", name: "Guardian links" };
+/** Which sheet this page is, named once so its states cannot drift apart. */
+const SHEET: SheetKind = { name: "Guardian links" };
 
 /**
  * A School's Guardian links, with what making one needs: the Persons to name
@@ -137,7 +131,7 @@ function GuardianLinksSheet({
 
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>Every Guardian link in this School, and what each one’s Access profile permits.</p>
       <dl>
         <Key term="Guardian link">
@@ -190,7 +184,7 @@ function GuardianLinksSheet({
                   aria-label={`${name} on ${between(link)}`}
                   onChange={(event) => onPermit(link, { [key]: event.currentTarget.checked })}
                 />
-                <span className={link.accessProfile[key] ? "mark mark--struck" : "mark"}>
+                <span className={link.accessProfile[key] ? "mark mark--filled" : "mark mark--struck"}>
                   {link.accessProfile[key] ? "May read" : "May not read"}
                 </span>
               </span>

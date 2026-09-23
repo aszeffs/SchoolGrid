@@ -6,7 +6,7 @@ import { NotAvailable } from "./NotAvailable.tsx";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 /** Which sheet this page is, named once so the two states cannot drift apart. */
-const SHEET: SheetKind = { stock: "pink", name: "Invitation" };
+const SHEET: SheetKind = { name: "Invitation" };
 
 /** Whether the invited person is creating an account or signing in to one they have. */
 type AccountChoice = "new" | "existing";
@@ -135,7 +135,7 @@ export function RedeemInvitation() {
           {...SHEET}
           legend={
             <>
-              <h2>This sheet</h2>
+              <h2>Key</h2>
               <p>Claiming the Person this Invitation names.</p>
               <dl>
                 <Key term="Once">

@@ -32,18 +32,18 @@ The security properties live in the domain, not in a layer bolted on afterwards:
 
 ## Capabilities and Constraints
 
-- Stack in place: React 19 + Vite + TypeScript SPA in `web/`, built into the service image and served on every path outside `/api` from the same origin. No router library, no component library, no CSS framework — `src/navigation.ts` and a single `src/styles.css` (~850 lines) holding the whole design system as custom properties. The sheet is run on one stock at a time and the palette is light-only; there is no dark mode, because a ditto sheet has no dark counterpart (`color-scheme: light`).
-- Shipped surfaces today, each one sheet rendered through `src/Sheet.tsx`: sign-in (with demo one-click roles, canary), Schools list (blue), Persons list (goldenrod), Invitations issue and redeem (pink), "How this was built" (mint), and `NotAvailable` (buff). `DESIGN.md` records the system; `web/.impeccable/` holds the design run that produced it.
-- Not yet built: every School-scoped academic surface — attendance sessions, results entry and publication, correction requests, audit review, enrollment and roster management, guardian and student views.
+- Stack in place: React 19 + Vite + TypeScript SPA in `web/`, built into the service image and served on every path outside `/api` from the same origin. No router library — a typed route table in `src/routes.ts` with `src/navigation.ts`. No component library, because the Content Security Policy below rules out what they ship (ADR-0006). No CSS framework — a single `src/styles.css` holds the whole design system as custom properties.
+- Shipped surfaces today: sign-in (with demo one-click roles), invitation redeem, "How this was built", and `NotAvailable` before sign-in; inside a School shell, Schools, Your account, Persons, Invitations, School memberships, Enrollments, Guardian links, and Audit records (cursor-paged, ADR-0008).
+- Not yet built: attendance sessions, results entry and publication, correction requests, roster management, and the Student and Guardian read views.
+- **The whole UI/UX was redesigned** (2026-09-23). The ditto-sheet look is retired for a calm official record with one seal blue; the direction lives in `.impeccable/surfaces/src-shell-tsx.md` and `DESIGN.md` records the built result. Light and dark renditions follow the browser's setting (ADR-0010, superseding ADR-0009). Product truth, content, routes, and behaviour carried over.
 - **No inline code, enforced at build time.** The service's Content Security Policy allows only same-origin files: no inline `<script>`, no inline `<style>`, no `style=` attribute, no `on*=` handler, and no `data:` URL inlining. `vite.config.ts` fails the build on any of them. Styling goes in `src/styles.css` (or another emitted stylesheet); CSS-in-JS and inline style objects are not available.
 - Development runs Vite on its own origin with `/api` proxied to the service on `:3000`, so the page and the API share one origin exactly as they do in the image.
 - **Safe denial is a UI constraint, not only an API one.** `NotAvailable` is the single state for a refused request, a failed one, or a path that does not exist, and it must never explain which. No screen may infer or display a reason the API withheld (ADR-0002).
 - Use the domain vocabulary in `CONTEXT.md` verbatim in UI copy — School Administrator not "admin", Faculty not "teacher", Class Offering not "class", Guardian not "parent", Enrollment not "registration". Each term there also lists the words to avoid.
-- Undecided: whether the app stays router-less as academic surfaces land; whether a component library or design system is adopted.
 
 ## Brand Commitments
 
-The name **SchoolGrid** is fixed. Nothing else is: no logo, no committed palette, no typeface. The current navy accent and light/dark tokens in `src/styles.css` are incumbent implementation, not a brand promise, and a later visual direction may replace them.
+The name **SchoolGrid** is fixed. Nothing else is: no logo, no committed palette, no typeface. The seal-blue record in `DESIGN.md` and `src/styles.css` is implementation, not a brand promise, and a later visual direction may replace it.
 
 ## Evidence on Hand
 

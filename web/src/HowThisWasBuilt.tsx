@@ -4,7 +4,7 @@ import { Link } from "./Link.tsx";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 /** Which sheet this page is, named once so the two states cannot drift apart. */
-const SHEET: SheetKind = { stock: "mint", name: "How this was built" };
+const SHEET: SheetKind = { name: "How this was built" };
 
 const REPOSITORY = "aszeffs/SchoolGrid";
 const IMAGE = "ghcr.io/aszeffs/schoolgrid";
@@ -69,7 +69,7 @@ export function HowThisWasBuilt() {
 
   const legend = (
     <>
-      <h2>This sheet</h2>
+      <h2>Key</h2>
       <p>What the running site was built from, and how to check it yourself.</p>
       <dl>
         <Key term="Digest">

@@ -8,8 +8,8 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * roles to try-a-role.spec.ts, the build's provenance to
  * how-this-was-built.spec.ts. What is asserted here is what both owe a
  * visitor who arrives on them cold: that they explain themselves, that they
- * can be worked by the keyboard, that they hold 360px, and that they print the
- * same whichever theme the browser asks for.
+ * can be worked by the keyboard, that they hold 360px, and that they follow the
+ * theme the browser asks for and stay legible in both.
  */
 
 const PUBLIC_SHEETS = [
@@ -17,7 +17,7 @@ const PUBLIC_SHEETS = [
   { path: "/how-this-was-built", heading: "How this was built" },
 ] as const;
 
-/** The element that floods the frame, and so the one carrying the sheet's stock. */
+/** The element that fills the frame, and so the one carrying the page's ground. */
 const sheet = (page: Page) => page.locator(".sheet");
 
 /** What the element holding the focus is, as a name a failure can be read by. */
@@ -76,25 +76,29 @@ for (const { path, heading } of PUBLIC_SHEETS) {
     await audit(page);
   });
 
-  test(`${path} prints the same in a dark browser as in a light one`, async ({ page, audit }) => {
+  test(`${path} follows a dark browser, and stays legible in both themes`, async ({ page, audit }) => {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
 
-    // Paper does not invert: the stocks carry the whole range, so the sheet a
-    // dark browser gets is the sheet a light one gets. Asserted against the
-    // page's own light rendition rather than against a colour written down
-    // here, which would only restate what styles.css already says.
+    // Two renditions, picked by the browser's setting (ADR-0010). Asserted
+    // against the page's own light rendition rather than against a colour
+    // written down here, which would only restate what styles.css already says.
     await page.emulateMedia({ colorScheme: "light" });
     const inLight = await sheet(page).evaluate((node) => {
       const { backgroundColor, color } = getComputedStyle(node);
       return { backgroundColor, color };
     });
+    await audit(page);
 
-    await page.emulateMedia({ colorScheme: "dark" });
-    await expect(sheet(page)).toHaveCSS("background-color", inLight.backgroundColor);
-    await expect(sheet(page)).toHaveCSS("color", inLight.color);
-    // And the ink still clears the bar against that stock, which is the thing
-    // an unasked-for dark rendition would break.
+    // With motion reduced, so the switch lands at once: audited mid-transition,
+    // a button fading between its two renditions fails contrast in neither.
+    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+    await expect(sheet(page)).not.toHaveCSS("background-color", inLight.backgroundColor);
+    await expect(sheet(page)).not.toHaveCSS("color", inLight.color);
+    // Two frames painted in the dark rendition before it is audited: read the
+    // moment the scheme flips, axe can still see text drawn in the light one.
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    // And the dark rendition clears the same contrast bar the light one does.
     await audit(page);
   });
 }

@@ -1,33 +1,25 @@
 import type { ReactNode } from "react";
 import { useShell } from "./ShellContext.ts";
 
-/**
- * The stock a sheet is run on. One per kind of sheet, so a School
- * Administrator knows which sheet is in front of them before reading a word.
- */
-export type Stock = "goldenrod" | "blue" | "canary" | "pink" | "mint" | "buff" | "salmon";
-
-/** Which sheet this is: the stock it runs on and the name struck in its head. */
+/** Which page this is: the name it carries while its record is still being read. */
 export interface SheetKind {
-  stock: Stock;
   name: string;
 }
 
 /**
- * Every page is one sheet: the stock floods the frame, the head carries the
- * mark and which sheet this is, and the legend beside the record stays level
- * while the record scrolls.
+ * Every page is one sheet of the record: the head says which record system and,
+ * inside a School, which School and who is acting; the key beside the record
+ * stays level while the record scrolls.
  *
- * The legend explains the sheet's own marks and never names a record. A sheet
- * shown for a refusal carries no legend at all, so nothing about what exists
+ * The key explains the page's own marks and never names a record. A sheet
+ * shown for a refusal carries no key at all, so nothing about what exists
  * can be read off it (ADR-0002).
  *
- * A sheet still coming off the drum is the same sheet with `busy` set: it
- * names no record. Inside the shell it keeps the shell's head and navigation,
- * which the session had already settled before the sheet was asked for.
+ * A sheet still being read is the same sheet with `busy` set: it names no
+ * record. Inside the shell it keeps the shell's head and navigation, which the
+ * session had already settled before the sheet was asked for.
  */
 export function Sheet({
-  stock,
   name,
   legend,
   head,
@@ -36,9 +28,9 @@ export function Sheet({
   children,
 }: SheetKind & {
   legend?: ReactNode;
-  /** Beside the mark in the head, after the shell's own. Left off while the sheet is still printing. */
+  /** In the head, after the shell's own. Left off while the sheet is still being read. */
   head?: ReactNode;
-  /** The way off this sheet, ruled off below the record. */
+  /** The way off this page, ruled off below the record. */
   foot?: ReactNode;
   busy?: boolean;
   children?: ReactNode;
@@ -46,11 +38,12 @@ export function Sheet({
   const shell = useShell();
   const aside = busy ? undefined : legend;
   return (
-    <div className={`sheet sheet--${stock}`}>
+    <div className="sheet">
       <header className="sheet__head">
         <div className="sheet__group">
           <p className="sheet__mark">SchoolGrid</p>
-          <p className="sheet__no">{name}</p>
+          {/* Inside a School the lifted tab names the page; nowhere else does. */}
+          {shell?.nav === undefined && <p className="sheet__no">{name}</p>}
         </div>
         {shell?.head}
         {!busy && head}
@@ -63,14 +56,11 @@ export function Sheet({
           {!busy && foot !== undefined && <div className="foot">{foot}</div>}
         </main>
       </div>
-      <footer className="sheet__foot">
-        <p>End of sheet</p>
-      </footer>
     </div>
   );
 }
 
-/** One entry in a sheet's legend: the mark, then what it means. */
+/** One entry in a page's key: the mark, then what it means. */
 export function Key({ term, children }: { term: string; children: ReactNode }) {
   return (
     <>
