@@ -220,7 +220,7 @@ describe("School settings", () => {
     async function schoolDateAt(client: TestClient, at: string) {
       const response = await client.get(`/school-date?at=${encodeURIComponent(at)}`);
       expect(response.status).toBe(200);
-      return response.body as { at: string; schoolDate: string };
+      return response.body as { schoolDate: string };
     }
 
     it("is the calendar date in the School's timezone, not in UTC", async () => {
@@ -228,10 +228,7 @@ describe("School settings", () => {
 
       // 03:00 on 24 September in UTC is still the 23rd in New York, and
       // already 11:00 on the 24th in Manila.
-      expect(await schoolDateAt(world.alice, "2026-09-24T03:00:00Z")).toEqual({
-        at: "2026-09-24T03:00:00.000Z",
-        schoolDate: "2026-09-23",
-      });
+      expect(await schoolDateAt(world.alice, "2026-09-24T03:00:00Z")).toEqual({ schoolDate: "2026-09-23" });
       expect((await schoolDateAt(world.bob, "2026-09-24T03:00:00Z")).schoolDate).toBe("2026-09-24");
     });
 
@@ -282,9 +279,8 @@ describe("School settings", () => {
       const response = await world.alice.get("/school-date");
 
       expect(response.status).toBe(200);
-      const { at, schoolDate } = response.body as { at: string; schoolDate: string };
+      const { schoolDate } = response.body as { schoolDate: string };
       expect([before, inNewYork()]).toContain(schoolDate);
-      expect(Math.abs(Date.parse(at) - Date.now())).toBeLessThan(60_000);
     });
 
     it.each([

@@ -1,3 +1,5 @@
+import { isKnownTimezone } from "../calendar/index.ts";
+import type { Queryable } from "../db/transaction.ts";
 import { MAX_NAME_LENGTH, MAX_REASON_LENGTH } from "../validation/bounds.ts";
 import { InvalidRequest } from "./invalid-request.ts";
 
@@ -73,4 +75,24 @@ function isCalendarDate(date: string): boolean {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
   const parsed = new Date(Date.UTC(year, month - 1, day));
   return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+}
+
+/** Longer than any identifier the database knows, and short enough not to be worth asking about. */
+const MAX_TIMEZONE_LENGTH = 64;
+
+/**
+ * A timezone a School may have, from a request: an IANA identifier the
+ * database knows, spelt exactly as it spells it. The one reading here that
+ * has to ask the database.
+ */
+export async function timezoneFrom(database: Queryable, value: unknown): Promise<string> {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > MAX_TIMEZONE_LENGTH ||
+    !(await isKnownTimezone(database, value))
+  ) {
+    throw new InvalidRequest("timezone must be an IANA timezone identifier the database knows");
+  }
+  return value;
 }

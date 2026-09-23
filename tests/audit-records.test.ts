@@ -68,6 +68,7 @@ describe("Audit records", () => {
           before: null,
           after: {
             name: "Northside",
+            timezone: "UTC",
             schoolAdministratorPersonId: northside.schoolAdministrator.id,
           },
         },

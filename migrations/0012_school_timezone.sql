@@ -10,9 +10,13 @@
 -- Copied here once rather than consulted live. pg_timezone_names reads every
 -- zone file on each query, which takes seconds on some platforms, and a School
 -- referring to its timezone by foreign key holds against a direct write as
--- much as against the service. A newer tzdata that adds a zone adds it here
--- only through a later migration; one never removes a name, so none held here
--- stops being interpretable.
+-- much as against the service.
+--
+-- The copy can fall behind the database it came from. A newer tzdata's new
+-- zones arrive here only through a later migration. And a PostgreSQL image
+-- built on a distribution that moves old aliases (Asia/Calcutta, Europe/Kiev)
+-- out of its tzdata would stop interpreting a name still held here, so a
+-- change of image must be checked against the timezones Schools hold.
 CREATE TABLE app.timezone (
   name  text PRIMARY KEY
 );

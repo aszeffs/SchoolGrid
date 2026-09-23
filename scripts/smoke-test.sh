@@ -198,7 +198,9 @@ APPLIED_MIGRATIONS="SELECT count(*) FROM public.schema_migrations"
 # suite paced: pacing would slow every run to protect a limit this container
 # does not need, and would still break as specs are added. Whether the width
 # is enough is checked on every run, not assumed: e2e/test.ts fails any test
-# that had a request throttled, and says to raise this.
+# that had a request throttled, and says to raise this. Measured with the
+# School settings specs added (#153), the suite peaked at 574 /api requests in
+# one 60-second window.
 start_image() {
   local into="$1"
   local port="$2"

@@ -6,6 +6,9 @@ import { createPerson } from "../src/identity/index.ts";
 import { provisionSchool } from "../src/platform/index.ts";
 import { SEEDED, type Seeded } from "./seeded.ts";
 
+/** The timezone each seeded School keeps, in the order the Schools are named. */
+const SCHOOL_TIMEZONES = ["America/New_York", "Europe/London"];
+
 /**
  * Arranges what the browser suite signs in as, directly in the database the
  * server under test uses, as the HTTP suite's harness arranges its fixtures.
@@ -15,9 +18,6 @@ import { SEEDED, type Seeded } from "./seeded.ts";
  * Names carry a random suffix, so the suite can run again against a database
  * it has already run against.
  */
-/** The timezone each seeded School keeps, in the order the Schools are named. */
-const SCHOOL_TIMEZONES = ["America/New_York", "Europe/London"];
-
 export default async function globalSetup(): Promise<void> {
   const url = process.env["SCHOOLGRID_DATABASE_URL"];
   if (url === undefined || url === "") {

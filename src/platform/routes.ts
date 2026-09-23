@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { findUserAccount, type Authenticator } from "../authentication/index.ts";
-import { timezoneFrom } from "../calendar/routes.ts";
 import type { Database } from "../db/pool.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { registerPlatformScope } from "../http/platform-scope.ts";
-import { boundedText, fieldsOf } from "../http/request-body.ts";
+import { boundedText, fieldsOf, timezoneFrom } from "../http/request-body.ts";
 import { provisionSchool } from "./index.ts";
 
 // Validation below runs only once the Access decision has permitted the

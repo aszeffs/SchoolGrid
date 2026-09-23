@@ -1,10 +1,9 @@
 import { authorizeManageSchoolSettings } from "../access/index.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import { offeredTimezones } from "../calendar/index.ts";
-import { timezoneFrom } from "../calendar/routes.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction } from "../db/transaction.ts";
-import { fieldsOf, reasonFrom } from "../http/request-body.ts";
+import { fieldsOf, reasonFrom, timezoneFrom } from "../http/request-body.ts";
 import type { SchoolScope } from "../http/school-scope.ts";
 import { lockSchoolSettings, schoolSettingsOf, setSchoolTimezone } from "./index.ts";
 
