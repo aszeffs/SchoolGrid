@@ -10,6 +10,9 @@ import { readAuditRecords } from "./index.ts";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
+/** Said of any cursor this endpoint cannot page from, malformed or naming no record in the trail alike. */
+const UNKNOWN_CURSOR = "cursor must be one this endpoint issued";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE_SIZE = /^[1-9]\d{0,2}$/;
 
@@ -22,7 +25,7 @@ const PAGE_SIZE = /^[1-9]\d{0,2}$/;
 function pageOf({ query }: SchoolScopedRequest): { cursor: string | null; limit: number } {
   const { cursor, limit } = query;
   if (cursor !== undefined && (typeof cursor !== "string" || !UUID.test(cursor))) {
-    throw new InvalidRequest("cursor must be one this endpoint issued");
+    throw new InvalidRequest(UNKNOWN_CURSOR);
   }
   if (limit !== undefined && (typeof limit !== "string" || !PAGE_SIZE.test(limit) || Number(limit) > MAX_PAGE_SIZE)) {
     throw new InvalidRequest(`limit must be a whole number from 1 to ${MAX_PAGE_SIZE}`);
@@ -42,7 +45,7 @@ export function registerAuditRoutes(
       const schoolId = authorizeReadAuditRecords(actor);
       const page = await readAuditRecords(database, schoolId, pageOf(request));
       if (page === null) {
-        throw new InvalidRequest("cursor must be one this endpoint issued");
+        throw new InvalidRequest(UNKNOWN_CURSOR);
       }
       return page;
     });

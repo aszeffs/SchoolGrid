@@ -5,6 +5,7 @@
 ## Consequences
 
 - Ordering must be stable, so paging cannot skip or repeat a record while new ones are being written behind it. A cursor over an ordered key does this; an offset does not.
+- One gap is accepted rather than closed. A record's position is taken from a sequence when it is inserted, but the record is seen only when its transaction commits, so two writes can commit out of position order. A reader who pages past a position in that window never sees the record that later commits behind it; reading the first page afresh does. The window is one transaction long, and Audit writes are short. Closing it would mean paging within a transaction snapshot or ordering by commit, both real work on a hot path for a trail that is read by people, not reconciled by machines. If the trail is ever consumed by something that must see every record exactly once, this is reopened.
 - A malformed cursor is rejected as malformed, and only after the Access decision. Validated first, it would answer differently depending on what the caller may see, which is what ADR-0002 forbids.
 - The two shapes of list response are a deliberate inconsistency, not an oversight, and a contributor tidying it into one shape would be undoing this decision. When another list outgrows its bound, it gets the same cursor treatment and is recorded here.
 - The public demo accumulates Audit records every night, so this endpoint is the first to feel the absence of a bound in practice, not in theory.

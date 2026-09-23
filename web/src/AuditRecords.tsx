@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { api, readAll, type AuditRecord, type ReachedSchool } from "./api.ts";
+import { api, type AuditRecord, type ReachedSchool } from "./api.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
 import { useScreen } from "./screen.ts";
@@ -21,6 +21,9 @@ interface Reached {
   /** How many records newer than this page there are, as far as paging has counted. */
   start: number;
 }
+
+/** The People list, read once for the screen rather than again with every page. */
+const listPersons = (schoolId: string) => api.persons(schoolId);
 
 /** A moment to the second: records written within one minute are told apart by it. */
 const TO_THE_SECOND = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" });
@@ -44,54 +47,54 @@ const KINDS: Readonly<Record<string, string>> = {
  *
  * A record names who acted and what was acted on by identifier alone. The
  * sheet puts a Person's name to it from the People list the School
- * Administrator already reads, and carries the identifier for whoever needs
- * it; it shows nothing about anyone the record does not name.
+ * Administrator already reads, read once rather than with every page, and
+ * prints the identifier under it for whoever needs it; it shows nothing about
+ * anyone the record does not name.
  */
 export function AuditRecords({ school }: { school: ReachedSchool }) {
   const { schoolId } = school;
   // Every page read so far, the one being read last. The first is the newest.
   const [pages, setPages] = useState<Reached[]>([{ cursor: null, start: 0 }]);
   const reading = pages.length;
-  const { cursor, start } = pages.at(-1)!;
+  const reached = pages.at(-1)!;
   const list = useCallback(
     async (schoolId: string) => {
-      const answered = await readAll([api.auditRecords(schoolId, cursor), api.persons(schoolId)]);
+      const answered = await api.auditRecords(schoolId, reached.cursor);
       if (!answered.ok) {
         return answered;
       }
-      const [page, { persons }] = answered.body;
       // Carries which page it is, so a page still being read is never shown under the next one's number.
-      return { ok: true as const, body: { ...page, persons, page: reading, start } };
+      return { ok: true as const, body: { ...answered.body, page: reading, start: reached.start } };
     },
-    [cursor, reading, start],
+    [reached, reading],
   );
   const { showing } = useScreen(schoolId, list);
+  const people = useScreen(schoolId, listPersons).showing;
 
-  switch (showing.kind) {
-    case "loading":
-      return <Sheet {...SHEET} busy />;
-    case "not-available":
-      return <NotAvailable />;
-    case "ready": {
-      const { auditRecords, nextCursor, persons, page, start } = showing.records;
-      return (
-        <AuditSheet
-          school={school}
-          auditRecords={auditRecords}
-          nameOf={namesOf(persons)}
-          page={page}
-          start={start}
-          reading={reading}
-          onNewer={page > 1 ? () => setPages((read) => read.slice(0, -1)) : null}
-          onOlder={
-            nextCursor === null
-              ? null
-              : () => setPages((read) => [...read, { cursor: nextCursor, start: start + auditRecords.length }])
-          }
-        />
-      );
-    }
+  if (showing.kind === "not-available" || people.kind === "not-available") {
+    return <NotAvailable />;
   }
+  if (showing.kind === "loading" || people.kind === "loading") {
+    return <Sheet {...SHEET} busy />;
+  }
+  const { auditRecords, nextCursor, page, start } = showing.records;
+  const { persons } = people.records;
+  return (
+    <AuditSheet
+      school={school}
+      auditRecords={auditRecords}
+      nameOf={namesOf(persons)}
+      page={page}
+      start={start}
+      reading={reading}
+      onNewer={page > 1 ? () => setPages((read) => read.slice(0, -1)) : null}
+      onOlder={
+        nextCursor === null
+          ? null
+          : () => setPages((read) => [...read, { cursor: nextCursor, start: start + auditRecords.length }])
+      }
+    />
+  );
 }
 
 function AuditSheet({
@@ -140,10 +143,10 @@ function AuditSheet({
 
   const actorOf = (record: AuditRecord) => {
     if (record.actorPersonId !== null) {
-      return <span title={record.actorPersonId}>{nameOf(record.actorPersonId)}</span>;
+      return <Named name={nameOf(record.actorPersonId)} id={record.actorPersonId} />;
     }
     if (record.actorPlatformAdministratorId !== null) {
-      return <span title={record.actorPlatformAdministratorId}>A Platform Administrator</span>;
+      return <Named name="A Platform Administrator" id={record.actorPlatformAdministratorId} />;
     }
     return "No one signed in";
   };
@@ -154,13 +157,13 @@ function AuditSheet({
     }
     switch (type) {
       case "person":
-        return <span title={id}>{nameOf(id)}</span>;
+        return <Named name={nameOf(id)} id={id} />;
       case "school":
-        return <span title={id}>{id === school.schoolId ? school.name : "A School"}</span>;
+        return <Named name={id === school.schoolId ? school.name : "A School"} id={id} />;
       case "request":
         return <code>{id}</code>;
       default:
-        return <span title={id}>{KINDS[type] ?? type}</span>;
+        return <Named name={KINDS[type] ?? type} id={id} />;
     }
   };
 
@@ -176,33 +179,9 @@ function AuditSheet({
     <Sheet {...SHEET} legend={legend}>
       <h1>Audit</h1>
       <nav className="pager" aria-label="Audit pages">
-        {/* Held with aria-disabled rather than disabled, so a keyboard user's
-            focus stays on the control they pressed when the end is reached. */}
-        <button
-          type="button"
-          className="button-ghost"
-          aria-disabled={onNewer === null || paging}
-          onClick={() => {
-            if (onNewer !== null && !paging) {
-              onNewer();
-            }
-          }}
-        >
-          Newer
-        </button>
+        <PageButton label="Newer" onPage={paging ? null : onNewer} />
         <p role="status">{status}</p>
-        <button
-          type="button"
-          className="button-ghost"
-          aria-disabled={onOlder === null || paging}
-          onClick={() => {
-            if (onOlder !== null && !paging) {
-              onOlder();
-            }
-          }}
-        >
-          Older
-        </button>
+        <PageButton label="Older" onPage={paging ? null : onOlder} />
       </nav>
       <RecordList
         label="Audit records"
@@ -221,5 +200,28 @@ function AuditSheet({
         ]}
       />
     </Sheet>
+  );
+}
+
+/** What a record names, and under it the identifier it names it by, readable without hovering. */
+function Named({ name, id }: { name: string; id: string }) {
+  return (
+    <>
+      {name}
+      <code className="identifier">{id}</code>
+    </>
+  );
+}
+
+/**
+ * One way through the trail, held while there is nowhere to go. Held with
+ * aria-disabled rather than disabled, so a keyboard user's focus stays on the
+ * control they pressed when the end is reached.
+ */
+function PageButton({ label, onPage }: { label: string; onPage: (() => void) | null }) {
+  return (
+    <button type="button" className="button-ghost" aria-disabled={onPage === null} onClick={() => onPage?.()}>
+      {label}
+    </button>
   );
 }

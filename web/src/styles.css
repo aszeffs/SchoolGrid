@@ -729,7 +729,7 @@ button {
 }
 
 @media (hover: hover) {
-  button:hover:not(:disabled, [aria-disabled="true"]) {
+  button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--ink) 82%, #000);
   }
 
@@ -738,13 +738,13 @@ button {
     background: var(--wash-strong);
   }
 
-  .button-ghost:hover:not(:disabled, [aria-disabled="true"]),
-  .button-quiet:hover:not(:disabled, [aria-disabled="true"]) {
+  .button-ghost:hover:not(:disabled),
+  .button-quiet:hover:not(:disabled) {
     background: var(--ink);
     color: var(--stock);
   }
 
-  .button-stamp:hover:not(:disabled, [aria-disabled="true"]) {
+  .button-stamp:hover:not(:disabled) {
     background: var(--stamp);
     color: var(--stock);
   }
@@ -760,7 +760,7 @@ button {
 }
 
 /* The stamp meets the page. */
-button:active:not(:disabled, [aria-disabled="true"]) {
+button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
@@ -768,8 +768,7 @@ button:focus-visible {
   outline-color: var(--ink);
 }
 
-button:disabled,
-button[aria-disabled="true"] {
+button:disabled {
   background: transparent;
   border-style: dashed;
   color: var(--ink-soft);
@@ -1165,6 +1164,13 @@ dialog.slip::backdrop {
   margin-top: 0;
 }
 
+/* A record's identifier, printed under the name it is given. */
+.identifier {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
 /* ---- Paging through a record ---------------------------------------- */
 
 /*
@@ -1183,6 +1189,21 @@ dialog.slip::backdrop {
   flex: 1 1 12rem;
   margin: 0;
   font-size: 0.85rem;
+}
+
+/*
+ * A way through that goes nowhere is held with aria-disabled rather than
+ * disabled (AuditRecords.tsx), so it is drawn as a disabled button is, and
+ * answers neither hover nor press.
+ */
+.pager button[aria-disabled="true"],
+.pager button[aria-disabled="true"]:hover,
+.pager button[aria-disabled="true"]:active {
+  background: transparent;
+  border-style: dashed;
+  color: var(--ink-soft);
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* ---- Foot ------------------------------------------------------------ */

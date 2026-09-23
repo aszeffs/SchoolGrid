@@ -38,7 +38,7 @@ test("a change made in the School is listed newest first, named by who made it a
   const created = rows(page).filter({ hasText: "person.created" }).filter({ hasText: displayName });
   await expect(created).toHaveCount(1);
   await expect(created).toContainText(seeded().schoolAdministrator.displayName);
-  await expect(created.getByText(displayName)).toHaveAttribute("title", personId);
+  await expect(created.getByText(personId)).toBeVisible();
   await expect(created.getByRole("time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}T/);
   await expect(pager(page).getByRole("status")).toContainText("Page 1: records 1 to");
   await audit(page);
