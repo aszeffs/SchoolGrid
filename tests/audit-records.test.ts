@@ -72,6 +72,145 @@ describe("Audit records", () => {
           },
         },
       ],
+      // All of it fitted on one page, so there is no next one.
+      nextCursor: null,
+    });
+  });
+
+  describe("are read a page at a time (ADR-0008)", () => {
+    interface Page {
+      auditRecords: { id: string; action: string }[];
+      nextCursor: string | null;
+    }
+
+    /**
+     * Alice administers Northside, whose trail holds her sign-in, its
+     * provisioning, and `count` more records appended one at a time, oldest
+     * first, as `step.1` onwards.
+     */
+    async function arrange(count: number) {
+      const alice = await server().createAccount(ALICE);
+      const { school, schoolAdministrator } = await server().provisionSchool({ name: "Northside", administrator: alice });
+      const caller = (await server().signIn(ALICE)).inSchool(school.id);
+      const append = async (action: string) =>
+        server().appendAuditRecord({
+          schoolId: school.id,
+          actorPersonId: schoolAdministrator.id,
+          action,
+          target: { type: "school", id: school.id },
+          reason: null,
+          before: null,
+          after: null,
+        });
+      for (let step = 1; step <= count; step++) {
+        await append(`step.${step}`);
+      }
+      return { caller, schoolId: school.id, append };
+    }
+
+    const read = async (caller: TestClient, query: string): Promise<Page> => {
+      const response = await caller.get(`/audit-records${query}`);
+      expect(response.status).toBe(200);
+      return response.body as Page;
+    };
+
+    /** Every page from the first, following each cursor until there is none. */
+    async function readAll(caller: TestClient, limit: number): Promise<Page[]> {
+      const pages = [await read(caller, `?limit=${limit}`)];
+      while (pages.at(-1)!.nextCursor !== null) {
+        pages.push(await read(caller, `?limit=${limit}&cursor=${encodeURIComponent(pages.at(-1)!.nextCursor!)}`));
+      }
+      return pages;
+    }
+
+    const actions = (pages: Page[]) => pages.flatMap((page) => page.auditRecords.map((record) => record.action));
+
+    it("pages newest first, each record once, and says when there is no next page", async () => {
+      const { caller } = await arrange(3);
+
+      const pages = await readAll(caller, 2);
+
+      expect(pages.map((page) => page.auditRecords.length)).toEqual([2, 2, 1]);
+      expect(actions(pages)).toEqual([
+        "step.3",
+        "step.2",
+        "step.1",
+        "authentication.succeeded",
+        "school.provisioned",
+      ]);
+      expect(pages.at(-1)!.nextCursor).toBeNull();
+    });
+
+    it("neither skips nor repeats a record when new ones are written while paging", async () => {
+      const { caller, append } = await arrange(4);
+      const first = await read(caller, "?limit=3");
+
+      await append("written.meanwhile.1");
+      await append("written.meanwhile.2");
+      const rest = [await read(caller, `?limit=3&cursor=${encodeURIComponent(first.nextCursor!)}`)];
+      while (rest.at(-1)!.nextCursor !== null) {
+        rest.push(await read(caller, `?limit=3&cursor=${encodeURIComponent(rest.at(-1)!.nextCursor!)}`));
+      }
+
+      // What was written behind the cursor is on a first page read afresh, not here.
+      expect(actions([first, ...rest])).toEqual([
+        "step.4",
+        "step.3",
+        "step.2",
+        "step.1",
+        "authentication.succeeded",
+        "school.provisioned",
+      ]);
+      expect(actions([await read(caller, "?limit=2")])).toEqual(["written.meanwhile.2", "written.meanwhile.1"]);
+    });
+
+    it("reads fifty records to a page unless asked for fewer, and never more than a hundred", async () => {
+      const { caller, schoolId } = await arrange(0);
+      await server().database.query(
+        `INSERT INTO app.audit_record (school_id, action, target_type)
+         SELECT $1, 'bulk.' || step, 'school' FROM generate_series(1, 150) AS step`,
+        [schoolId],
+      );
+
+      expect((await read(caller, "")).auditRecords).toHaveLength(50);
+      expect((await read(caller, "?limit=100")).auditRecords).toHaveLength(100);
+      expect((await read(caller, "?limit=1")).auditRecords).toHaveLength(1);
+    });
+
+    it.each([
+      ["a cursor that is not an identifier", () => "?cursor=not-a-cursor"],
+      ["an empty cursor", () => "?cursor="],
+      ["a cursor naming no Audit record", () => `?cursor=${ABSENT_ID}`],
+      ["two cursors", (cursor: string) => `?cursor=${cursor}&cursor=${cursor}`],
+      ["a page size of none", () => "?limit=0"],
+      ["a page size above a hundred", () => "?limit=101"],
+      ["a page size that is not a whole number", () => "?limit=1.5"],
+      ["a page size that is not a number", () => "?limit=ten"],
+      ["two page sizes", () => "?limit=1&limit=2"],
+    ])("rejects %s as malformed", async (_case, query) => {
+      const { caller } = await arrange(2);
+      const { nextCursor } = await read(caller, "?limit=1");
+
+      const response = await caller.get(`/audit-records${query(nextCursor!)}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ status: "invalid_request" });
+    });
+
+    // A cursor names a record in the caller's own trail, or it is malformed. A
+    // cursor from another School's trail is refused the way one naming nothing
+    // is, so it cannot be used to learn that the record exists.
+    it("rejects a cursor from another School's trail exactly as one naming no record", async () => {
+      const { caller } = await arrange(0);
+      const bob = await server().createAccount(BOB);
+      const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
+      const [foreign] = (await read((await server().signIn(BOB)).inSchool(westbrook.school.id), "")).auditRecords;
+
+      const fromElsewhere = await caller.get(`/audit-records?cursor=${foreign!.id}`);
+      const namingNothing = await caller.get(`/audit-records?cursor=${ABSENT_ID}`);
+
+      expect(fromElsewhere.status).toBe(400);
+      expect(observable(fromElsewhere)).toEqual(observable(namingNothing));
     });
   });
 
@@ -109,32 +248,37 @@ describe("Audit records", () => {
     it.each([
       [
         "a School Administrator reading a School they have no Person in",
-        (w: World) => w.alice.inSchool(w.westbrookId).get("/audit-records"),
+        (w: World, query: string) => w.alice.inSchool(w.westbrookId).get(`/audit-records${query}`),
       ],
       [
         "a School Administrator reading a School where they administer nothing",
-        (w: World) => w.alice.inSchool(w.eastfieldId).get("/audit-records"),
+        (w: World, query: string) => w.alice.inSchool(w.eastfieldId).get(`/audit-records${query}`),
       ],
       [
         "a Person without the School Administrator role",
-        (w: World) => w.sam.inSchool(w.northsideId).get("/audit-records"),
+        (w: World, query: string) => w.sam.inSchool(w.northsideId).get(`/audit-records${query}`),
       ],
       [
         "a caller with no session",
-        (w: World) => server().client.inSchool(w.northsideId).get("/audit-records"),
+        (w: World, query: string) => server().client.inSchool(w.northsideId).get(`/audit-records${query}`),
       ],
       [
         "a School that does not exist",
-        (w: World) => w.alice.inSchool(ABSENT_ID).get("/audit-records"),
+        (w: World, query: string) => w.alice.inSchool(ABSENT_ID).get(`/audit-records${query}`),
       ],
     ])("refuses %s exactly as an absent Person is refused", async (_case, attempt) => {
       const world = await arrange();
 
       const absent = await world.alice.inSchool(world.northsideId).get(`/persons/${ABSENT_ID}`);
-      const refused = await attempt(world);
-
       expect(absent.status).not.toBe(200);
-      expect(observable(refused)).toEqual(observable(absent));
+
+      // The paging parameters are the caller's own input, well formed or not,
+      // and none of them may change the refusal: validated ahead of the Access
+      // decision, a malformed one would answer differently (ADR-0008).
+      for (const query of ["", "?limit=2", "?cursor=not-a-cursor", `?cursor=${ABSENT_ID}`, "?limit=0&limit=1"]) {
+        const refused = await attempt(world, query);
+        expect(observable(refused), query).toEqual(observable(absent));
+      }
     });
   });
 

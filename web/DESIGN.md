@@ -193,7 +193,7 @@ A one-ink press with a seven-stock paper drawer: the colour range lives in the p
 ### Tertiary
 The seven copy stocks. One stock is assigned per kind of sheet so a School Administrator knows which sheet is in front of them before reading a word. Where two sheets are two ends of one piece of business, they share a stock rather than a new one being cut — the drawer holds seven, and the range is the paper's, not the ink's. The stock is set once on `.sheet` and inherited; it is never set on an element inside the sheet.
 - **Goldenrod** (`{colors.stock-goldenrod}`): Persons — the roster sheet, the system's first viewport.
-- **Canary** (`{colors.stock-canary}`): Sign in, and School memberships (listed as Roles). Also the default stock for any sheet that does not name one. Sign in and School memberships never meet: no one signing in holds a list of roles, and no one holding one is signing in.
+- **Canary** (`{colors.stock-canary}`): Sign in, School memberships (listed as Roles), and Audit. Also the default stock for any sheet that does not name one, which is how Audit came by it: the trail is read, never worked in, and is not one end of any other sheet's business. Sign in and School memberships never meet: no one signing in holds a list of roles, and no one holding one is signing in.
 - **Duplicator Blue** (`{colors.stock-blue}`): Schools.
 - **Carbon Pink** (`{colors.stock-pink}`): the Invitation, both sides of it — Invitations, where a School Administrator holds what is pending, and Redeem Invitation, where a human claims a Person. The one stock covers both because they are the same business seen from its two ends, and no actor is ever asked to tell one from the other at a glance: an administrator holding a list never lands on a claim, and a claimant never holds a list.
 - **Ledger Mint** (`{colors.stock-mint}`): How this was built, and Enrollments. The one is a public page read once; the other is worked in, and a School Administrator does not move between them.
@@ -327,7 +327,7 @@ A typed two-column `max-content / 1fr` definition grid, ruled above, with terms 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** flood the frame with exactly one stock per sheet, set on `.sheet` via `--stock`, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in and School memberships, blue Schools, pink Invitation — both Invitations and Redeem, mint How this was built and Enrollments, buff Not available, salmon Your account and Guardian links).
+- **Do** flood the frame with exactly one stock per sheet, set on `.sheet` via `--stock`, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in, School memberships and Audit, blue Schools, pink Invitation — both Invitations and Redeem, mint How this was built and Enrollments, buff Not available, salmon Your account and Guardian links).
 - **Do** keep every rule in `src/styles.css`: the CSP forbids inline `<style>`, `style=`, `on*=` and `data:` inlining, and the Vite build fails on any of them.
 - **Do** set records, names and figures in Courier Prime and reserve Stardos Stencil for the wordmark, the single `h1`, button labels and the slip heading.
 - **Do** draw structure with violet hairlines (`{colors.rule}`, `{colors.rule-faint}`) and 3px double rules; use washes (9% / 15%) for recessed fields.

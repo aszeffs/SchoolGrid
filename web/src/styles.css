@@ -729,7 +729,7 @@ button {
 }
 
 @media (hover: hover) {
-  button:hover:not(:disabled) {
+  button:hover:not(:disabled, [aria-disabled="true"]) {
     background: color-mix(in srgb, var(--ink) 82%, #000);
   }
 
@@ -738,13 +738,13 @@ button {
     background: var(--wash-strong);
   }
 
-  .button-ghost:hover:not(:disabled),
-  .button-quiet:hover:not(:disabled) {
+  .button-ghost:hover:not(:disabled, [aria-disabled="true"]),
+  .button-quiet:hover:not(:disabled, [aria-disabled="true"]) {
     background: var(--ink);
     color: var(--stock);
   }
 
-  .button-stamp:hover:not(:disabled) {
+  .button-stamp:hover:not(:disabled, [aria-disabled="true"]) {
     background: var(--stamp);
     color: var(--stock);
   }
@@ -760,7 +760,7 @@ button {
 }
 
 /* The stamp meets the page. */
-button:active:not(:disabled) {
+button:active:not(:disabled, [aria-disabled="true"]) {
   transform: translateY(1px);
 }
 
@@ -768,7 +768,8 @@ button:focus-visible {
   outline-color: var(--ink);
 }
 
-button:disabled {
+button:disabled,
+button[aria-disabled="true"] {
   background: transparent;
   border-style: dashed;
   color: var(--ink-soft);
@@ -1162,6 +1163,26 @@ dialog.slip::backdrop {
 
 .not-built h2 {
   margin-top: 0;
+}
+
+/* ---- Paging through a record ---------------------------------------- */
+
+/*
+ * The way through a record read a page at a time: newer to the left, older to
+ * the right, as the record runs, and between them which page is struck.
+ */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--step) * 1) calc(var(--step) * 2);
+  margin-bottom: calc(var(--step) * 2);
+}
+
+.pager p {
+  flex: 1 1 12rem;
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 /* ---- Foot ------------------------------------------------------------ */
