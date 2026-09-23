@@ -53,7 +53,7 @@ export function RecordList<Row>({
       <thead>
         <tr>
           {columns.map((column) => (
-            <th key={column.head} scope="col">
+            <th key={column.head} scope="col" className={column.actions === true ? "record__actions" : undefined}>
               <span className={column.actions === true ? "unprinted" : undefined}>{column.head}</span>
             </th>
           ))}
@@ -63,7 +63,11 @@ export function RecordList<Row>({
         {rows.map((row) => (
           <tr key={keyOf(row)}>
             {columns.map((column) => (
-              <td key={column.head} data-head={column.actions === true ? undefined : column.head}>
+              <td
+                key={column.head}
+                className={column.actions === true ? "record__actions" : undefined}
+                data-head={column.actions === true ? undefined : column.head}
+              >
                 {column.cell(row)}
               </td>
             ))}

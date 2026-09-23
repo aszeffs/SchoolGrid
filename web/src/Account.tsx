@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type OwnAccount, type ReachedSchool, type Role } from "./api.ts";
-import { navigate } from "./navigation.ts";
+import { afterFailure } from "./failed.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES } from "./roles.ts";
@@ -36,18 +36,8 @@ export function Account({ school }: { school: ReachedSchool }) {
       }
       if (loaded.ok) {
         setState({ kind: "ready", account: loaded.body.account });
-        return;
-      }
-      const session = await api.session();
-      if (!current) {
-        return;
-      }
-      if (session.ok) {
-        // Refused, failed, or throttled: the one state for all of them (ADR-0002).
+      } else if ((await afterFailure()) === "not-available" && current) {
         setState({ kind: "not-available" });
-      } else {
-        // The session ended after the shell read it.
-        navigate({ name: "signIn" }, { replace: true });
       }
     })();
     return () => {

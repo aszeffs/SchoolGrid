@@ -737,6 +737,24 @@ button:disabled {
   font-size: 0.78rem;
 }
 
+/* ---- Finding one entry in a record ----------------------------------- */
+
+/*
+ * The field that narrows a record to the entry being looked for. It sifts what
+ * is already struck on the sheet and asks the server for nothing: a record of
+ * a School's People is as long as a School is, and the whole of it is here.
+ */
+.filter {
+  display: block;
+  max-width: 22rem;
+  margin: calc(var(--step) * 3) 0 calc(var(--step) * 1.5);
+}
+
+/* The tally beneath it, which says how much of the record is in front of you. */
+.filter + p {
+  margin: 0;
+}
+
 /* ---- Ruled records --------------------------------------------------- */
 
 .roster {
@@ -887,6 +905,14 @@ h1 + .roster {
 .record th:last-child,
 .record td:last-child {
   padding-right: 0;
+}
+
+/*
+ * A column of controls is struck to the right edge, where the hand returns to
+ * act. The last column is not enough to go on: a record of one column is its
+ * own last, and a Person's name belongs at the margin it is read from.
+ */
+.record .record__actions {
   text-align: right;
 }
 

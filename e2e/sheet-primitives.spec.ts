@@ -5,6 +5,7 @@ import {
   addPerson,
   issueInvitationFor,
   openSchool,
+  openSection,
   pendingInvitations,
   revokeButtonFor,
   signIn,
@@ -17,11 +18,11 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * uses them: the slip held over the sheet, and the record of several columns.
  *
  * What is asserted here is the primitive's behaviour, not the Invitation's.
- * What issuing and revoking an Invitation mean is covered in web-app.spec.ts
- * and at the HTTP seam.
+ * What issuing and revoking an Invitation mean is covered in
+ * invitations.spec.ts and at the HTTP seam.
  */
 
-/** A School Administrator on the Persons sheet, with one Person invited. */
+/** A School Administrator on the People sheet, with one Person invited. */
 async function invited(page: Page): Promise<string> {
   const { schoolAdministrator, schools } = seeded();
   const displayName = `Alex ${randomUUID().slice(0, 8)}`;
@@ -30,6 +31,17 @@ async function invited(page: Page): Promise<string> {
   await openSchool(page, schools[0]!);
   await addPerson(page, displayName);
   await issueInvitationFor(page, displayName);
+  return displayName;
+}
+
+/**
+ * The same, gone on to the Invitations sheet with the link acknowledged: where
+ * the confirming dialog and the pending record both are.
+ */
+async function pending(page: Page): Promise<string> {
+  const displayName = await invited(page);
+  await acknowledgeIssuedLink(page);
+  await openSection(page, "Invitations");
   return displayName;
 }
 
@@ -52,8 +64,7 @@ test("the issued link's dialog closes only on acknowledgement, not on Escape or 
 });
 
 test("a dialog takes focus, holds it, and hands it back to the control that opened it", async ({ page }) => {
-  const displayName = await invited(page);
-  await acknowledgeIssuedLink(page);
+  const displayName = await pending(page);
 
   await revokeButtonFor(page, displayName).click();
   // Cancel holds the focus: the consequence is read before the key that
@@ -79,11 +90,11 @@ test("a dialog takes focus, holds it, and hands it back to the control that open
   // opening the slip made the rest of the page inert.
   expect(
     await page.evaluate(() => {
-      const behind = document.querySelector<HTMLInputElement>('input[name="displayName"]');
+      const behind = document.querySelector<HTMLButtonElement>("table.record button");
       behind?.focus();
       return behind !== null && document.activeElement === behind;
     }),
-    "a field on the sheet behind took the focus",
+    "a control on the sheet behind took the focus",
   ).toBe(false);
 
   await page.keyboard.press("Escape");
@@ -92,8 +103,7 @@ test("a dialog takes focus, holds it, and hands it back to the control that open
 });
 
 test("cancelling a confirmation leaves the server as it was", async ({ page }) => {
-  const displayName = await invited(page);
-  await acknowledgeIssuedLink(page);
+  const displayName = await pending(page);
 
   await revokeButtonFor(page, displayName).click();
   await expect(page.getByRole("dialog")).toContainText(displayName);
@@ -106,8 +116,7 @@ test("cancelling a confirmation leaves the server as it was", async ({ page }) =
 });
 
 test("the record lists its columns on a wide sheet and stacks them at 360px", async ({ page, audit }) => {
-  const displayName = await invited(page);
-  await acknowledgeIssuedLink(page);
+  const displayName = await pending(page);
 
   const record = page.getByRole("table", { name: "Pending Invitations" });
   await expect(record.getByRole("columnheader", { name: "Expires" })).toBeVisible();

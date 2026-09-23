@@ -141,7 +141,7 @@ test("a School Administrator is not sent here, and their landing page is the Sch
   await openSchool(page, schools[0]!);
 
   await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "People" })).toBeVisible();
 });
 
 test("anything the actor may not read is the one not-available sheet", async ({ page }) => {
