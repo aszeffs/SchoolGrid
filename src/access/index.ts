@@ -1,7 +1,7 @@
 import type { Authentication, AuthenticationFailure, UserAccount } from "../authentication/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import {
-  findPerson,
+  findPersons,
   personFor,
   platformAdministratorFor,
   schoolsReachedBy,
@@ -266,13 +266,15 @@ export interface LinkedStudent {
 }
 
 /**
- * What an actor holds in the School they are acting in, as their own facts:
- * the roles in force, the Enrollment they hold as a Student, and the Students
- * they reach as a Guardian.
+ * What an actor holds in the School they are acting in, beyond what the
+ * session already says: the Enrollment they hold as a Student, and the
+ * Students they reach as a Guardian.
+ *
+ * Who the actor is here and which roles they hold are the session's to name
+ * (see actorInEachSchool), and are not restated: one fact with two sources is
+ * a fact that can disagree with itself.
  */
 export interface OwnAccount {
-  person: { id: string; displayName: string };
-  roles: Role[];
   /** The Enrollment as it stands, for an actor holding a Student membership; null otherwise. */
   enrollment: { startedAt: string; endedAt: string | null } | null;
   /** Empty for an actor who is not a Guardian, and for one linked to no Student. */
@@ -293,29 +295,17 @@ export interface OwnAccount {
  * records it gates, Attendance and Term results, enforce it themselves.
  */
 export async function ownAccount(database: Queryable, actor: Actor): Promise<OwnAccount> {
-  const standing = standingOf.get(actor);
-  const roles = ROLES.filter((role) => standing?.roles.has(role) ?? false);
   const enrollment = holds(actor, "student")
     ? await currentEnrollmentOf(database, actor.person)
     : null;
-  const linkedStudents: LinkedStudent[] = [];
-  if (holds(actor, "guardian")) {
-    for (const link of await guardianLinksHeldBy(database, actor.person)) {
-      const student = await findPerson(database, link.studentPersonId);
-      // A link's Student cannot be absent; skipped rather than asserted, for
-      // the same reason actorInEachSchool skips a School without its Person.
-      if (student === null) {
-        continue;
-      }
-      linkedStudents.push({
-        student: { id: student.id, displayName: student.displayName },
-        accessProfile: link.accessProfile,
-      });
-    }
-  }
+  const links = holds(actor, "guardian") ? await guardianLinksHeldBy(database, actor.person) : [];
+  // Read through the Identity module rather than joined onto the links, so a
+  // Person is still only ever read where Persons are owned.
+  const students = await findPersons(
+    database,
+    links.map((link) => link.studentPersonId),
+  );
   return {
-    person: { id: actor.person.id, displayName: actor.person.displayName },
-    roles,
     enrollment:
       enrollment === null
         ? null
@@ -323,7 +313,14 @@ export async function ownAccount(database: Queryable, actor: Actor): Promise<Own
             startedAt: enrollment.startedAt.toISOString(),
             endedAt: enrollment.endedAt?.toISOString() ?? null,
           },
-    linkedStudents,
+    linkedStudents: links.flatMap((link) => {
+      const student = students.get(link.studentPersonId);
+      // A link's Student cannot be absent; skipped rather than asserted, for
+      // the same reason actorInEachSchool skips a School without its Person.
+      return student === undefined
+        ? []
+        : [{ student: { id: student.id, displayName: student.displayName }, accessProfile: link.accessProfile }];
+    }),
   };
 }
 

@@ -18,16 +18,14 @@ interface AccessProfile {
 }
 
 interface OwnAccount {
-  person: { id: string; displayName: string };
-  roles: string[];
   enrollment: { startedAt: string; endedAt: string | null } | null;
   linkedStudents: { student: { id: string; displayName: string }; accessProfile: AccessProfile }[];
 }
 
 /**
- * What an actor is told about themselves: the landing page every Faculty
- * member, Student and Guardian opens on is built from this and the session,
- * and from nothing else.
+ * What an actor is told about themselves beyond what the session already says.
+ * The landing page every Faculty member, Student and Guardian opens on is
+ * built from this and the session, and from nothing else.
  */
 describe("Your account", () => {
   const server = useTestServer();
@@ -90,25 +88,25 @@ describe("Your account", () => {
     return (response.body as { guardianLink: { id: string } }).guardianLink;
   }
 
-  it("names the Person and the roles they hold, and nothing they do not", async () => {
+  it("tells a Faculty member they hold neither an Enrollment nor a link", async () => {
     const world = await arrange();
     const frankie = await signedInAt(world.northsideId, FRANKIE);
 
-    expect(await accountOf(frankie)).toEqual({
-      person: { id: world.frankiePerson.id, displayName: "Frankie" },
-      roles: ["faculty"],
-      enrollment: null,
-      linkedStudents: [],
-    });
+    expect(await accountOf(frankie)).toEqual({ enrollment: null, linkedStudents: [] });
   });
 
-  it("names every role a Person holds, on the one response", async () => {
+  it("restates nothing the session already names", async () => {
     const world = await arrange();
-    await server().grantMembership({ person: world.frankiePerson, role: "guardian" });
     const frankie = await signedInAt(world.northsideId, FRANKIE);
 
-    // In the order the roles are declared, not the order they were granted.
-    expect((await accountOf(frankie)).roles).toEqual(["faculty", "guardian"]);
+    // Who the actor is and which roles they hold are the session's to name, so
+    // they cannot disagree with this response.
+    const response = await frankie.get("/account");
+    expect(Object.keys(response.body as { account: object }).length).toBe(1);
+    expect(Object.keys((response.body as { account: object }).account).sort()).toEqual([
+      "enrollment",
+      "linkedStudents",
+    ]);
   });
 
   it("names a Student's Enrollment", async () => {
@@ -117,7 +115,6 @@ describe("Your account", () => {
     const sam = await signedInAt(world.northsideId, SAM);
 
     const account = await accountOf(sam);
-    expect(account.roles).toEqual(["student"]);
     expect(account.enrollment?.startedAt).toMatch(ISO_TIMESTAMP);
     expect(account.enrollment?.endedAt).toBeNull();
   });
@@ -126,7 +123,7 @@ describe("Your account", () => {
     const world = await arrange();
     const sam = await signedInAt(world.northsideId, SAM);
 
-    expect(await accountOf(sam)).toMatchObject({ roles: ["student"], enrollment: null });
+    expect(await accountOf(sam)).toEqual({ enrollment: null, linkedStudents: [] });
   });
 
   it("tells a Student their Enrollment has ended, once it has", async () => {
@@ -151,8 +148,6 @@ describe("Your account", () => {
     const gina = await signedInAt(world.northsideId, GINA);
 
     expect(await accountOf(gina)).toEqual({
-      person: { id: world.ginaPerson.id, displayName: "Gina" },
-      roles: ["guardian"],
       enrollment: null,
       linkedStudents: [
         {

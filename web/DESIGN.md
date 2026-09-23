@@ -297,13 +297,16 @@ The head carries identity (wordmark, sheet name) and, on a signed-in sheet, the 
 Inside a School, `.shell-nav` rules a row of tabs under the head: 0.78rem bold caps tracked 0.16em, each at least 2.75rem tall. The page being shown carries `aria-current="page"` and is struck with a strong wash and a 3px ink underline. It lists only the pages the actor's roles reach. Elsewhere, movement is by links in the record and in the `.foot` block. Links are ink-coloured with a 1px underline offset 0.22em, thickening to 2px over a strong-wash highlight on hover.
 
 ### Status Mark (signature component)
-State prints itself into the record instead of appearing as chrome. A mark is 0.72rem bold caps tracked 0.2em, `white-space: nowrap`, in one of two renditions: **held** — solid ink block with stock-coloured type, for a settled fact (CLAIMED, COPIED) — or **open** — 1px dashed ink outline with ink type, padding reduced by the border width so both renditions sit on the same baseline grid (UNCLAIMED). An empty mark sets `display: none`, so a status with nothing to report is not a blank box waiting to be read.
+State prints itself into the record instead of appearing as chrome. A mark is 0.72rem bold caps tracked 0.2em, `white-space: nowrap`, in one of three renditions: **held** — solid ink block with stock-coloured type, for a settled fact (CLAIMED, COPIED, MAY READ) — **open** — 1px dashed ink outline with ink type, padding reduced by the border width so both renditions sit on the same baseline grid, for a fact not yet settled (UNCLAIMED, OPEN) — or **unstruck** — the caps alone, no block and no outline, for a fact that is settled but negative (MAY NOT READ). A withheld permission takes the unstruck rendition and never the open one: dashed reads as not yet done, and a permission withheld is decided. Unstruck also leaves the record scannable for what *was* granted, since only those marks carry ink. An empty mark sets `display: none`, so a status with nothing to report is not a blank box waiting to be read.
 
 ### Roster (signature component)
 The record itself: an unstyled `ul` opened with a 1px rule, each row a baseline-aligned flex line padded 0.875rem vertically and closed with a faint hairline. Name at the left in 1.05rem body type, a **dotted leader** (a 2px-on/4px-off repeating gradient, 1px tall, centred) filling the gap, and the state group pushed hard right with `margin-left: auto`. Rows wash on hover. The leader is hidden below 52rem. Its empty counterpart is an italic washed-violet line ruled top and bottom.
 
 ### Legend (signature component)
 A sticky `<dl>` strip beside the record: a "THIS SHEET" heading in label caps, an optional sentence of context, then term/definition pairs where the term is the mark as it appears in the record. It explains the sheet's marks and never names a record — and a sheet shown for a refusal carries no legend at all, so nothing about what exists can be read off it.
+
+### Not built (block)
+What a sheet says it does not hold, ruled off below what it does: a 1px rule above, a label-caps heading and a sentence of body copy. It is struck like the foot because it is read last and is not part of the record. It names the glossary's own terms (Attendance, Term results) and never softens them into a promise.
 
 ### Slip (signature component)
 The issued Invitation, torn off the sheet: a wash-filled block with a 2px solid ink border, 1.5rem padding, a stencil heading at 1.1rem, and inputs that reverse to the raw stock so the handed-over link reads as a fresh strip of paper.
@@ -324,7 +327,7 @@ A typed two-column `max-content / 1fr` definition grid, ruled above, with terms 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** flood the frame with exactly one stock per sheet, set on `.sheet` via `--stock`, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in, blue Schools, pink Redeem, mint How this was built, buff Not available).
+- **Do** flood the frame with exactly one stock per sheet, set on `.sheet` via `--stock`, and pick the stock by kind of sheet (goldenrod Persons, canary Sign in, blue Schools, pink Redeem, mint How this was built, buff Not available, salmon Your account).
 - **Do** keep every rule in `src/styles.css`: the CSP forbids inline `<style>`, `style=`, `on*=` and `data:` inlining, and the Vite build fails on any of them.
 - **Do** set records, names and figures in Courier Prime and reserve Stardos Stencil for the wordmark, the single `h1`, button labels and the slip heading.
 - **Do** draw structure with violet hairlines (`{colors.rule}`, `{colors.rule-faint}`) and 3px double rules; use washes (9% / 15%) for recessed fields.

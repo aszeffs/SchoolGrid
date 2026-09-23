@@ -2,15 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, type DemoAccount } from "./api.ts";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
+import { ROLE_NAMES } from "./roles.ts";
 import { Key, Sheet } from "./Sheet.tsx";
-
-/** Each School role as the demo's panel names it, in CONTEXT.md's own words. */
-const ROLE_NAMES: Record<DemoAccount["role"], string> = {
-  school_administrator: "School Administrator",
-  faculty: "Faculty",
-  student: "Student",
-  guardian: "Guardian",
-};
 
 /**
  * What each role reaches once it is signed in, so a visitor picks a

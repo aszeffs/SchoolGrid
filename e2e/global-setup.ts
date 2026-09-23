@@ -76,17 +76,25 @@ export default async function globalSetup(): Promise<void> {
     if ((await recordEnrollment(database, studentPerson)) === null) {
       throw new Error("could not enroll the seeded Student");
     }
-    // The Faculty member is a Guardian here too, as a teacher whose own child
-    // attends the School is: one Person holding several roles.
-    await grantMembership(database, { person: facultyPerson, role: "guardian" });
+    // Someone holding two roles at once, as a teacher whose own child attends
+    // the School does, so one page can be asked to show both.
+    const severalCredentials = { username: `robin-${suffix}`, password: `staple horse correct ${suffix}` };
+    const severalAccount = await createUserAccount(database, severalCredentials);
+    const severalPerson = await createPerson(database, {
+      schoolId: schoolIds[0]!,
+      displayName: "Robin",
+      userAccountId: severalAccount.id,
+    });
+    await grantMembership(database, { person: severalPerson, role: "faculty" });
+    await grantMembership(database, { person: severalPerson, role: "guardian" });
     if (
       (await linkGuardian(database, {
-        guardian: facultyPerson,
+        guardian: severalPerson,
         student: studentPerson,
         accessProfile: { attendanceRead: true, resultsRead: true },
       })) === null
     ) {
-      throw new Error("could not link the seeded Faculty member to the seeded Student");
+      throw new Error("could not link the seeded Person holding several roles to the seeded Student");
     }
 
     const guardianAccessProfile = { attendanceRead: true, resultsRead: false };
@@ -105,6 +113,7 @@ export default async function globalSetup(): Promise<void> {
       faculty: { ...facultyCredentials, displayName: "Frankie" },
       student: { ...studentCredentials, displayName: "Sasha" },
       guardian: { ...guardianCredentials, displayName: "Gale" },
+      severalRoles: { ...severalCredentials, displayName: "Robin" },
       guardianAccessProfile,
       schools,
     };

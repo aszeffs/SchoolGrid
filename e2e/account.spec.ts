@@ -79,11 +79,14 @@ test("a Guardian sees each Student they are linked to, and what that link lets t
     "School memberships": "Guardian",
   });
 
-  // The link's Access profile as the setup set it: Attendance yes, results no.
-  // Read as written rather than as printed, since the mark is struck in caps.
+  // The link's Access profile as the setup seeded it, read from there rather
+  // than restated, and read as written rather than as printed: the mark is
+  // struck in caps.
+  const { attendanceRead, resultsRead } = seeded().guardianAccessProfile;
+  const permits = (permitted: boolean) => (permitted ? "May read" : "May not read");
   await expect(
     linkedStudents(page).filter({ hasText: student.displayName }).getByRole("cell"),
-  ).toHaveText([student.displayName, "May read", "May not read"]);
+  ).toHaveText([student.displayName, permits(attendanceRead), permits(resultsRead)]);
   // Read-only here: changing a profile is a School Administrator's.
   await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
   // Holding no Student membership, they are told nothing about an Enrollment.
@@ -92,14 +95,36 @@ test("a Guardian sees each Student they are linked to, and what that link lets t
   await audit(page);
 });
 
-test("a Faculty member holding several roles sees all of them on the one page", async ({ page, audit }) => {
-  const { faculty, student } = seeded();
+test("a Faculty member lands on their account, which holds their role and nothing else", async ({
+  page,
+  audit,
+}) => {
+  const { faculty, schools } = seeded();
   await signIn(page, faculty);
 
   await expect(page).toHaveURL(/\/schools\/[^/]+\/account$/);
   await expect(page.getByRole("heading", { level: 1, name: "Your account" })).toBeVisible();
   expect(await factsOn(page)).toMatchObject({
     Person: faculty.displayName,
+    School: schools[0]!,
+    "School memberships": "Faculty",
+  });
+  // Holding neither of the other two roles, they are told about neither.
+  await expect(page.getByRole("heading", { name: "Your Enrollment" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Students you are linked to" })).toHaveCount(0);
+  await expectSaysWhatIsNotBuilt(page);
+  await audit(page);
+});
+
+test("a Person holding several roles sees all of them on the one page", async ({ page, audit }) => {
+  const { severalRoles, student } = seeded();
+  await signIn(page, severalRoles);
+
+  await expect(page).toHaveURL(/\/schools\/[^/]+\/account$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Your account" })).toBeVisible();
+  expect(await factsOn(page)).toMatchObject({
+    Person: severalRoles.displayName,
+    // Named in the order the roles are declared, not the order they were granted.
     "School memberships": "Faculty, Guardian",
   });
   // What the second role holds is on the same sheet as the first.

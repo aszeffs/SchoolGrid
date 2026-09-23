@@ -3,20 +3,13 @@ import { api, type OwnAccount, type ReachedSchool, type Role } from "./api.ts";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
+import { ROLE_NAMES } from "./roles.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 type State = { kind: "loading" } | { kind: "not-available" } | { kind: "ready"; account: OwnAccount };
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { stock: "salmon", name: "Your account" };
-
-/** Each role as the glossary names it, rather than as the API spells it. */
-const ROLE_NAMES: Record<Role, string> = {
-  school_administrator: "School Administrator",
-  faculty: "Faculty",
-  student: "Student",
-  guardian: "Guardian",
-};
 
 const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
@@ -72,8 +65,13 @@ export function Account({ school }: { school: ReachedSchool }) {
   }
 }
 
+/**
+ * Who the actor is here and what they hold. The Person, the School and the
+ * roles are the session's, already read by the shell; the Enrollment and the
+ * links are what only this page asks for.
+ */
 function AccountSheet({ account, school }: { account: OwnAccount; school: ReachedSchool }) {
-  const holds = (role: Role) => account.roles.includes(role);
+  const holds = (role: Role) => school.roles.includes(role);
   const legend = (
     <>
       <h2>This sheet</h2>
@@ -84,12 +82,13 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
         </Key>
         {holds("student") && (
           <Key term="Enrollment">
-            Your participation in this School, open from the day it was recorded until the day it ends.
+            Your participation in this School. Marked Open from the day it was recorded until the day it ends.
           </Key>
         )}
         {holds("guardian") && (
           <Key term="Access profile">
-            What your link to one Student lets you read of theirs, set for that link alone.
+            What your link to one Student lets you read of theirs, set for that link alone. May read is struck; May
+            not read is not.
           </Key>
         )}
       </dl>
@@ -101,11 +100,11 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
       <h1>Your account</h1>
       <dl className="facts">
         <dt>Person</dt>
-        <dd>{account.person.displayName}</dd>
+        <dd>{school.displayName}</dd>
         <dt>School</dt>
         <dd>{school.name}</dd>
         <dt>School memberships</dt>
-        <dd>{account.roles.map((role) => ROLE_NAMES[role]).join(", ")}</dd>
+        <dd>{school.roles.map((role) => ROLE_NAMES[role]).join(", ")}</dd>
       </dl>
 
       {holds("student") && <Enrollment enrollment={account.enrollment} />}
@@ -174,11 +173,14 @@ function LinkedStudents({ account }: { account: OwnAccount }) {
   );
 }
 
-/** One permission of an Access profile: whether this link lets you read that record. */
+/**
+ * One permission of an Access profile: whether this link lets you read that
+ * record. What the link permits is struck solid, as a settled fact is; what it
+ * does not is left unstruck. The open mark is not used here: dashed means not
+ * yet done, and a permission withheld is decided, not pending.
+ */
 function Permits({ permitted }: { permitted: boolean }) {
   return (
-    <span className={permitted ? "mark mark--struck" : "mark mark--open"}>
-      {permitted ? "May read" : "May not read"}
-    </span>
+    <span className={permitted ? "mark mark--struck" : "mark"}>{permitted ? "May read" : "May not read"}</span>
   );
 }

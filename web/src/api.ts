@@ -87,16 +87,15 @@ export interface LinkedStudent {
 }
 
 /**
- * What the actor holds in one School, as their own facts: the roles in force,
- * the Enrollment they hold as a Student, and the Students they reach as a
+ * What the actor holds in one School beyond what the session already says: the
+ * Enrollment they hold as a Student, and the Students they reach as a
  * Guardian.
  *
- * Read on every visit rather than taken from the session, which names the
- * School and the Person but nothing either of these depends on.
+ * The Person, the School and the roles are the session's (see `ReachedSchool`)
+ * and are not restated here: one fact with two sources is a fact that can
+ * disagree with itself.
  */
 export interface OwnAccount {
-  person: { id: string; displayName: string };
-  roles: Role[];
   /** Null for a Person holding no Student membership, and for a Student never enrolled. */
   enrollment: { startedAt: string; endedAt: string | null } | null;
   linkedStudents: LinkedStudent[];
