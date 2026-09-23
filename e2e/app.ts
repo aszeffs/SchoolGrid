@@ -69,3 +69,67 @@ export async function revokeInvitationFor(page: Page, displayName: string) {
   await revokeButtonFor(page, displayName).click();
   await page.getByRole("button", { name: "Revoke the Invitation", exact: true }).click();
 }
+
+/** The id of a School the signed-in account reaches, by its name. */
+export async function schoolIdOf(page: Page, name: string): Promise<string> {
+  const { schools } = (await (await page.request.get("/api/session")).json()) as {
+    schools: { schoolId: string; name: string }[];
+  };
+  return schools.find((school) => school.name === name)!.schoolId;
+}
+
+/**
+ * Sends one change to the API as the signed-in account, for a spec to arrange
+ * what the sheet under test is not itself for: the Persons, roles and
+ * Enrollments a Guardian link needs, say. It carries the page's own origin,
+ * as the browser would, and fails the spec when the change is not made.
+ */
+export async function arrange<T>(
+  page: Page,
+  schoolId: string,
+  path: string,
+  data: Record<string, unknown>,
+): Promise<T> {
+  const response = await page.request.post(`/api/schools/${schoolId}${path}`, {
+    headers: { origin: new URL(page.url()).origin },
+    data,
+  });
+  if (!response.ok()) {
+    throw new Error(`could not arrange POST ${path}: ${response.status()}`);
+  }
+  return (await response.json()) as T;
+}
+
+/** A Person of the spec's own, holding each of these roles from now. */
+export async function arrangePerson(
+  page: Page,
+  schoolId: string,
+  displayName: string,
+  roles: string[],
+): Promise<string> {
+  const { person } = await arrange<{ person: { id: string } }>(page, schoolId, "/persons", { displayName });
+  for (const role of roles) {
+    await arrange(page, schoolId, "/memberships", { personId: person.id, role });
+  }
+  return person.id;
+}
+
+/** The rows of a record, by the name it is listed under; the head row names nothing. */
+export function recordRows(page: Page, label: string) {
+  return page.getByRole("table", { name: label, exact: true }).getByRole("row");
+}
+
+/**
+ * Records every change the page sends to the API from here on, so a spec can
+ * say that a cancelled confirmation sent nothing at all, rather than only that
+ * the page still looks the same.
+ */
+export function changesSent(page: Page): string[] {
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() !== "GET" && new URL(request.url()).pathname.startsWith("/api/schools/")) {
+      sent.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    }
+  });
+  return sent;
+}

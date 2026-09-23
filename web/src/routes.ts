@@ -97,7 +97,8 @@ export interface Section {
 
 /**
  * The pages within a School, in the order the navigation lists them, named
- * after the glossary's terms.
+ * after the glossary's terms. Two are listed by a plainer word than the sheet
+ * they open: People opens Persons, and Roles opens School memberships.
  *
  * `reachedBy` mirrors the server's decisions so the navigation does not lead
  * anyone into a refusal. It is not a permission (ADR-0007): the server decides
@@ -108,7 +109,7 @@ export const SECTIONS: readonly Section[] = [
   { name: "account", label: "Your account", reachedBy: null },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
-  { name: "memberships", label: "Memberships", reachedBy: ["school_administrator"] },
+  { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },
   { name: "enrollments", label: "Enrollments", reachedBy: ["school_administrator"] },
   { name: "guardianLinks", label: "Guardians", reachedBy: ["school_administrator"] },
   { name: "auditRecords", label: "Audit", reachedBy: ["school_administrator"] },

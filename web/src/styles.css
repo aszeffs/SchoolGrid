@@ -595,7 +595,7 @@ strong {
 
 /* ---- Controls: struck, not rendered ---------------------------------- */
 
-:where(a, button, input, summary, [tabindex]):focus-visible {
+:where(a, button, input, select, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
@@ -642,6 +642,73 @@ input:focus {
   outline-offset: 0;
 }
 
+/* A choice from a list is a field like any other, struck the same way. */
+select {
+  min-height: 2.75rem;
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.25);
+  background: var(--wash);
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+select:focus {
+  background: var(--wash-strong);
+  border-bottom-width: 3px;
+  outline-offset: 0;
+}
+
+/*
+ * A box ticked in ink. It keeps the browser's own control, tinted, rather than
+ * a drawn one, and is held to the 24px target WCAG 2.2 AA sets.
+ */
+input[type="checkbox"] {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--step) * 1.25);
+  min-height: 2.25rem;
+}
+
+label.check {
+  display: flex;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+}
+
+/* A group of boxes, named once above them, and ruled like the record. */
+fieldset {
+  display: grid;
+  gap: calc(var(--step) * 0.5);
+  justify-self: stretch;
+  margin: 0;
+  padding: calc(var(--step) * 1.5) 0 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+fieldset legend {
+  padding: 0 calc(var(--step) * 1) 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
 button {
   min-height: 2.75rem;
   padding: calc(var(--step) * 1.25) calc(var(--step) * 3);
@@ -666,7 +733,8 @@ button {
     background: color-mix(in srgb, var(--ink) 82%, #000);
   }
 
-  input:hover {
+  input:hover,
+  select:hover {
     background: var(--wash-strong);
   }
 
@@ -846,6 +914,30 @@ h1 + .roster {
   border-bottom: 1px solid var(--rule);
   color: var(--ink-soft);
   font-style: italic;
+}
+
+/*
+ * A plain statement the sheet needs read before its record: what a setting on
+ * it does, or does not yet do. Ruled in ink down its edge, as a margin note is.
+ */
+.notice {
+  max-width: var(--measure);
+  padding: calc(var(--step) * 0.5) 0 calc(var(--step) * 0.5) calc(var(--step) * 2);
+  border-left: 3px double var(--ink);
+}
+
+/* What an action will also do, one consequence to a line. */
+.consequences {
+  display: grid;
+  gap: calc(var(--step) * 1);
+  margin: 0;
+  padding-left: calc(var(--step) * 2.5);
+}
+
+/* Several controls in one cell of a record, struck to its right edge. */
+.record__buttons {
+  justify-content: flex-end;
+  gap: calc(var(--step) * 1);
 }
 
 /* ---- Facts: a typed two-column entry --------------------------------- */
@@ -1176,6 +1268,10 @@ dialog.slip::backdrop {
 
   .record td:last-child {
     text-align: left;
+  }
+
+  .record__buttons {
+    justify-content: flex-start;
   }
 }
 

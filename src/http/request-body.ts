@@ -1,4 +1,4 @@
-import { MAX_NAME_LENGTH } from "../validation/bounds.ts";
+import { MAX_NAME_LENGTH, MAX_REASON_LENGTH } from "../validation/bounds.ts";
 import { InvalidRequest } from "./invalid-request.ts";
 
 /**
@@ -6,9 +6,6 @@ import { InvalidRequest } from "./invalid-request.ts";
  * InvalidRequest, so it runs only once the Access decision has permitted the
  * caller: see InvalidRequest.
  */
-
-/** No web form takes one, so it is not among the bounds `web/` shares. */
-const MAX_REASON_LENGTH = 1000;
 
 /** The body's fields, refusing a body that is not an object or names a field not allowed. */
 export function fieldsOf(body: unknown, allowed: readonly string[]): Record<string, unknown> {
