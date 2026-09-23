@@ -1,0 +1,9 @@
+# Academic participation is bounded by School dates
+
+Roster memberships and Teaching assignments start and end on School dates, while Enrollments and School memberships start and end at instants. The difference is deliberate. Every question asked of academic participation is asked about a school day: may Attendance be recorded for this Student on this date, who belongs in this Roster snapshot, did this Faculty member hold an active assignment when this was recorded. A School date answers those directly and means the same thing to everyone in the School. An instant has to be converted through the School's timezone on every check, and one that lands near midnight gives an answer the School Administrator who set it did not intend. Enrollments and School memberships stay as instants because they govern access. They are about when a person may act, not which school day they took part in. We rejected converting them to School dates for consistency: that would change the meaning of access decisions already made and recorded in Audit records.
+
+## Consequences
+
+- Where the two meet, the instant is converted to a School date in the School's timezone. Ending an Enrollment ends the Student's open Roster memberships on the School date the Enrollment ended; ending a Faculty School membership does the same to that Faculty member's open Teaching assignments.
+- This is why a School's timezone is fixed once its first Academic Year exists. If it changed afterwards, the School date of every existing instant would shift under the Roster memberships and Teaching assignments already bounded against it.
+- A contributor who "tidies" the four kinds of bound into one type would be undoing this decision.
