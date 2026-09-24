@@ -5,7 +5,11 @@ import {
   authorizeManageTerm,
   authorizeReadClassOffering,
   authorizeReadOwnClassOfferings,
+  authorizeReadOwnRosterMemberships,
+  mayReadRosterOf,
   ownClassOfferings,
+  ownRosterMemberships,
+  rostersServedOn,
   teachingAssignmentsServedOn,
   type Actor,
 } from "../access/index.ts";
@@ -209,12 +213,21 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
     });
   });
 
-  // Read by a School Administrator, and by anyone ever assigned to teach it, with its Teaching assignments.
+  /*
+   * Read by a School Administrator, and by anyone ever assigned to teach it,
+   * with its Teaching assignments and its roster; and by a Student ever
+   * rostered in it, with its Teaching assignments alone.
+   */
   scope.get("/class-offerings/:classOfferingId", async (actor, { params }) => {
     const classOfferingId = params["classOfferingId"]!;
     const offering = authorizeReadClassOffering(actor, classOfferingId, await findClassOffering(database, classOfferingId));
     const assignments = await teachingAssignmentsServedOn(database, [offering.id]);
-    return { classOffering: { ...presentOffering(offering), teachingAssignments: assignments.get(offering.id)! } };
+    const roster = mayReadRosterOf(actor, offering)
+      ? { rosterMemberships: (await rostersServedOn(database, [offering.id])).get(offering.id)! }
+      : {};
+    return {
+      classOffering: { ...presentOffering(offering), teachingAssignments: assignments.get(offering.id)!, ...roster },
+    };
   });
 
   /*
@@ -242,6 +255,45 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
         .filter((offering) => past.has(offering.id))
         .reverse()
         .map(served),
+    };
+  });
+
+  /*
+   * The Class Offerings a Student is or was rostered in, by Term: the Term
+   * running today first, then the rest, the latest first. Each names who
+   * teaches it and the Student's own Roster memberships in it, and nothing of
+   * their classmates.
+   */
+  scope.get("/account/roster-memberships", async (actor) => {
+    const schoolId = authorizeReadOwnRosterMemberships(actor);
+    const { today, byOffering } = await ownRosterMemberships(database, actor);
+    const offerings = (await classOfferingsInSchool(database, schoolId)).filter((offering) =>
+      byOffering.has(offering.id),
+    );
+    const assignments = await teachingAssignmentsServedOn(
+      database,
+      offerings.map((offering) => offering.id),
+    );
+    const terms = new Map<string, { term: ReturnType<typeof presentOffering>["term"]; classOfferings: unknown[] }>();
+    for (const offering of offerings) {
+      const { term } = presentOffering(offering);
+      const entry = terms.get(term.id) ?? { term, classOfferings: [] };
+      entry.classOfferings.push({
+        ...presentOffering(offering),
+        teachingAssignments: assignments.get(offering.id)!,
+        rosterMemberships: byOffering.get(offering.id)!,
+      });
+      terms.set(term.id, entry);
+    }
+    const isCurrent = ({ term }: { term: { firstDate: string; lastDate: string } }) =>
+      term.firstDate <= today && today <= term.lastDate;
+    // Listed in Term order, so the rest reversed are the latest first.
+    const listed = [...terms.values()].reverse();
+    return {
+      terms: [...listed.filter(isCurrent), ...listed.filter((entry) => !isCurrent(entry))].map((entry) => ({
+        ...entry,
+        current: isCurrent(entry),
+      })),
     };
   });
 

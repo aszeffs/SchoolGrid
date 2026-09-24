@@ -10,6 +10,7 @@ import { registerSchoolScope } from "../http/school-scope.ts";
 import { findPerson } from "../identity/index.ts";
 import { registerEnrollmentRoutes } from "./enrollment-routes.ts";
 import { registerGuardianLinkRoutes } from "./guardian-link-routes.ts";
+import { registerRosterMembershipRoutes } from "./roster-membership-routes.ts";
 import { endTeachingWithMembership, registerTeachingAssignmentRoutes } from "./teaching-assignment-routes.ts";
 import { countTeachingAssignmentsRunningPast } from "./teaching-assignments.ts";
 import {
@@ -241,6 +242,7 @@ export function registerAccessRoutes(
 
     registerGuardianLinkRoutes(scope, database);
     registerTeachingAssignmentRoutes(scope, database);
+    registerRosterMembershipRoutes(scope, database);
     registerEnrollmentRoutes(scope, database);
   });
 }

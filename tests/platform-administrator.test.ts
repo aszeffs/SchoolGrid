@@ -222,6 +222,9 @@ describe("Platform Administrator", () => {
     const assigned = await world.alice.post(`/class-offerings/${classOfferingId}/teaching-assignments`, {
       personId: faculty.id,
     });
+    const rostered = await world.alice.post(`/class-offerings/${classOfferingId}/roster-memberships`, {
+      personIds: [student.id],
+    });
       expect([
         enrolled.status,
         linked.status,
@@ -232,7 +235,8 @@ describe("Platform Administrator", () => {
         divided.status,
         course.status,
         offering.status,
-      ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201]);
+        rostered.status,
+      ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201, 201]);
       return {
         schoolId: world.schoolId,
         personId: student.id,
@@ -245,6 +249,7 @@ describe("Platform Administrator", () => {
         courseId,
         classOfferingId,
         teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
+        rosterMembershipId: (rostered.body as { rosterMemberships: { id: string }[] }).rosterMemberships[0]!.id,
       } as Record<string, string>;
     }
 
@@ -345,6 +350,11 @@ describe("Platform Administrator", () => {
           { method: "DELETE", url: "/api/schools/:schoolId/teaching-assignments/:teachingAssignmentId" },
           { method: "GET", url: "/api/schools/:schoolId/memberships/:membershipId/consequences" },
           { method: "GET", url: "/api/schools/:schoolId/account/class-offerings" },
+          { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/roster-memberships" },
+          { method: "PATCH", url: "/api/schools/:schoolId/roster-memberships/:rosterMembershipId" },
+          { method: "DELETE", url: "/api/schools/:schoolId/roster-memberships/:rosterMembershipId" },
+          { method: "GET", url: "/api/schools/:schoolId/enrollments/:enrollmentId/consequences" },
+          { method: "GET", url: "/api/schools/:schoolId/account/roster-memberships" },
         ]),
       );
 

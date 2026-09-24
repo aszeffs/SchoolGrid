@@ -347,7 +347,7 @@ describe("Courses and Class Offerings", () => {
       expect(await offeringsOf(world.alice)).toEqual([classOffering]);
       // Read by itself, it names its Teaching assignments too: none yet.
       expect((await world.alice.get(`/class-offerings/${classOffering.id}`)).body).toEqual({
-        classOffering: { ...classOffering, teachingAssignments: [] },
+        classOffering: { ...classOffering, teachingAssignments: [], rosterMemberships: [] },
       });
       expect(await trailOf(world.alice, "class_offering.created")).toEqual([
         expect.objectContaining({

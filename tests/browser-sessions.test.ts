@@ -129,8 +129,9 @@ describe("Browser sessions", () => {
   /**
    * Alice administers Northside, where a Student is enrolled and linked to a
    * Guardian, an unclaimed Person is invited, and an Academic Year is planned
-   * with a Course offered in it, which Alice also teaches as Faculty, so the
-   * routes only Faculty reach answer her too; Pat is a Platform Administrator. Each is
+   * with a Course offered in it, which Alice also teaches as Faculty and holds a
+   * Student membership beside, so the routes only Faculty or Students reach
+   * answer her too; Pat is a Platform Administrator. Each is
    * signed in twice, once with each form of session.
    */
   async function arrange() {
@@ -140,6 +141,7 @@ describe("Browser sessions", () => {
       administrator: await server().createAccount(ALICE),
     });
     await server().grantMembership({ person: schoolAdministrator, role: "faculty" });
+    await server().grantMembership({ person: schoolAdministrator, role: "student" });
     const aliceBearer = (await server().signIn(ALICE)).inSchool(school.id);
     const student = await server().createPerson({ schoolId: school.id, displayName: "Sam", role: "student" });
     const guardian = await server().createPerson({ schoolId: school.id, displayName: "Gina", role: "guardian" });
@@ -174,6 +176,9 @@ describe("Browser sessions", () => {
     const assigned = await aliceBearer.post(`/class-offerings/${classOfferingId}/teaching-assignments`, {
       personId: schoolAdministrator.id,
     });
+    const rostered = await aliceBearer.post(`/class-offerings/${classOfferingId}/roster-memberships`, {
+      personIds: [student.id],
+    });
     expect([
       enrolled.status,
       linked.status,
@@ -185,7 +190,8 @@ describe("Browser sessions", () => {
       course.status,
       offering.status,
       assigned.status,
-    ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201, 201]);
+      rostered.status,
+    ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201, 201, 201]);
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -199,6 +205,7 @@ describe("Browser sessions", () => {
       courseId,
       classOfferingId,
       teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
+      rosterMembershipId: (rostered.body as { rosterMemberships: { id: string }[] }).rosterMemberships[0]!.id,
     };
     return {
       school,

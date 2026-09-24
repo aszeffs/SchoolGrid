@@ -609,6 +609,9 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
       if (conflict.dependent === "teaching_assignment") {
         return "A Teaching assignment would fall outside its Term's new dates. Change or end the assignment on its Class Offering first.";
       }
+      if (conflict.dependent === "roster_membership") {
+        return "A Roster membership would fall outside its Term's new dates. Change or end the membership on its Class Offering first.";
+      }
       if (conflict.dependent === "class_offering") {
         return "A Term these changes would remove has Class Offerings, and a Term is not deleted while it has any. Keep the Term, or delete its Class Offerings first.";
       }
@@ -632,6 +635,8 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
     case "class_offering_label_taken":
     case "teaching_assignment_overlap":
     case "teaching_assignment_outside_term":
+    case "roster_membership_overlap":
+    case "roster_membership_outside_term":
       return "That change could not be made.";
   }
 }
