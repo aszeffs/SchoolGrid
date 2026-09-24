@@ -31,8 +31,9 @@ const WEB_APP_FIXTURE = new URL("./web-app/", import.meta.url);
 
 /**
  * Each password an account is arranged with, hashed at production cost the
- * first time it is used and reused from then on. Tests share a handful of
- * passwords, so arranging an account almost never costs a hash. A test of
+ * first time it is used and reused from then on. Module state, so it lasts
+ * a test file: Vitest isolates each. Tests share a handful of passwords, so
+ * arranging an account almost never costs a hash. A test of
  * hashing itself creates its account through the Authentication module instead.
  */
 const passwordHashes = new Map<string, Promise<string>>();
@@ -168,7 +169,8 @@ export interface TestServer {
   /**
    * Arranges a User account. Accounts are provisioned, never self-registered.
    * Its password verifies at sign-in, but its hash is shared with every other
-   * account arranged with the same password, so no hashing is done here.
+   * account this test file arranges with the same password, so only the
+   * first of them costs a hash.
    */
   createAccount(credentials: Credentials): Promise<UserAccount>;
   /**

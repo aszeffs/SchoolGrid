@@ -468,16 +468,22 @@ then_command=()
 
 # How close the browser suite came to the rate limit is printed on every run,
 # pass or fail, so headroom running out shows before a run fails for it.
-expect "the rate limit headroom is printed on a passing run" healthy 0   "was sent at most 3 /api requests in any 60s window, of RATE_LIMIT_MAX 1000"
-expect "the rate limit headroom is printed on a failing run" silent-migration 1   "was sent at most 3 /api requests in any 60s window, of RATE_LIMIT_MAX 1000"
+expect "the rate limit headroom is printed on a passing run" healthy 0 \
+  "was sent at most 3 /api requests in any 60s window, of RATE_LIMIT_MAX 1000"
+expect "the rate limit headroom is printed on a failing run" silent-migration 1 \
+  "was sent at most 3 /api requests in any 60s window, of RATE_LIMIT_MAX 1000"
 then_command=(true)
-expect "the demo's rate limit headroom is printed too" healthy 0   "the demo at http://localhost:3001 was sent at most 3 /api requests"
+expect "the demo's rate limit headroom is printed too" healthy 0 \
+  "the demo at http://localhost:3001 was sent at most 3 /api requests"
 then_command=()
 
 export SMOKE_RATE_LIMIT_MAX=10
-expect "the peak is the busiest minute, of /api requests only" spread-out 0   "was sent at most 6 /api requests in any 60s window, of RATE_LIMIT_MAX 10" "warning"
-expect "a peak above 80% of the limit warns, naming SMOKE_RATE_LIMIT_MAX, without failing the run" near-rate-limit 0   "warning: .*Raise SMOKE_RATE_LIMIT_MAX"
-expect "a peak of exactly 80% of the limit does not warn" at-eighty-percent 0   "was sent at most 8 /api requests" "warning"
+expect "the peak is the busiest minute, of /api requests only" spread-out 0 \
+  "was sent at most 6 /api requests in any 60s window, of RATE_LIMIT_MAX 10" "warning"
+expect "a peak above 80% of the limit warns, naming SMOKE_RATE_LIMIT_MAX, without failing the run" near-rate-limit 0 \
+  "warning: .*Raise SMOKE_RATE_LIMIT_MAX"
+expect "a peak of exactly 80% of the limit does not warn" at-eighty-percent 0 \
+  "was sent at most 8 /api requests" "warning"
 unset SMOKE_RATE_LIMIT_MAX
 
 # --- verdict ----------------------------------------------------------------
