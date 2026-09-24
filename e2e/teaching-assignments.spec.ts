@@ -225,6 +225,7 @@ test.describe("on a phone", () => {
       await page.getByRole("button", { name: "Sign out" }).click();
 
       await signIn(page, faculty);
+      await expect(page.getByRole("heading", { level: 1, name: "Your account" })).toBeVisible();
       await page.goto(`/schools/${own.schoolId}/classes`);
       await expect(recordRows(page, "Your current classes").filter({ hasText: own.offering })).toHaveCount(1);
       await expectNoSidewaysScroll(page);
