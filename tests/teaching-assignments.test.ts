@@ -75,7 +75,7 @@ describe("Teaching assignments", () => {
     frankiePerson: Person;
     flynn: TestClient;
     flynnPerson: Person;
-    /** Northside's School date today, in New York. */
+    /** Northside's School date today, in New York unless arranged elsewhere. */
     today: string;
     /** Northside's year, divided so that one Term is over, one is running today, and one is still to come. */
     past: Term;
@@ -89,12 +89,12 @@ describe("Teaching assignments", () => {
     westbrookOffering: ClassOffering;
   }
 
-  async function arrange(): Promise<World> {
+  async function arrange(timezone = "America/New_York"): Promise<World> {
     const aliceAccount = await server().createAccount(ALICE);
     const bobAccount = await server().createAccount(BOB);
     const northside = await server().provisionSchool({
       name: "Northside",
-      timezone: "America/New_York",
+      timezone,
       administrator: aliceAccount,
     });
     const westbrook = await server().provisionSchool({
@@ -379,6 +379,8 @@ describe("Teaching assignments", () => {
         displayName: "Leaving",
       });
       const leavesOn = shifted(world.today, 50);
+      // A second, open Faculty membership does not lift the cap: the one ending first binds.
+      await server().grantMembership({ person: leaving, role: "faculty" });
       await server().grantMembership({
         person: leaving,
         role: "faculty",
@@ -573,9 +575,13 @@ describe("Teaching assignments", () => {
   });
 
   describe("ending a Faculty membership", () => {
-    it("by revoking it ends each open assignment today, removes those not begun, and records each", async () => {
-      const world = await arrange();
+    it("by revoking it ends each open assignment on today's School date, removes those not begun, and records each", async () => {
+      // Arranged where the School date is not UTC's today, whenever this runs,
+      // and hours from midnight either way.
+      const utcHour = new Date().getUTCHours();
+      const world = await arrange(utcHour < 9 ? "Pacific/Pago_Pago" : "Pacific/Kiritimati");
       const { today } = world;
+      expect(today).not.toBe(new Date().toISOString().slice(0, 10));
       const running = await assign(world.alice, world.offering, {
         personId: world.frankiePerson.id,
       });
@@ -632,6 +638,16 @@ describe("Teaching assignments", () => {
         ]),
       );
       expect(await trailOf(world.alice, "teaching_assignment.ended", "teaching_assignment.deleted")).toHaveLength(2);
+
+      // Its record can still be corrected within its bounds, but not extended.
+      const path = `/teaching-assignments/${running.id}`;
+      const corrected = await world.alice.patch(path, { firstDate: shifted(running.firstDate, 1) });
+      const extended = [
+        await world.alice.patch(path, { lastDate: shifted(today, 1) }),
+        await world.alice.patch(path, { firstDate: running.firstDate }),
+      ];
+      expect(corrected.status).toBe(200);
+      expect(extended.map((response) => response.status)).toEqual([400, 400]);
     });
 
     it("by narrowing it ends them on the School date the end falls on, either side of midnight in New York", async () => {
@@ -823,7 +839,7 @@ describe("Teaching assignments", () => {
       );
     });
 
-    it("lists no class for Faculty never assigned, and reaches nothing once their Faculty membership ends", async () => {
+    it("lists no class for Faculty never assigned, and still reads what they taught once their Faculty membership ends", async () => {
       const world = await arrange();
       await assign(world.alice, world.offering, {
         personId: world.frankiePerson.id,
@@ -842,7 +858,8 @@ describe("Teaching assignments", () => {
       const classes = await world.frankie.get("/account/class-offerings");
 
       expect(none.body).toEqual({ current: [], past: [] });
-      expect(observable(read)).toEqual(observable(refusal));
+      expect(read.status).toBe(200);
+      // The list of their classes is a Faculty member's page alone.
       expect(observable(classes)).toEqual(observable(refusal));
     });
   });

@@ -112,9 +112,10 @@ interface Standing {
    */
   enrolled: boolean;
   /**
-   * The Class Offerings the Actor was ever assigned to teach, while they hold a
-   * Faculty membership: one whose Faculty membership has ended keeps nothing
-   * through their assignments, whatever else they still hold.
+   * The Class Offerings the Actor was ever assigned to teach. Unlike a link or
+   * an Enrollment, these outlast the Faculty membership: one who taught an
+   * offering keeps reading its history while they hold any role in the School
+   * (CONTEXT.md: Teaching assignment).
    */
   taughtClassOfferingIds: ReadonlySet<string>;
 }
@@ -164,7 +165,7 @@ export async function resolveActor(
   // whatever else they still hold.
   const linkedStudents = roles.has("guardian") ? await linkedStudentIds(database, person) : new Set<string>();
   const enrolled = roles.has("student") && (await hasOpenEnrollment(database, person));
-  const taught = roles.has("faculty") ? await classOfferingIdsTaughtBy(database, person) : new Set<string>();
+  const taught = await classOfferingIdsTaughtBy(database, person);
   const actor: Actor = Object.freeze({ person, schoolId: person.schoolId });
   standingOf.set(actor, { roles, linkedStudentIds: linkedStudents, enrolled, taughtClassOfferingIds: taught });
   return actor;
@@ -737,8 +738,9 @@ export function authorizeManageClassOffering<O extends { schoolId: string }>(
 /**
  * Returns the Class Offering the actor may read, with its Teaching
  * assignments, and refuses otherwise. A School Administrator reads every one
- * in their School. A Faculty member reads one they were ever assigned to,
- * ended assignments included, and no other (CONTEXT.md: Teaching assignment).
+ * in their School. Anyone ever assigned to teach one reads it, ended
+ * assignments included, even once their Faculty membership has ended, and no
+ * other (CONTEXT.md: Teaching assignment).
  * Of the Persons it names they are told display names alone, so this grants
  * nothing about those Persons beyond it.
  */
@@ -769,7 +771,7 @@ export function authorizeReadOwnClassOfferings(actor: Actor): string {
 }
 
 function hasTaught(actor: Actor, offering: { id: string }): boolean {
-  return (holds(actor, "faculty") && standingOf.get(actor)?.taughtClassOfferingIds.has(offering.id)) ?? false;
+  return standingOf.get(actor)?.taughtClassOfferingIds.has(offering.id) ?? false;
 }
 
 /**

@@ -93,18 +93,36 @@ function parseBounds(body: unknown, assignment: TeachingAssignment) {
 
 /**
  * The School date through which this Person may teach: the one their Faculty
- * membership ends on, or null while it has no end. Refuses a Person who holds
- * no Faculty membership now, holding the one they do hold until the
+ * membership ends on, or null while it has no end, or undefined when they
+ * hold no Faculty membership now. The membership is held until the
  * transaction ends, so it cannot end between this check and the write.
  */
-async function teachesUntil(transaction: Queryable, person: Person): Promise<SchoolDate | null> {
+async function teachesUntil(transaction: Queryable, person: Person): Promise<SchoolDate | null | undefined> {
   const membership = await holdActiveMembership(transaction, person, "faculty");
   if (membership === null) {
-    throw new InvalidRequest("personId must name a Person holding an active Faculty membership");
+    return undefined;
   }
   return membership.endsAt === null
     ? null
     : (await schoolDateAt(transaction, { schoolId: person.schoolId, at: membership.endsAt }))!;
+}
+
+/**
+ * Refuses bounds reaching beyond the assignment's own, for one whose Person no
+ * longer holds a Faculty membership: it can still be corrected or shortened,
+ * as a record of what they taught, but not made to teach more.
+ */
+function checkNotExtended(
+  bounds: { firstDate: SchoolDate; lastDate: SchoolDate | null },
+  assignment: TeachingAssignment,
+  termLastDate: SchoolDate,
+): void {
+  if (
+    bounds.firstDate < assignment.firstDate ||
+    (bounds.lastDate ?? termLastDate) > (assignment.lastDate ?? termLastDate)
+  ) {
+    throw new InvalidRequest("the assignment may not be extended, as the Person no longer holds a Faculty membership");
+  }
 }
 
 /**
@@ -204,6 +222,9 @@ export function registerTeachingAssignmentRoutes(scope: SchoolScope, database: D
       const offering = await lockPermittedOffering(transaction, actor, params["classOfferingId"]!);
       const person = authorizeAssignTeaching(actor, request.personId, await findPerson(transaction, request.personId));
       const until = await teachesUntil(transaction, person);
+      if (until === undefined) {
+        throw new InvalidRequest("personId must name a Person holding an active Faculty membership");
+      }
       const { term } = offering;
       const firstDate = request.firstDate ?? term.firstDate;
       // Unstated, it runs to the end of the Term, or to the end of the Faculty membership if that comes first.
@@ -230,7 +251,10 @@ export function registerTeachingAssignmentRoutes(scope: SchoolScope, database: D
       );
       const { reason, ...bounds } = parseBounds(body, assignment);
       const until = await teachesUntil(transaction, (await findPerson(transaction, assignment.personId))!);
-      checkBounds(bounds, termLastDate, until);
+      if (until === undefined) {
+        checkNotExtended(bounds, assignment, termLastDate);
+      }
+      checkBounds(bounds, termLastDate, until ?? null);
       const changed = await setTeachingAssignmentBounds(transaction, assignment, bounds);
       if (changed === null) {
         return served(transaction, assignment);

@@ -209,7 +209,7 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
     });
   });
 
-  // Read by a School Administrator, and by Faculty ever assigned to it, with its Teaching assignments.
+  // Read by a School Administrator, and by anyone ever assigned to teach it, with its Teaching assignments.
   scope.get("/class-offerings/:classOfferingId", async (actor, { params }) => {
     const classOfferingId = params["classOfferingId"]!;
     const offering = authorizeReadClassOffering(actor, classOfferingId, await findClassOffering(database, classOfferingId));

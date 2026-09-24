@@ -210,7 +210,7 @@ test.describe("on a phone", () => {
   test.use({ viewport: { width: 360, height: 740 } });
 
   for (const colorScheme of ["light", "dark"] as const) {
-    test(`the Class Offering and Your classes hold 360px in the ${colorScheme} rendition`, async ({ page, audit }) => {
+    test(`the Class Offering, the Roles confirmation and Your classes hold 360px in the ${colorScheme} rendition`, async ({ page, audit }) => {
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
       const { faculty } = seeded();
       const own = await withOwnOffering(page);
@@ -222,6 +222,16 @@ test.describe("on a phone", () => {
       await expect(assignments(page)).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
+
+      // The Roles confirmation naming the assignments that ending the membership ends.
+      await openSection(page, "Roles");
+      await page.getByRole("button", { name: `Revoke ${faculty.displayName}’s Faculty membership` }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toContainText(/\d+ Teaching assignments?\./);
+      await expect(dialog.getByRole("button", { name: "Cancel" })).toBeInViewport();
+      await expectNoSidewaysScroll(page);
+      await audit(page);
+      await dialog.getByRole("button", { name: "Cancel" }).click();
       await page.getByRole("button", { name: "Sign out" }).click();
 
       await signIn(page, faculty);

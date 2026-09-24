@@ -95,7 +95,7 @@ test("a Guardian sees each Student they are linked to, and what that link lets t
   await audit(page);
 });
 
-test("a Faculty member lands on their account, which holds their role and nothing else", async ({
+test("a Faculty member lands on their account, which holds their role and points to their classes", async ({
   page,
   audit,
 }) => {
@@ -112,8 +112,11 @@ test("a Faculty member lands on their account, which holds their role and nothin
   // Holding neither of the other two roles, they are told about neither.
   await expect(page.getByRole("heading", { name: "Your Enrollment" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Students you are linked to" })).toHaveCount(0);
-  await expectSaysWhatIsNotBuilt(page);
+  // Their classes replace the note on what is not built.
+  await expect(page.getByRole("main").getByText(/not built yet/)).toHaveCount(0);
   await audit(page);
+  await page.getByRole("main").getByRole("link", { name: "Your classes" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
 });
 
 test("a Person holding several roles sees all of them on the one page", async ({ page, audit }) => {
