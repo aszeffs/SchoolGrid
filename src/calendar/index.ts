@@ -53,7 +53,12 @@ export async function isInstructionalDay(
   { schoolId, date }: { schoolId: string; date: SchoolDate },
 ): Promise<boolean> {
   const { rows } = await database.query<{ instructional: boolean }>(
-    `SELECT EXISTS (${INSTRUCTIONAL_DAYS} AND days.day = $2::date) AS instructional`,
+    // Only the year holding the date is stepped through, and only to that date.
+    `SELECT EXISTS (
+       ${INSTRUCTIONAL_DAYS}
+         AND $2::date BETWEEN academic_year.first_date AND academic_year.last_date
+         AND days.day = $2::date
+     ) AS instructional`,
     [schoolId, date],
   );
   return rows[0]!.instructional;

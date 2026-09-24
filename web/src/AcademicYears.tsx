@@ -7,6 +7,7 @@ import {
   type ApiResult,
   type ConflictDetail,
   type InstructionalDayException,
+  type ProposedException,
   type ProposedTerm,
   type ReachedSchool,
 } from "./api.ts";
@@ -84,10 +85,7 @@ function AcademicYearsSheet({
   onChange: (year: AcademicYear, proposed: Change) => Promise<ApiResult<unknown>>;
   onDelete: (year: AcademicYear) => Promise<ApiResult<unknown>>;
   onSetPattern: (year: AcademicYear, weekdays: Weekday[]) => Promise<ApiResult<unknown>>;
-  onAddException: (
-    year: AcademicYear,
-    exception: { date: string; instructional: boolean },
-  ) => Promise<ApiResult<unknown>>;
+  onAddException: (year: AcademicYear, exception: ProposedException) => Promise<ApiResult<unknown>>;
   onRemoveException: (year: AcademicYear, exception: InstructionalDayException) => Promise<ApiResult<unknown>>;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -289,7 +287,7 @@ function YearRecord({
   onEdit: () => void;
   onDelete: () => void;
   onSetPattern: (weekdays: Weekday[]) => Promise<ApiResult<unknown>>;
-  onAddException: (exception: { date: string; instructional: boolean }) => Promise<ApiResult<unknown>>;
+  onAddException: (exception: ProposedException) => Promise<ApiResult<unknown>>;
   onRemoveException: (exception: InstructionalDayException) => Promise<ApiResult<unknown>>;
 }) {
   const headingId = useId();

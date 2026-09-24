@@ -1246,13 +1246,17 @@ dialog.slip::backdrop {
 }
 
 /*
- * A way through that goes nowhere is held with aria-disabled rather than
- * disabled (AuditRecords.tsx), so it is drawn as a disabled button is, and
- * answers neither hover nor press.
+ * A way through that goes nowhere, or a change held while another is in
+ * flight, is held with aria-disabled rather than disabled (AuditRecords.tsx,
+ * InstructionalDays.tsx), so the focus stays on it. It is drawn as a disabled
+ * button is, and answers neither hover nor press.
  */
 .pager button[aria-disabled="true"],
 .pager button[aria-disabled="true"]:hover,
-.pager button[aria-disabled="true"]:active {
+.pager button[aria-disabled="true"]:active,
+.instructional-days button[aria-disabled="true"],
+.instructional-days button[aria-disabled="true"]:hover,
+.instructional-days button[aria-disabled="true"]:active {
   background: transparent;
   border-style: dashed;
   border-color: var(--rule);
@@ -1349,8 +1353,8 @@ dialog.slip::backdrop {
 }
 
 .day__mark {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.625rem;
+  height: 0.625rem;
   border: 1.5px solid transparent;
   border-radius: 50%;
 }
@@ -1401,21 +1405,6 @@ td[aria-selected="true"] > .day {
 
 .calendar__chosen p {
   margin: 0;
-}
-
-/*
- * Held without being disabled, so a keyboard user's focus stays on it: the
- * same look as a disabled button, as the Audit pager's.
- */
-.instructional-days button[aria-disabled="true"],
-.instructional-days button[aria-disabled="true"]:hover,
-.instructional-days button[aria-disabled="true"]:active {
-  background: transparent;
-  border-style: dashed;
-  border-color: var(--rule);
-  color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
-  cursor: not-allowed;
-  transform: none;
 }
 
 @media (hover: hover) {

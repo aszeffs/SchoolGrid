@@ -1,6 +1,12 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Weekday } from "../../src/calendar/index.ts";
-import type { AcademicYear, ApiResult, ConflictDetail, InstructionalDayException } from "./api.ts";
+import type {
+  AcademicYear,
+  ApiResult,
+  ConflictDetail,
+  InstructionalDayException,
+  ProposedException,
+} from "./api.ts";
 
 /**
  * An Academic Year's Instructional days: its weekday pattern, and a calendar
@@ -32,7 +38,7 @@ export function InstructionalDays({
   busy: boolean;
   say: (message: string) => void;
   onSetPattern: (weekdays: Weekday[]) => Promise<ApiResult<unknown>>;
-  onAddException: (exception: { date: string; instructional: boolean }) => Promise<ApiResult<unknown>>;
+  onAddException: (exception: ProposedException) => Promise<ApiResult<unknown>>;
   onRemoveException: (exception: InstructionalDayException) => Promise<ApiResult<unknown>>;
 }) {
   const headingId = useId();
@@ -130,11 +136,24 @@ function WeekdayPattern({
 /** What one day of the year is, as the server's lists make it. */
 type DayState = "instructional" | "not-instructional" | "holiday" | "make-up";
 
-const STATE_WORDS: Record<DayState, string> = {
-  instructional: "Instructional day",
-  "not-instructional": "not an Instructional day",
-  holiday: "holiday, taken out",
-  "make-up": "make-up day, put in",
+/** What each state is called on a day's button, how a chosen day is described, and the change it offers. */
+const STATES: Record<DayState, { words: string; is: string; action: string }> = {
+  instructional: {
+    words: "Instructional day",
+    is: "is an Instructional day by the weekday pattern.",
+    action: "Take it out as a holiday",
+  },
+  "not-instructional": {
+    words: "not an Instructional day",
+    is: "is not an Instructional day by the weekday pattern.",
+    action: "Put it in as a make-up day",
+  },
+  holiday: { words: "holiday, taken out", is: "is taken out as a holiday.", action: "Return it to the weekday pattern" },
+  "make-up": {
+    words: "make-up day, put in",
+    is: "is put in as a make-up day.",
+    action: "Return it to the weekday pattern",
+  },
 };
 
 /** A day as a reader expects it in full. The date is read at midnight UTC, where it was made. */
@@ -156,7 +175,7 @@ function MonthCalendar({
   year: AcademicYear;
   busy: boolean;
   say: (message: string) => void;
-  onAddException: (exception: { date: string; instructional: boolean }) => Promise<ApiResult<unknown>>;
+  onAddException: (exception: ProposedException) => Promise<ApiResult<unknown>>;
   onRemoveException: (exception: InstructionalDayException) => Promise<ApiResult<unknown>>;
 }) {
   const headingId = useId();
@@ -308,7 +327,7 @@ function MonthCalendar({
                       data-date={date}
                       className={`day day--${state}`}
                       tabIndex={date === tabStop ? 0 : -1}
-                      aria-label={`${FULL_DAY.format(utc(date))}: ${STATE_WORDS[state]}`}
+                      aria-label={`${FULL_DAY.format(utc(date))}: ${STATES[state].words}`}
                       onKeyDown={(event) => onKeyDown(event, date)}
                       onClick={() => {
                         setCurrent(date);
@@ -328,7 +347,9 @@ function MonthCalendar({
       </table>
 
       <div className="calendar__chosen">
-        <p>{picked === null ? "Choose a day to take it out or put it in." : describe(picked, stateOf(picked))}</p>
+        <p>{picked === null
+            ? "Choose a day to take it out or put it in."
+            : `${FULL_DAY.format(utc(picked))} ${STATES[stateOf(picked)].is}`}</p>
         {problem !== null && (
           <p role="alert" className="error">
             {problem}
@@ -336,38 +357,12 @@ function MonthCalendar({
         )}
         {picked !== null && (
           <button type="button" className="button-ghost" aria-disabled={busy} onClick={change}>
-            {actionFor(stateOf(picked))}
+            {STATES[stateOf(picked)].action}
           </button>
         )}
       </div>
     </div>
   );
-}
-
-function describe(date: string, state: DayState): string {
-  const day = FULL_DAY.format(utc(date));
-  switch (state) {
-    case "instructional":
-      return `${day} is an Instructional day by the weekday pattern.`;
-    case "not-instructional":
-      return `${day} is not an Instructional day by the weekday pattern.`;
-    case "holiday":
-      return `${day} is taken out as a holiday.`;
-    case "make-up":
-      return `${day} is put in as a make-up day.`;
-  }
-}
-
-function actionFor(state: DayState): string {
-  switch (state) {
-    case "instructional":
-      return "Take it out as a holiday";
-    case "not-instructional":
-      return "Put it in as a make-up day";
-    case "holiday":
-    case "make-up":
-      return "Return it to the weekday pattern";
-  }
 }
 
 /** Why a day's change changed nothing. The calendar offers only days of the year, one change each. */

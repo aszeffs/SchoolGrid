@@ -570,8 +570,9 @@ export function authorizeReadSchoolCalendar(actor: Actor): string {
 /**
  * Returns the School whose academic structure the actor may read and change,
  * and refuses otherwise. For now that is its Academic Years, their Terms and
- * Instructional days, and only a School Administrator shapes them, in the School they are acting
- * in. Asked before a request's body is read, as for memberships.
+ * Instructional days, and only a School Administrator shapes them, in the
+ * School they are acting in. Asked before a request's body is read, as for
+ * memberships.
  */
 export function authorizeManageAcademicStructure(actor: Actor): string {
   return authorizeManageRelationships(actor);

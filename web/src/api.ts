@@ -247,8 +247,12 @@ export interface AcademicYear {
 }
 
 /** A date an Academic Year's pattern does not decide: put in when `instructional`, taken out when not. */
-export interface InstructionalDayException {
+export interface InstructionalDayException extends ProposedException {
   id: string;
+}
+
+/** An exception as one is added: its date, and whether it puts the date in or takes it out. */
+export interface ProposedException {
   date: string;
   instructional: boolean;
 }
@@ -414,7 +418,7 @@ export const api = {
   addInstructionalDayException: (
     schoolId: string,
     academicYearId: string,
-    exception: { date: string; instructional: boolean },
+    exception: ProposedException,
   ) =>
     request<{ academicYear: AcademicYear }>(
       "POST",

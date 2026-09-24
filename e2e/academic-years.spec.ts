@@ -309,7 +309,7 @@ test("a weekday pattern is set, a holiday and a make-up day are added, and the T
   const fallRow = recordRows(page, `Terms of ${year.name}`).nth(1);
   await expect(fallRow).toContainText(`${daysOn(fall.firstDate, fall.lastDate, [1, 2, 3, 4, 5])} Instructional days`);
 
-  // Four-day weeks: Friday is no longer a school day.
+  // Four-day weeks: Friday is no longer an Instructional day.
   const pattern = page.getByRole("form", { name: `Weekday pattern of ${year.name}` });
   await pattern.getByLabel("Friday").uncheck();
   await pattern.getByRole("button", { name: "Save the pattern" }).click();
@@ -347,7 +347,7 @@ test("a weekday pattern is set, a holiday and a make-up day are added, and the T
     ].sort((a, b) => a.date.localeCompare(b.date)),
   );
 
-  // Returned to the pattern, the holiday is a school day again.
+  // Returned to the pattern, the holiday is an Instructional day again.
   await dayIn(page, year, holiday).click();
   await page.getByRole("button", { name: "Return it to the weekday pattern" }).click();
   await expect(page.getByRole("status")).toContainText("is returned to the weekday pattern.");
