@@ -275,6 +275,22 @@ export interface ClassOffering {
   term: Term & { academicYear: { id: string; name: string } };
 }
 
+/**
+ * A Faculty member's assignment to a Class Offering, bounded by School dates.
+ * A last date of null is one still open, running to the end of its Term.
+ */
+export interface TeachingAssignment {
+  id: string;
+  person: { id: string; displayName: string };
+  firstDate: string;
+  lastDate: string | null;
+}
+
+/** A Class Offering read by itself, or among a Faculty member's own: with who teaches it. */
+export interface TaughtClassOffering extends ClassOffering {
+  teachingAssignments: TeachingAssignment[];
+}
+
 /** A Term as a change states it: one of the year's own by its identifier, or a new one without. */
 export interface ProposedTerm {
   id?: string;
@@ -357,6 +373,17 @@ export const api = {
       "PATCH",
       inSchool(schoolId, `/memberships/${encodeURIComponent(membershipId)}`),
       { endsAt },
+    ),
+  /** What ending a membership at `endsAt`, or now, would end with it. */
+  membershipConsequences: (schoolId: string, membershipId: string, endsAt?: string) =>
+    request<{ consequences: { teachingAssignments: number } }>(
+      "GET",
+      inSchool(
+        schoolId,
+        `/memberships/${encodeURIComponent(membershipId)}/consequences${
+          endsAt === undefined ? "" : `?endsAt=${encodeURIComponent(endsAt)}`
+        }`,
+      ),
     ),
   revokeMembership: (schoolId: string, membershipId: string) =>
     request<{ membership: Membership }>(
@@ -469,9 +496,42 @@ export const api = {
   classOfferings: (schoolId: string) =>
     request<{ classOfferings: ClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
   classOffering: (schoolId: string, classOfferingId: string) =>
-    request<{ classOffering: ClassOffering }>(
+    request<{ classOffering: TaughtClassOffering }>(
       "GET",
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}`),
+    ),
+  /** A Faculty member's own: those they still teach, and those they taught. */
+  ownClassOfferings: (schoolId: string) =>
+    request<{ current: TaughtClassOffering[]; past: TaughtClassOffering[] }>(
+      "GET",
+      inSchool(schoolId, "/account/class-offerings"),
+    ),
+  /** Bounds left unstated run with the Term's, or to the end of the Person's Faculty membership. */
+  assignTeaching: (
+    schoolId: string,
+    classOfferingId: string,
+    assignment: { personId: string; firstDate?: string; lastDate?: string | null },
+  ) =>
+    request<{ teachingAssignment: TeachingAssignment }>(
+      "POST",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/teaching-assignments`),
+      assignment,
+    ),
+  changeTeachingAssignment: (
+    schoolId: string,
+    teachingAssignmentId: string,
+    bounds: { firstDate: string; lastDate: string | null },
+  ) =>
+    request<{ teachingAssignment: TeachingAssignment }>(
+      "PATCH",
+      inSchool(schoolId, `/teaching-assignments/${encodeURIComponent(teachingAssignmentId)}`),
+      bounds,
+    ),
+  /** Ends it on today's School date, or removes it if it has not begun. */
+  endTeachingAssignment: (schoolId: string, teachingAssignmentId: string) =>
+    request<{ teachingAssignment: TeachingAssignment }>(
+      "DELETE",
+      inSchool(schoolId, `/teaching-assignments/${encodeURIComponent(teachingAssignmentId)}`),
     ),
   /** Refused when another offering of the Course in the Term has the label, or has none too. */
   offerCourse: (schoolId: string, offering: { courseId: string; termId: string; label: string | null }) =>

@@ -10,7 +10,8 @@ import { withConstraintsNamed } from "./constraints.ts";
  * School, ignoring letter case. One Course may be offered more than once in a
  * Term, each offering told apart by a label unique among them. A Course that
  * is offered, or a Term that has Class Offerings, is not deleted: the offering
- * would be left offering nothing, or offered in no Term.
+ * would be left offering nothing, or offered in no Term. Nor is an offering
+ * Faculty were ever assigned to (migrations/0016).
  *
  * The database holds each of those, so they hold against concurrent changes
  * too, and a change that would break one is refused as a Conflict naming the
@@ -248,10 +249,14 @@ export async function relabelClassOffering(
   return { before: offering, after: { ...offering, label } };
 }
 
-/** Deletes a locked Class Offering. Nothing refers to one yet. */
+/** Deletes a locked Class Offering, or refuses while Faculty are assigned to it, ended assignments included. */
 export async function deleteClassOffering(transaction: Queryable, offering: ClassOffering): Promise<void> {
-  await transaction.query(`DELETE FROM app.class_offering WHERE school_id = $1 AND id = $2`, [
-    offering.schoolId,
-    offering.id,
-  ]);
+  await withConstraintsNamed(
+    { teaching_assignment_class_offering_fk: { conflict: "dependent", dependent: "teaching_assignment" } },
+    () =>
+      transaction.query(`DELETE FROM app.class_offering WHERE school_id = $1 AND id = $2`, [
+        offering.schoolId,
+        offering.id,
+      ]),
+  );
 }

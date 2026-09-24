@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, readAll, type ListedPerson, type Membership, type ReachedSchool, type Role } from "./api.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
@@ -6,7 +6,7 @@ import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES, ROLES } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { byName, dayAfter, hasEnded, MOMENT, namesOf, startOfDay } from "./standing.ts";
+import { byName, dayAfter, hasEnded, MOMENT, namesOf, schoolDay, startOfDay } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "School memberships" };
@@ -44,6 +44,7 @@ export function Memberships({ school }: { school: ReachedSchool }) {
     case "ready":
       return (
         <MembershipsSheet
+          schoolId={schoolId}
           {...showing.records}
           busy={busy}
           onGrant={(grant) => change(() => api.grantMembership(schoolId, grant))}
@@ -55,6 +56,7 @@ export function Memberships({ school }: { school: ReachedSchool }) {
 }
 
 function MembershipsSheet({
+  schoolId,
   memberships,
   persons,
   busy,
@@ -62,6 +64,7 @@ function MembershipsSheet({
   onNarrow,
   onRevoke,
 }: {
+  schoolId: string;
   memberships: Membership[];
   persons: ListedPerson[];
   busy: boolean;
@@ -225,6 +228,7 @@ function MembershipsSheet({
 
       {confirming?.kind === "narrow" && (
         <Narrow
+          schoolId={schoolId}
           membership={confirming.membership}
           whose={whose(confirming.membership)}
           name={nameOf(confirming.membership.personId)}
@@ -251,6 +255,12 @@ function MembershipsSheet({
             {nameOf(confirming.membership.personId)} stops holding {ROLE_NAMES[confirming.membership.role]} in this
             School now, and loses whatever that role reaches.
           </p>
+          <EndsTeaching
+            schoolId={schoolId}
+            membership={confirming.membership}
+            name={nameOf(confirming.membership.personId)}
+            on="today"
+          />
           <p>
             Any other School membership {nameOf(confirming.membership.personId)} holds stays as it is. This one stays
             on the record, as ended, and cannot be reopened: to give the role back, grant it again.
@@ -263,6 +273,7 @@ function MembershipsSheet({
 
 /** Asks when a membership is to end, and names what that does before it is set. */
 function Narrow({
+  schoolId,
   membership,
   whose,
   name,
@@ -270,6 +281,7 @@ function Narrow({
   onCancel,
   onNarrow,
 }: {
+  schoolId: string;
   membership: Membership;
   whose: string;
   name: string;
@@ -304,6 +316,82 @@ function Narrow({
           onChange={(event) => setEndsOn(event.currentTarget.value)}
         />
       </label>
+      {endsOn !== "" && endsOn >= earliest && (
+        <EndsTeaching
+          schoolId={schoolId}
+          membership={membership}
+          name={name}
+          on={endsOn}
+          endsAt={startOfDay(endsOn)}
+        />
+      )}
     </ConfirmDialog>
+  );
+}
+
+/**
+ * The cascade that ending a Faculty membership sets off, counted by the
+ * server for the moment it would end: each of the Person's Teaching
+ * assignments still running after that School date ends on it, and one not
+ * yet begun is removed (CONTEXT.md: Teaching assignment). Nothing for any
+ * other role, which ends no assignment.
+ *
+ * Asked for, never worked out here: which School date a moment falls on is
+ * the School's timezone's to say, and the server holds that.
+ */
+function EndsTeaching({
+  schoolId,
+  membership,
+  name,
+  on,
+  endsAt,
+}: {
+  schoolId: string;
+  membership: Membership;
+  name: string;
+  /** The day it ends, as a date field writes it, or "today" for a revocation. */
+  on: string;
+  /** When it ends; now when absent. */
+  endsAt?: string;
+}) {
+  const [count, setCount] = useState<number | null>(null);
+  const faculty = membership.role === "faculty";
+
+  useEffect(() => {
+    if (!faculty) {
+      return;
+    }
+    let current = true;
+    setCount(null);
+    void api.membershipConsequences(schoolId, membership.id, endsAt).then((answered) => {
+      if (current && answered.ok) {
+        setCount(answered.body.consequences.teachingAssignments);
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [faculty, schoolId, membership.id, endsAt]);
+
+  if (!faculty) {
+    return null;
+  }
+  const day = on === "today" ? "today" : schoolDay(on);
+  const after = on === "today" ? "today" : "that day";
+  return (
+    <ul className="consequences" aria-live="polite">
+      <li>
+        {count === null ? (
+          "Counting the Teaching assignments this ends…"
+        ) : (
+          <>
+            <strong>{count === 1 ? "1 Teaching assignment" : `${count} Teaching assignments`}.</strong>{" "}
+            {count === 0
+              ? `${name} holds none running past ${after}.`
+              : `Those of ${name}’s still running after ${after} end ${on === "today" ? "today" : `on ${day}`}; any not yet begun is removed.`}
+          </>
+        )}
+      </li>
+    </ul>
   );
 }

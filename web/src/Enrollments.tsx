@@ -253,7 +253,7 @@ function EndEnrollment({
       <p>{student} departs the School. Ending this Enrollment also ends:</p>
       <ul className="consequences">
         <li>
-          <strong>0 open Roster memberships.</strong> Class Offerings are not built yet, so {student} holds none.
+          <strong>0 open Roster memberships.</strong> Rostering is not built yet, so {student} holds none.
         </li>
         <li>
           <strong>{links}.</strong>{" "}

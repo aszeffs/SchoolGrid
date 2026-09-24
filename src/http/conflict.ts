@@ -27,11 +27,18 @@ export type ConflictDetail =
    * case, or goes without one too.
    */
   | { conflict: "class_offering_label_taken" }
+  /** One Person's Teaching assignments to one Class Offering would overlap. */
+  | { conflict: "teaching_assignment_overlap" }
+  /** A Teaching assignment would begin before its offering's Term or end after it. */
+  | { conflict: "teaching_assignment_outside_term" }
   /**
    * Something depends on what would change or go, and would be stranded. Only
    * its kind is named, never a record the caller could not otherwise read.
    */
-  | { conflict: "dependent"; dependent: "term" | "instructional_day_exception" | "class_offering" }
+  | {
+      conflict: "dependent";
+      dependent: "term" | "instructional_day_exception" | "class_offering" | "teaching_assignment";
+    }
   /** The School's timezone is fixed once its first Academic Year exists (ADR-0011). */
   | { conflict: "timezone_fixed" };
 

@@ -1,30 +1,69 @@
 import { useCallback, useState, type FormEvent } from "react";
 import { MAX_NAME_LENGTH } from "../../src/validation/bounds.ts";
-import { api, type ApiResult, type ClassOffering as Offering, type ReachedSchool } from "./api.ts";
+import {
+  api,
+  readAll,
+  type ApiResult,
+  type ConflictDetail,
+  type ListedPerson,
+  type Membership,
+  type ReachedSchool,
+  type TaughtClassOffering as Offering,
+  type TeachingAssignment,
+} from "./api.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts";
+import { RecordList } from "./RecordList.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { schoolDay } from "./standing.ts";
+import { byName, dayOf, hasEnded, schoolDay } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Class Offering" };
 
+/** A Faculty member who may be assigned now, and the moment their Faculty membership ends, if it does. */
+interface Assignable {
+  person: ListedPerson;
+  endsAt: string | null;
+}
+
 /**
- * One Class Offering: the Course it offers and the Term it runs in, with the
- * ways to relabel and delete it. It opens from its own URL, so a bookmark to
- * it works.
+ * One Class Offering: the Course it offers, the Term it runs in, and the
+ * Faculty assigned to teach it. It opens from its own URL, so a bookmark to it
+ * works.
  *
- * One that does not exist, or is another School's, is the one "not
- * available" state, as any refusal is (ADR-0002).
+ * A School Administrator reads it with the ways to assign Faculty, change or
+ * end an assignment, relabel the offering and delete it. A Faculty member ever
+ * assigned to it reads it and changes nothing. Anyone else, and an offering
+ * that does not exist or is another School's, is the one "not available"
+ * state, as any refusal is (ADR-0002).
  */
 export function ClassOffering({ school, classOfferingId }: { school: ReachedSchool; classOfferingId: string }) {
   const { schoolId } = school;
+  const administers = school.roles.includes("school_administrator");
   // Stable for as long as the page shows one offering, so it is read once and again only after a change.
-  const read = useCallback((schoolId: string) => api.classOffering(schoolId, classOfferingId), [classOfferingId]);
+  const read = useCallback(
+    async (schoolId: string) => {
+      if (!administers) {
+        const answered = await api.classOffering(schoolId, classOfferingId);
+        return answered.ok ? { ok: true as const, body: { ...answered.body, assignable: [] } } : answered;
+      }
+      const answered = await readAll([
+        api.classOffering(schoolId, classOfferingId),
+        api.memberships(schoolId),
+        api.persons(schoolId),
+      ]);
+      if (!answered.ok) {
+        return answered;
+      }
+      const [{ classOffering }, { memberships }, { persons }] = answered.body;
+      return { ok: true as const, body: { classOffering, assignable: assignableFaculty(memberships, persons) } };
+    },
+    [classOfferingId, administers],
+  );
   const { showing, busy, change } = useScreen(schoolId, read);
   /** Held apart from the screen's own: a deleted offering is not read again, which would find it gone. */
   const [deleting, setDeleting] = useState(false);
@@ -38,43 +77,123 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
       return (
         <OfferingSheet
           schoolId={schoolId}
+          administers={administers}
           offering={showing.records.classOffering}
+          assignable={showing.records.assignable}
           busy={busy || deleting}
+          onAssign={(assignment) => change(() => api.assignTeaching(schoolId, classOfferingId, assignment))}
+          onChangeDates={(assignment, bounds) =>
+            change(() => api.changeTeachingAssignment(schoolId, assignment.id, bounds))
+          }
+          onEnd={(assignment) => change(() => api.endTeachingAssignment(schoolId, assignment.id))}
           onRelabel={(label) => change(() => api.relabelClassOffering(schoolId, classOfferingId, label))}
           onDelete={async () => {
             setDeleting(true);
             const sent = await api.deleteClassOffering(schoolId, classOfferingId);
             if (sent.ok) {
               navigate({ name: "classOfferings", schoolId }, { replace: true });
-              return;
+              return sent;
             }
             setDeleting(false);
             // Settled as any failed change is, so it shows what every other failure shows.
-            await change(async () => sent);
+            return change(async () => sent);
           }}
         />
       );
   }
 }
 
+/** The Persons holding a Faculty membership in force now, by name: the only ones the server assigns. */
+function assignableFaculty(memberships: Membership[], persons: ListedPerson[]): Assignable[] {
+  const now = new Date();
+  const byId = new Map(persons.map((person) => [person.id, person]));
+  return memberships
+    .filter(
+      (membership) =>
+        membership.role === "faculty" && new Date(membership.startsAt) <= now && !hasEnded(membership, now),
+    )
+    .flatMap((membership) => {
+      const person = byId.get(membership.personId);
+      return person === undefined ? [] : [{ person, endsAt: membership.endsAt }];
+    })
+    .sort(byName((each) => each.person.displayName));
+}
+
+/** What is waiting on a confirmation: which assignment, and which of the two changes to it. */
+type Confirming = { kind: "dates" | "end"; assignment: TeachingAssignment };
+
 function OfferingSheet({
   schoolId,
+  administers,
   offering,
+  assignable,
   busy,
+  onAssign,
+  onChangeDates,
+  onEnd,
   onRelabel,
   onDelete,
 }: {
   schoolId: string;
+  administers: boolean;
   offering: Offering;
+  assignable: Assignable[];
   busy: boolean;
+  onAssign: (assignment: { personId: string; firstDate?: string; lastDate?: string }) => Promise<ApiResult<unknown>>;
+  onChangeDates: (
+    assignment: TeachingAssignment,
+    bounds: { firstDate: string; lastDate: string | null },
+  ) => Promise<ApiResult<unknown>>;
+  onEnd: (assignment: TeachingAssignment) => Promise<ApiResult<unknown>>;
   onRelabel: (label: string | null) => Promise<ApiResult<unknown>>;
-  onDelete: () => Promise<void>;
+  onDelete: () => Promise<ApiResult<unknown>>;
 }) {
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<Confirming | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [assignProblem, setAssignProblem] = useState<string | null>(null);
   /** What the last change did, said once so a screen reader hears it land. */
   const [done, setDone] = useState("");
+  const [chosen, setChosen] = useState("");
   const { course, term } = offering;
+  const today = dayOf(new Date());
+  /** The last day an assignment runs to: its own, or its Term's while it is open. */
+  const runsTo = (assignment: TeachingAssignment) => assignment.lastDate ?? term.lastDate;
+  const whose = (assignment: TeachingAssignment) => `${assignment.person.displayName}’s Teaching assignment`;
+  const leaving = assignable.find((each) => each.person.id === chosen)?.endsAt ?? null;
+
+  const settle = (sent: ApiResult<unknown>, success: string, show: (message: string) => void) => {
+    if (sent.ok) {
+      setDone(success);
+    } else if (sent.conflict !== undefined) {
+      show(assignmentConflictMessage(sent.conflict));
+    }
+  };
+
+  const assign = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    const personId = String(fields.get("personId") ?? "");
+    const firstDate = String(fields.get("firstDate") ?? "");
+    const lastDate = String(fields.get("lastDate") ?? "");
+    if (personId === "") {
+      return;
+    }
+    setAssignProblem(null);
+    setDone("");
+    const name = assignable.find((each) => each.person.id === personId)?.person.displayName ?? "The Faculty member";
+    const sent = await onAssign({
+      personId,
+      ...(firstDate === "" ? {} : { firstDate }),
+      ...(lastDate === "" ? {} : { lastDate }),
+    });
+    if (sent.ok) {
+      form.reset();
+      setChosen("");
+    }
+    settle(sent, `${name} is assigned to teach ${offeringName(offering)}.`, setAssignProblem);
+  };
 
   const relabel = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -92,12 +211,17 @@ function OfferingSheet({
   const legend = (
     <>
       <h2>Key</h2>
-      <p>One Course, offered for one Term.</p>
+      <p>One Course, offered for one Term, and who teaches it.</p>
       <dl>
         <Key term="Class Offering">
           A Course offered for one Term. Offering it in another Term is another Class Offering.
         </Key>
         <Key term="Label">What tells this offering apart from the Course&rsquo;s others in the same Term.</Key>
+        <Key term="Teaching assignment">
+          One Faculty member teaching this offering, from one School date to another inside its Term. Several may teach
+          it at once.
+        </Key>
+        <Key term="End of Term">An assignment still open: it runs until the Term&rsquo;s last day.</Key>
       </dl>
     </>
   );
@@ -108,7 +232,11 @@ function OfferingSheet({
       legend={legend}
       foot={
         <p>
-          <Link to={{ name: "classOfferings", schoolId }}>All Class Offerings</Link>
+          {administers ? (
+            <Link to={{ name: "classOfferings", schoolId }}>All Class Offerings</Link>
+          ) : (
+            <Link to={{ name: "classes", schoolId }}>Your classes</Link>
+          )}
         </p>
       }
     >
@@ -131,44 +259,225 @@ function OfferingSheet({
         {done}
       </p>
 
-      <form onSubmit={relabel} aria-label="Relabel this Class Offering">
-        <h2>Relabel</h2>
-        <label>
-          Label (optional)
-          <input
-            // Keyed by the label as it stands, so the field shows it afresh once a change lands.
-            key={offering.label ?? ""}
-            name="label"
-            maxLength={MAX_NAME_LENGTH}
-            autoComplete="off"
-            defaultValue={offering.label ?? ""}
-          />
-        </label>
-        {problem !== null && (
-          <p role="alert" className="error">
-            {problem}
-          </p>
-        )}
-        <p className="actions">
-          <button type="submit" disabled={busy}>
-            Save label
-          </button>
-          <button type="button" className="button-stamp" disabled={busy} onClick={() => setConfirming(true)}>
-            Delete Class Offering
-          </button>
-        </p>
-      </form>
+      <section>
+        <h2>Teaching assignments</h2>
+        <RecordList
+          label="Teaching assignments"
+          rows={offering.teachingAssignments}
+          keyOf={(assignment) => assignment.id}
+          empty={`No Faculty member is assigned to teach this offering yet.${administers ? " Assign one below." : ""}`}
+          columns={[
+            { head: "Faculty", cell: (assignment) => assignment.person.displayName },
+            {
+              head: "From",
+              cell: (assignment) =>
+                assignment.firstDate > today ? (
+                  <>
+                    <span className="mark mark--open">Starts later</span> {schoolDay(assignment.firstDate)}
+                  </>
+                ) : (
+                  schoolDay(assignment.firstDate)
+                ),
+            },
+            {
+              head: "Until",
+              cell: (assignment) =>
+                runsTo(assignment) < today ? (
+                  <>
+                    <span className="mark mark--struck">Ended</span> {schoolDay(runsTo(assignment))}
+                  </>
+                ) : assignment.lastDate === null ? (
+                  <span className="mark">End of Term</span>
+                ) : (
+                  schoolDay(assignment.lastDate)
+                ),
+            },
+            ...(administers
+              ? [
+                  {
+                    head: "Change",
+                    actions: true,
+                    cell: (assignment: TeachingAssignment) =>
+                      runsTo(assignment) < today ? null : (
+                        <span className="actions record__buttons">
+                          <button
+                            type="button"
+                            className="button-quiet"
+                            disabled={busy}
+                            aria-label={`Change the dates of ${whose(assignment)}`}
+                            onClick={() => setConfirming({ kind: "dates", assignment })}
+                          >
+                            Change dates
+                          </button>
+                          <button
+                            type="button"
+                            className="button-stamp"
+                            disabled={busy}
+                            aria-label={`End ${whose(assignment)}`}
+                            onClick={() => setConfirming({ kind: "end", assignment })}
+                          >
+                            End
+                          </button>
+                        </span>
+                      ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </section>
 
-      {confirming && (
+      {administers && (
+        <>
+          <form onSubmit={assign} aria-label="Assign Faculty to this Class Offering">
+            <h2>Assign Faculty</h2>
+            {assignable.length === 0 ? (
+              <p className="empty">
+                No one holds a Faculty membership in force. Grant one on{" "}
+                <Link to={{ name: "memberships", schoolId }}>Roles</Link> first.
+              </p>
+            ) : (
+              <>
+                <label>
+                  Faculty member
+                  <select
+                    name="personId"
+                    required
+                    value={chosen}
+                    onChange={(event) => setChosen(event.currentTarget.value)}
+                  >
+                    <option value="" disabled>
+                      Choose a Faculty member
+                    </option>
+                    {assignable.map(({ person }) => (
+                      <option key={person.id} value={person.id}>
+                        {person.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  From (optional)
+                  <input type="date" name="firstDate" min={term.firstDate} max={term.lastDate} />
+                </label>
+                <label>
+                  Until (optional)
+                  <input
+                    type="date"
+                    name="lastDate"
+                    min={term.firstDate}
+                    max={leaving === null ? term.lastDate : [term.lastDate, dayOf(new Date(leaving))].sort()[0]}
+                  />
+                </label>
+                <p className="muted">
+                  Left blank, the assignment runs with the Term, from its first day to its last.
+                  {leaving !== null &&
+                    ` This Faculty membership ends on ${schoolDay(dayOf(new Date(leaving)))}, so the assignment ends by then.`}
+                </p>
+                {assignProblem !== null && (
+                  <p role="alert" className="error">
+                    {assignProblem}
+                  </p>
+                )}
+                <button type="submit" disabled={busy}>
+                  Assign
+                </button>
+              </>
+            )}
+          </form>
+
+          <form onSubmit={relabel} aria-label="Relabel this Class Offering">
+            <h2>Relabel</h2>
+            <label>
+              Label (optional)
+              <input
+                // Keyed by the label as it stands, so the field shows it afresh once a change lands.
+                key={offering.label ?? ""}
+                name="label"
+                maxLength={MAX_NAME_LENGTH}
+                autoComplete="off"
+                defaultValue={offering.label ?? ""}
+              />
+            </label>
+            {problem !== null && (
+              <p role="alert" className="error">
+                {problem}
+              </p>
+            )}
+            <p className="actions">
+              <button type="submit" disabled={busy}>
+                Save label
+              </button>
+              <button type="button" className="button-stamp" disabled={busy} onClick={() => setDeleting(true)}>
+                Delete Class Offering
+              </button>
+            </p>
+          </form>
+        </>
+      )}
+
+      {confirming?.kind === "dates" && (
+        <ChangeDates
+          assignment={confirming.assignment}
+          whose={whose(confirming.assignment)}
+          term={term}
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onSave={async (bounds) => {
+            const { assignment } = confirming;
+            setConfirming(null);
+            setDone("");
+            setAssignProblem(null);
+            const sent = await onChangeDates(assignment, bounds);
+            settle(sent, `The dates of ${whose(assignment)} are changed.`, setAssignProblem);
+          }}
+        />
+      )}
+      {confirming?.kind === "end" && (
+        <ConfirmDialog
+          title={
+            confirming.assignment.firstDate > today
+              ? `Remove ${whose(confirming.assignment)}?`
+              : `End ${whose(confirming.assignment)}?`
+          }
+          confirm={confirming.assignment.firstDate > today ? "Remove the assignment" : "End the assignment"}
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={async () => {
+            const { assignment } = confirming;
+            setConfirming(null);
+            setDone("");
+            const sent = await onEnd(assignment);
+            settle(sent, `${whose(assignment)} is ended.`, setAssignProblem);
+          }}
+        >
+          {confirming.assignment.firstDate > today ? (
+            <p>
+              It has not begun, so it is removed: {confirming.assignment.person.displayName} will not have taught{" "}
+              {offeringName(offering)} at all.
+            </p>
+          ) : (
+            <p>
+              {confirming.assignment.person.displayName} teaches {offeringName(offering)} until the end of today. The
+              assignment stays on this sheet as ended, as the record of who taught it and when.
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
+      {deleting && (
         <ConfirmDialog
           title={`Delete ${offeringName(offering)}?`}
           confirm="Delete the Class Offering"
           busy={busy}
-          onCancel={() => setConfirming(false)}
+          onCancel={() => setDeleting(false)}
           onConfirm={async () => {
-            setConfirming(false);
+            setDeleting(false);
             setDone("");
-            await onDelete();
+            setProblem(null);
+            const sent = await onDelete();
+            if (!sent.ok && sent.conflict !== undefined) {
+              setProblem(assignmentConflictMessage(sent.conflict));
+            }
           }}
         >
           <p>
@@ -179,4 +488,76 @@ function OfferingSheet({
       )}
     </Sheet>
   );
+}
+
+/** Asks for an assignment's new dates, inside its Term, and names what they mean before they are set. */
+function ChangeDates({
+  assignment,
+  whose,
+  term,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  assignment: TeachingAssignment;
+  whose: string;
+  term: Offering["term"];
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (bounds: { firstDate: string; lastDate: string | null }) => void;
+}) {
+  const [firstDate, setFirstDate] = useState(assignment.firstDate);
+  const [lastDate, setLastDate] = useState(assignment.lastDate ?? "");
+  const inOrder = lastDate === "" || lastDate >= firstDate;
+  return (
+    <ConfirmDialog
+      title={`Change the dates of ${whose}?`}
+      confirm="Save the dates"
+      busy={busy || firstDate === "" || !inOrder}
+      onCancel={onCancel}
+      onConfirm={() => onSave({ firstDate, lastDate: lastDate === "" ? null : lastDate })}
+    >
+      <p>
+        Both days are taught, and both fall inside {term.name}. Left without an end, it runs to the Term&rsquo;s last
+        day.
+      </p>
+      <label>
+        From
+        <input
+          type="date"
+          name="firstDate"
+          required
+          min={term.firstDate}
+          max={term.lastDate}
+          value={firstDate}
+          onChange={(event) => setFirstDate(event.currentTarget.value)}
+        />
+      </label>
+      <label>
+        Until (optional)
+        <input
+          type="date"
+          name="lastDate"
+          min={firstDate === "" ? term.firstDate : firstDate}
+          max={term.lastDate}
+          value={lastDate}
+          onChange={(event) => setLastDate(event.currentTarget.value)}
+        />
+      </label>
+    </ConfirmDialog>
+  );
+}
+
+/** Why an assignment was not made or changed, or the offering not deleted, in the words of the rule. */
+function assignmentConflictMessage(conflict: ConflictDetail): string {
+  switch (conflict.conflict) {
+    case "teaching_assignment_overlap":
+      return "That Faculty member is already assigned to this offering for some of those days. Their assignments to it cannot overlap.";
+    case "teaching_assignment_outside_term":
+      return "Those days fall outside the Term. A Teaching assignment runs between the Term’s first and last days.";
+    case "dependent":
+      return "Faculty have been assigned to this offering, and it is not deleted once they have: the assignments are the record of who taught it.";
+    default:
+      return "That change could not be made.";
+  }
 }
