@@ -14,11 +14,15 @@ export type ConflictDetail =
   | { conflict: "term_gap" }
   /** A Term would begin before its Academic Year or end after it. */
   | { conflict: "term_outside_academic_year" }
+  /** An exception to an Academic Year's weekday pattern would fall outside the year. */
+  | { conflict: "exception_outside_academic_year" }
+  /** An exception would fall on a date that already has one. */
+  | { conflict: "exception_date_taken" }
   /**
    * Something depends on what would change or go, and would be stranded. Only
    * its kind is named, never a record the caller could not otherwise read.
    */
-  | { conflict: "dependent"; dependent: "term" }
+  | { conflict: "dependent"; dependent: "term" | "instructional_day_exception" }
   /** The School's timezone is fixed once its first Academic Year exists (ADR-0011). */
   | { conflict: "timezone_fixed" };
 

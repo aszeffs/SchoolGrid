@@ -1,4 +1,5 @@
 import type { Role } from "../../src/access/roles.ts";
+import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 
 /**
@@ -228,13 +229,32 @@ export interface Term {
   lastDate: string;
 }
 
-/** An Academic Year, bounded by School dates, with its Terms in order. None while it is not yet divided. */
+/**
+ * An Academic Year, bounded by School dates, with its Terms in order (none
+ * while it is not yet divided), and its Instructional days: the weekday
+ * pattern, the dates taken out of it or put in, and the days those make.
+ */
 export interface AcademicYear {
   id: string;
   name: string;
   firstDate: string;
   lastDate: string;
+  weekdays: Weekday[];
+  exceptions: InstructionalDayException[];
+  /** Every Instructional day of the year, in order, as the server works them out. */
+  instructionalDays: string[];
   terms: Term[];
+}
+
+/** A date an Academic Year's pattern does not decide: put in when `instructional`, taken out when not. */
+export interface InstructionalDayException extends ProposedException {
+  id: string;
+}
+
+/** An exception as one is added: its date, and whether it puts the date in or takes it out. */
+export interface ProposedException {
+  date: string;
+  instructional: boolean;
 }
 
 /** A Term as a change states it: one of the year's own by its identifier, or a new one without. */
@@ -388,7 +408,32 @@ export const api = {
       inSchool(schoolId, `/academic-years/${encodeURIComponent(academicYearId)}`),
       change,
     ),
-  /** Refused while the year still has Terms. */
+  setWeekdayPattern: (schoolId: string, academicYearId: string, weekdays: Weekday[]) =>
+    request<{ academicYear: AcademicYear }>(
+      "PATCH",
+      inSchool(schoolId, `/academic-years/${encodeURIComponent(academicYearId)}`),
+      { weekdays },
+    ),
+  /** Refused on a date outside the year, or one that already has an exception. */
+  addInstructionalDayException: (
+    schoolId: string,
+    academicYearId: string,
+    exception: ProposedException,
+  ) =>
+    request<{ academicYear: AcademicYear }>(
+      "POST",
+      inSchool(schoolId, `/academic-years/${encodeURIComponent(academicYearId)}/exceptions`),
+      exception,
+    ),
+  removeInstructionalDayException: (schoolId: string, academicYearId: string, exceptionId: string) =>
+    request<{ academicYear: AcademicYear }>(
+      "DELETE",
+      inSchool(
+        schoolId,
+        `/academic-years/${encodeURIComponent(academicYearId)}/exceptions/${encodeURIComponent(exceptionId)}`,
+      ),
+    ),
+  /** Refused while the year still has Terms or exceptions. */
   deleteAcademicYear: (schoolId: string, academicYearId: string) =>
     request<{ academicYear: AcademicYear }>(
       "DELETE",

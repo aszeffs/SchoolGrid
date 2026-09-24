@@ -569,9 +569,10 @@ export function authorizeReadSchoolCalendar(actor: Actor): string {
 
 /**
  * Returns the School whose academic structure the actor may read and change,
- * and refuses otherwise. For now that is its Academic Years and their Terms,
- * and only a School Administrator shapes them, in the School they are acting
- * in. Asked before a request's body is read, as for memberships.
+ * and refuses otherwise. For now that is its Academic Years, their Terms and
+ * Instructional days, and only a School Administrator shapes them, in the
+ * School they are acting in. Asked before a request's body is read, as for
+ * memberships.
  */
 export function authorizeManageAcademicStructure(actor: Actor): string {
   return authorizeManageRelationships(actor);
@@ -586,6 +587,23 @@ export function authorizeManageAcademicYear<Y extends { schoolId: string }>(
   const reason = decideManageRelationships(actor, target);
   if (reason !== null) {
     throw new Refused(reason, { type: "academic_year", id: academicYearId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the exception to an Academic Year's weekday pattern the actor may
+ * remove, and refuses otherwise. Asked once the actor may change the year, so
+ * one the year does not have is refused as absent, whatever else holds it.
+ */
+export function authorizeManageInstructionalDayException<E extends { schoolId: string }>(
+  actor: Actor,
+  exceptionId: string,
+  target: E | null,
+): E {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "instructional_day_exception", id: exceptionId });
   }
   return target!;
 }

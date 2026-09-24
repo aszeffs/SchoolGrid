@@ -156,9 +156,19 @@ describe("Browser sessions", () => {
       firstDate: "2026-09-01",
       lastDate: "2027-06-30",
     });
-    expect([enrolled.status, linked.status, memberships.status, invited.status, academicYear.status]).toEqual([
-      201, 201, 200, 201, 201,
-    ]);
+    const academicYearId = (academicYear.body as { academicYear: { id: string } }).academicYear.id;
+    const holiday = await aliceBearer.post(`/academic-years/${academicYearId}/exceptions`, {
+      date: "2026-11-26",
+      instructional: false,
+    });
+    expect([
+      enrolled.status,
+      linked.status,
+      memberships.status,
+      invited.status,
+      academicYear.status,
+      holiday.status,
+    ]).toEqual([201, 201, 200, 201, 201, 201]);
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -167,7 +177,8 @@ describe("Browser sessions", () => {
       guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
       membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
       invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
-      academicYearId: (academicYear.body as { academicYear: { id: string } }).academicYear.id,
+      academicYearId,
+      exceptionId: (holiday.body as { academicYear: { exceptions: { id: string }[] } }).academicYear.exceptions[0]!.id,
     };
     return {
       school,

@@ -1,14 +1,18 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import type { Weekday } from "../../src/calendar/index.ts";
 import { MAX_NAME_LENGTH } from "../../src/validation/bounds.ts";
 import {
   api,
   type AcademicYear,
   type ApiResult,
   type ConflictDetail,
+  type InstructionalDayException,
+  type ProposedException,
   type ProposedTerm,
   type ReachedSchool,
 } from "./api.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
+import { dayCount, InstructionalDays } from "./InstructionalDays.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
@@ -22,8 +26,9 @@ const SHEET: SheetKind = { name: "Academic Years" };
 type Change = { name: string; firstDate: string; lastDate: string; terms: ProposedTerm[] };
 
 /**
- * A School's Academic Years, each with the Terms that divide it, in date order:
- * where a School Administrator plans the School's calendar.
+ * A School's Academic Years, each with the Terms that divide it and its
+ * Instructional days, in date order: where a School Administrator plans the
+ * School's calendar.
  *
  * A year's Terms are edited together with the year and sent as one change, so
  * moving the boundary between two Terms, or the year's own first or last day,
@@ -50,6 +55,13 @@ export function AcademicYears({ school }: { school: ReachedSchool }) {
           onCreate={(year) => change(() => api.createAcademicYear(schoolId, year))}
           onChange={(year, proposed) => change(() => api.changeAcademicYear(schoolId, year.id, proposed))}
           onDelete={(year) => change(() => api.deleteAcademicYear(schoolId, year.id))}
+          onSetPattern={(year, weekdays) => change(() => api.setWeekdayPattern(schoolId, year.id, weekdays))}
+          onAddException={(year, exception) =>
+            change(() => api.addInstructionalDayException(schoolId, year.id, exception))
+          }
+          onRemoveException={(year, exception) =>
+            change(() => api.removeInstructionalDayException(schoolId, year.id, exception.id))
+          }
         />
       );
   }
@@ -62,6 +74,9 @@ function AcademicYearsSheet({
   onCreate,
   onChange,
   onDelete,
+  onSetPattern,
+  onAddException,
+  onRemoveException,
 }: {
   years: AcademicYear[];
   schoolId: string;
@@ -69,6 +84,9 @@ function AcademicYearsSheet({
   onCreate: (year: { name: string; firstDate: string; lastDate: string }) => Promise<ApiResult<unknown>>;
   onChange: (year: AcademicYear, proposed: Change) => Promise<ApiResult<unknown>>;
   onDelete: (year: AcademicYear) => Promise<ApiResult<unknown>>;
+  onSetPattern: (year: AcademicYear, weekdays: Weekday[]) => Promise<ApiResult<unknown>>;
+  onAddException: (year: AcademicYear, exception: ProposedException) => Promise<ApiResult<unknown>>;
+  onRemoveException: (year: AcademicYear, exception: InstructionalDayException) => Promise<ApiResult<unknown>>;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<AcademicYear | null>(null);
@@ -113,6 +131,12 @@ function AcademicYearsSheet({
           no day in two Terms.
         </Key>
         <Key term="Not yet divided">A year with no Terms. Class Offerings will run in Terms, so divide it first.</Key>
+        <Key term="Instructional day">
+          A day the School is in session: a weekday of the year&rsquo;s pattern, unless it is taken out. Marked with a
+          filled dot.
+        </Key>
+        <Key term="Holiday">A day of the pattern taken out. Framed, and marked with a struck ring.</Key>
+        <Key term="Make-up day">A day outside the pattern put in. Framed, and marked with a filled dot.</Key>
         <Key term="Timezone">
           Once the first Academic Year exists, the School&rsquo;s timezone is fixed, so no day already planned moves.
         </Key>
@@ -160,6 +184,10 @@ function AcademicYearsSheet({
               busy={busy || editing !== null}
               focusChange={returning === year.id}
               problem={problem?.about === year.id ? problem.message : null}
+              say={setDone}
+              onSetPattern={(weekdays) => onSetPattern(year, weekdays)}
+              onAddException={(exception) => onAddException(year, exception)}
+              onRemoveException={(exception) => onRemoveException(year, exception)}
               onEdit={() => {
                 setProblem(null);
                 setDone("");
@@ -213,15 +241,20 @@ function AcademicYearsSheet({
             }
           }}
         >
-          {deleting.terms.length === 0 ? (
-            <p>
-              {deleting.name}, from {schoolDay(deleting.firstDate)} to {schoolDay(deleting.lastDate)}, is removed.
-              Nothing else refers to it yet.
-            </p>
-          ) : (
+          {deleting.terms.length > 0 ? (
             <p>
               {deleting.name} is divided into {termCount(deleting.terms.length)}. A year is not deleted while it has
               Terms: remove them with Change first.
+            </p>
+          ) : deleting.exceptions.length > 0 ? (
+            <p>
+              {deleting.name} has days taken out or put in. A year is not deleted while it has any: return each to the
+              weekday pattern first.
+            </p>
+          ) : (
+            <p>
+              {deleting.name}, from {schoolDay(deleting.firstDate)} to {schoolDay(deleting.lastDate)}, is removed.
+              Nothing else refers to it yet.
             </p>
           )}
         </ConfirmDialog>
@@ -230,21 +263,32 @@ function AcademicYearsSheet({
   );
 }
 
-/** One year as it stands, with its Terms in order and the ways to change or delete it. */
+/**
+ * One year as it stands, with its Terms in order, its Instructional days, and
+ * the ways to change or delete it.
+ */
 function YearRecord({
   year,
   busy,
   focusChange,
   problem,
+  say,
   onEdit,
   onDelete,
+  onSetPattern,
+  onAddException,
+  onRemoveException,
 }: {
   year: AcademicYear;
   busy: boolean;
   focusChange: boolean;
   problem: string | null;
+  say: (message: string) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSetPattern: (weekdays: Weekday[]) => Promise<ApiResult<unknown>>;
+  onAddException: (exception: ProposedException) => Promise<ApiResult<unknown>>;
+  onRemoveException: (exception: InstructionalDayException) => Promise<ApiResult<unknown>>;
 }) {
   const headingId = useId();
   const change = useRef<HTMLButtonElement>(null);
@@ -273,6 +317,12 @@ function YearRecord({
           { head: "Term", cell: (term) => term.name },
           { head: "First day", cell: (term) => schoolDay(term.firstDate) },
           { head: "Last day", cell: (term) => schoolDay(term.lastDate) },
+          {
+            head: "Instructional days",
+            // The server's list, counted within the Term's bounds: `YYYY-MM-DD` sorts as the dates do.
+            cell: (term) =>
+              dayCount(year.instructionalDays.filter((day) => term.firstDate <= day && day <= term.lastDate).length),
+          },
         ]}
       />
       {problem !== null && (
@@ -301,6 +351,14 @@ function YearRecord({
           Delete
         </button>
       </p>
+      <InstructionalDays
+        year={year}
+        busy={busy}
+        say={say}
+        onSetPattern={onSetPattern}
+        onAddException={onAddException}
+        onRemoveException={onRemoveException}
+      />
     </section>
   );
 }
@@ -548,9 +606,18 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
     case "term_outside_academic_year":
       return "A Term falls outside the year. Every Term runs between the year's first and last days.";
     case "dependent":
+      if (conflict.dependent === "instructional_day_exception") {
+        return attempt === "delete"
+          ? "This year still has days taken out or put in, and a year is not deleted while it has any. Return each to the weekday pattern first."
+          : "A day taken out or put in would fall outside the year's new dates. Return it to the weekday pattern first.";
+      }
       return attempt === "delete"
         ? "This year still has Terms, and a year is not deleted while it has any. Remove its Terms with Change first."
         : "The year's Terms would no longer fit its dates. Change them together with the year.";
+    case "exception_outside_academic_year":
+      return "That day falls outside the year.";
+    case "exception_date_taken":
+      return "That day is already taken out or put in.";
     case "timezone_fixed":
       return "The School's timezone is fixed.";
   }

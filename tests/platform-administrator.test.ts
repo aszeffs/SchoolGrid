@@ -196,9 +196,19 @@ describe("Platform Administrator", () => {
         firstDate: "2026-09-01",
         lastDate: "2027-06-30",
       });
-      expect([enrolled.status, linked.status, memberships.status, invited.status, academicYear.status]).toEqual([
-        201, 201, 200, 201, 201,
-      ]);
+      const academicYearId = (academicYear.body as { academicYear: { id: string } }).academicYear.id;
+      const holiday = await world.alice.post(`/academic-years/${academicYearId}/exceptions`, {
+        date: "2026-11-26",
+        instructional: false,
+      });
+      expect([
+        enrolled.status,
+        linked.status,
+        memberships.status,
+        invited.status,
+        academicYear.status,
+        holiday.status,
+      ]).toEqual([201, 201, 200, 201, 201, 201]);
       return {
         schoolId: world.schoolId,
         personId: student.id,
@@ -206,7 +216,8 @@ describe("Platform Administrator", () => {
         guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
         membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
         invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
-        academicYearId: (academicYear.body as { academicYear: { id: string } }).academicYear.id,
+        academicYearId,
+        exceptionId: (holiday.body as { academicYear: { exceptions: { id: string }[] } }).academicYear.exceptions[0]!.id,
       } as Record<string, string>;
     }
 
@@ -288,6 +299,11 @@ describe("Platform Administrator", () => {
           { method: "POST", url: "/api/schools/:schoolId/academic-years" },
           { method: "PATCH", url: "/api/schools/:schoolId/academic-years/:academicYearId" },
           { method: "DELETE", url: "/api/schools/:schoolId/academic-years/:academicYearId" },
+          { method: "POST", url: "/api/schools/:schoolId/academic-years/:academicYearId/exceptions" },
+          {
+            method: "DELETE",
+            url: "/api/schools/:schoolId/academic-years/:academicYearId/exceptions/:exceptionId",
+          },
         ]),
       );
 

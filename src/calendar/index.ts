@@ -1,7 +1,8 @@
 import type { Queryable } from "../db/transaction.ts";
 
 /**
- * The School calendar: the one place an instant becomes a School date.
+ * The School calendar: the one place an instant becomes a School date, and
+ * the one place a School date is found to be an Instructional day or not.
  *
  * A School date is a calendar date as observed in the School's timezone
  * (CONTEXT.md: School date), written `YYYY-MM-DD`. Working one out means
@@ -19,6 +20,11 @@ import type { Queryable } from "../db/transaction.ts";
 /** A calendar date as observed in one School's timezone, as `YYYY-MM-DD`. */
 export type SchoolDate = string;
 
+/** The days of the week, Monday first, as an Academic Year's weekday pattern names them. */
+export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+
+export type Weekday = (typeof WEEKDAYS)[number];
+
 /**
  * The School date this instant falls on in the School's timezone, or null when
  * there is no such School.
@@ -35,6 +41,64 @@ export async function schoolDateAt(
   );
   return rows[0]?.schoolDate ?? null;
 }
+
+/**
+ * Whether this School date is an Instructional day: one that falls in one of
+ * the School's Academic Years, and is either on a weekday of that year's
+ * pattern and not taken out, or put in (CONTEXT.md: Instructional day). A date
+ * in no Academic Year is not one.
+ */
+export async function isInstructionalDay(
+  database: Queryable,
+  { schoolId, date }: { schoolId: string; date: SchoolDate },
+): Promise<boolean> {
+  const { rows } = await database.query<{ instructional: boolean }>(
+    // Only the year holding the date is stepped through, and only to that date.
+    `SELECT EXISTS (
+       ${INSTRUCTIONAL_DAYS}
+         AND $2::date BETWEEN academic_year.first_date AND academic_year.last_date
+         AND days.day = $2::date
+     ) AS instructional`,
+    [schoolId, date],
+  );
+  return rows[0]!.instructional;
+}
+
+/** Each of a School's Academic Years' Instructional days in order, by the year's identifier. */
+export async function instructionalDaysInSchool(
+  database: Queryable,
+  schoolId: string,
+): Promise<Map<string, SchoolDate[]>> {
+  const { rows } = await database.query<{ academicYearId: string; date: SchoolDate }>(
+    `${INSTRUCTIONAL_DAYS} ORDER BY days.day`,
+    [schoolId],
+  );
+  const byYear = new Map<string, SchoolDate[]>();
+  for (const { academicYearId, date } of rows) {
+    byYear.set(academicYearId, [...(byYear.get(academicYearId) ?? []), date]);
+  }
+  return byYear;
+}
+
+/**
+ * Every Instructional day of School `$1`'s Academic Years, as the rule makes
+ * them: each School date in a year, in by its weekday unless an exception on
+ * it says otherwise. Written once, so the two questions above cannot come to
+ * disagree.
+ *
+ * A School date is a date and nothing more: stepping through a year a day at
+ * a time never meets a clock change, since no timezone is involved.
+ */
+const INSTRUCTIONAL_DAYS = `
+  SELECT academic_year.id AS "academicYearId", to_char(days.day, 'YYYY-MM-DD') AS date
+  FROM app.academic_year
+  CROSS JOIN LATERAL generate_series(academic_year.first_date, academic_year.last_date, interval '1 day') AS days (day)
+  LEFT JOIN app.instructional_day_exception AS exception
+    ON exception.school_id = academic_year.school_id
+   AND exception.academic_year_id = academic_year.id
+   AND exception.date = days.day::date
+  WHERE academic_year.school_id = $1
+    AND coalesce(exception.instructional, extract(isodow FROM days.day)::smallint = ANY (academic_year.weekdays))`;
 
 /**
  * Whether this is an IANA timezone identifier the database knows, spelt
