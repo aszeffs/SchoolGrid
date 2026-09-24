@@ -22,8 +22,10 @@
 
 BEGIN;
 
-INSERT INTO app.school (id, name) VALUES
-  ('5c4001a0-0000-4000-8000-000000000001', 'Riverbend Demo School');
+-- The demo is visited from anywhere, so its School keeps UTC and favours no
+-- visitor's day over another's.
+INSERT INTO app.school (id, name, timezone) VALUES
+  ('5c4001a0-0000-4000-8000-000000000001', 'Riverbend Demo School', 'UTC');
 
 INSERT INTO app.user_account (id, username, password_hash) VALUES
   ('5c4001a0-0000-4000-8000-000000000101', 'demo.administrator',

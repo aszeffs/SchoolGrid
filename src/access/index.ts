@@ -547,6 +547,26 @@ export function authorizeManageEnrollments(actor: Actor): string {
   return authorizeManageRelationships(actor);
 }
 
+/**
+ * Returns the School whose settings the actor may read and change, and refuses
+ * otherwise. Only a School Administrator configures a School, and only the one
+ * they are acting in: its timezone is theirs to see and set, and no one else's
+ * business. Asked before a request's body is read, as for memberships.
+ */
+export function authorizeManageSchoolSettings(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/**
+ * Returns the School whose calendar the actor may ask about, and refuses
+ * otherwise. For now only a School Administrator may: which School date an
+ * instant falls on tells the asker the School's timezone, which is one of its
+ * settings. The slice that first needs another role to ask widens this.
+ */
+export function authorizeReadSchoolCalendar(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
 function authorizeManageRelationships(actor: Actor): string {
   const reason = decideManageRelationships(actor, { schoolId: actor.schoolId });
   if (reason !== null) {

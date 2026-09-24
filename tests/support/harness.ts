@@ -157,8 +157,8 @@ export interface TestServer {
     account: UserAccount;
     displayName?: string;
   }): Promise<PlatformAdministrator>;
-  /** Arranges a School together with its first School Administrator. */
-  provisionSchool(school: { name: string; administrator: UserAccount }): Promise<ProvisionedSchool>;
+  /** Arranges a School together with its first School Administrator, keeping UTC unless given a timezone. */
+  provisionSchool(school: { name: string; timezone?: string; administrator: UserAccount }): Promise<ProvisionedSchool>;
   /**
    * Arranges a Person in a School, optionally one a User account resolves to,
    * holding a membership with this role from now on. A Person with no
@@ -374,9 +374,10 @@ export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: Tes
           userAccountId: account.id,
           displayName: displayName ?? account.username,
         }),
-      provisionSchool: async ({ name, administrator }) => {
+      provisionSchool: async ({ name, timezone = "UTC", administrator }) => {
         const provisioned = await provisionSchool(pool, {
           name,
+          timezone,
           schoolAdministrator: { account: administrator, displayName: administrator.username },
           platformAdministrator: null,
         });
