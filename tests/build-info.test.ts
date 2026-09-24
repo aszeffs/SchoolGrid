@@ -31,8 +31,9 @@ describe("GET /api/build-info", () => {
     });
 
     it("needs no session, and answers a signed-in caller the same", async () => {
-      await server().provisionSchool({ name: "Northside", administrator: await server().createAccount(ALICE) });
-      const signedIn = await server().signIn(ALICE);
+      const alice = await server().createAccount(ALICE);
+      await server().provisionSchool({ name: "Northside", administrator: alice });
+      const signedIn = await server().sessionFor(alice);
 
       const anonymous = await server().client.get("/api/build-info");
       const withSession = await signedIn.get("/api/build-info");

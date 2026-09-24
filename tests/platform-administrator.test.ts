@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
+import type { UserAccount } from "../src/authentication/index.ts";
 import { observable, useTestServer, type Method, type TestClient, type TestResponse } from "./support/harness.ts";
 
 const PAT = { username: "pat", password: "the platform's own staple" };
@@ -8,15 +9,21 @@ const ALICE = { username: "alice", password: "correct horse battery staple" };
 const BOB = { username: "bob", password: "yet another staple, longer" };
 const SAM = { username: "sam", password: "a different staple entirely" };
 
+interface Accounts {
+  sam: UserAccount;
+  bob: UserAccount;
+}
+
 describe("Platform Administrator", () => {
   // The route enumeration below makes more requests than the default limit allows.
   const server = useTestServer({ rateLimit: { max: 10_000, windowMs: 60_000 } });
 
   describe("provisioning a School", () => {
     it("creates a School whose first School Administrator can then act in it", async () => {
-      await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
-      await server().createAccount(ALICE);
-      const pat = await server().signIn(PAT);
+      const patAccount = await server().createAccount(PAT);
+      await server().createPlatformAdministrator({ account: patAccount });
+      const aliceAccount = await server().createAccount(ALICE);
+      const pat = await server().sessionFor(patAccount);
 
       const provisioned = await pat.post("/api/platform/schools", {
         name: "Northside",
@@ -34,7 +41,7 @@ describe("Platform Administrator", () => {
         schoolAdministrator: { id: expect.any(String), displayName: "Alice Administrator" },
       });
 
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(aliceAccount);
       expect((await alice.get("/api/schools")).body).toEqual({ schools: [{ id: school.id, name: school.name }] });
       expect((await alice.inSchool(school.id).get("/persons")).body).toEqual({
         persons: [{ ...schoolAdministrator, claimed: true }],
@@ -45,11 +52,10 @@ describe("Platform Administrator", () => {
     });
 
     it("is recorded in the School's own trail, naming the Platform Administrator, for its School Administrator to read", async () => {
-      const platformAdministrator = await server().createPlatformAdministrator({
-        account: await server().createAccount(PAT),
-      });
-      await server().createAccount(ALICE);
-      const pat = await server().signIn(PAT);
+      const patAccount = await server().createAccount(PAT);
+      const platformAdministrator = await server().createPlatformAdministrator({ account: patAccount });
+      const aliceAccount = await server().createAccount(ALICE);
+      const pat = await server().sessionFor(patAccount);
 
       const provisioned = await pat.post("/api/platform/schools", {
         name: "Northside",
@@ -61,7 +67,7 @@ describe("Platform Administrator", () => {
         schoolAdministrator: { id: string };
       };
 
-      const alice = (await server().signIn(ALICE)).inSchool(school.id);
+      const alice = (await server().sessionFor(aliceAccount)).inSchool(school.id);
       const trail = await alice.get("/audit-records");
 
       expect(trail.status).toBe(200);
@@ -85,9 +91,10 @@ describe("Platform Administrator", () => {
       ["an empty timezone", { timezone: "" }],
       ["a timezone that is not text", { timezone: 8 }],
     ])("requires a timezone the database knows, creating nothing given %s", async (_case, timezone) => {
-      await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
-      await server().createAccount(ALICE);
-      const pat = await server().signIn(PAT);
+      const patAccount = await server().createAccount(PAT);
+      await server().createPlatformAdministrator({ account: patAccount });
+      const aliceAccount = await server().createAccount(ALICE);
+      const pat = await server().sessionFor(patAccount);
 
       const refused = await pat.post("/api/platform/schools", {
         name: "Northside",
@@ -106,9 +113,10 @@ describe("Platform Administrator", () => {
       ["another Platform Administrator's account", "quinn"],
       ["an account that does not exist", "mallory"],
     ])("will not make %s a School Administrator, and creates nothing", async (_case, username) => {
-      await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
+      const patAccount = await server().createAccount(PAT);
+      await server().createPlatformAdministrator({ account: patAccount });
       await server().createPlatformAdministrator({ account: await server().createAccount(QUINN) });
-      const pat = await server().signIn(PAT);
+      const pat = await server().sessionFor(patAccount);
 
       const refused = await pat.post("/api/platform/schools", {
         name: "Northside",
@@ -126,24 +134,25 @@ describe("Platform Administrator", () => {
 
     it.each([
       ["no session", async () => server().client],
-      ["an account that is no Platform Administrator", async () => server().signIn(SAM)],
-      ["a School Administrator", async () => server().signIn(BOB)],
+      ["an account that is no Platform Administrator", async ({ sam }: Accounts) => server().sessionFor(sam)],
+      ["a School Administrator", async ({ bob }: Accounts) => server().sessionFor(bob)],
     ])("refuses %s exactly as a route that does not exist, creating nothing", async (_case, caller) => {
-      await server().createAccount(ALICE);
-      await server().createAccount(SAM);
-      await server().provisionSchool({ name: "Westbrook", administrator: await server().createAccount(BOB) });
+      const alice = await server().createAccount(ALICE);
+      const sam = await server().createAccount(SAM);
+      const bob = await server().createAccount(BOB);
+      await server().provisionSchool({ name: "Westbrook", administrator: bob });
       const request = {
         name: "Northside",
         timezone: "UTC",
         schoolAdministrator: { username: "alice", displayName: "Alice Administrator" },
       };
 
-      const refused = await (await caller()).post("/api/platform/schools", request);
+      const refused = await (await caller({ sam, bob })).post("/api/platform/schools", request);
       const unrouted = await server().client.post("/api/platform/no-such-thing", request);
 
       expect(refused.status).not.toBe(201);
       expect(observable(refused)).toEqual(observable(unrouted));
-      expect((await (await server().signIn(ALICE)).get("/api/schools")).body).toEqual({ schools: [] });
+      expect((await (await server().sessionFor(alice)).get("/api/schools")).body).toEqual({ schools: [] });
     });
   });
 
@@ -168,8 +177,8 @@ describe("Platform Administrator", () => {
         schoolId: school.id,
         platformAdministrator,
         patPerson,
-        pat: await server().signIn(PAT),
-        alice: (await server().signIn(ALICE)).inSchool(school.id),
+        pat: await server().sessionFor(patAccount),
+        alice: (await server().sessionFor(alice)).inSchool(school.id),
       };
     }
 

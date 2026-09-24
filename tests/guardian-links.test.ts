@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { UserAccount } from "../src/authentication/index.ts";
 import type { Person } from "../src/identity/index.ts";
 import { observable, useTestServer, type TestClient } from "./support/harness.ts";
 
@@ -45,6 +46,7 @@ describe("Guardian links", () => {
     /** Wren: a Student at Westbrook. */
     wrenPerson: Person;
     bobAdmin: TestClient;
+    accounts: Record<"alice" | "gina", UserAccount>;
   }
 
   async function arrange(): Promise<World> {
@@ -68,12 +70,13 @@ describe("Guardian links", () => {
       northsideId: northside.school.id,
       westbrookId: westbrook.school.id,
       aliceId: northside.schoolAdministrator.id,
-      aliceAdmin: (await server().signIn(ALICE)).inSchool(northside.school.id),
+      aliceAdmin: (await server().sessionFor(alice)).inSchool(northside.school.id),
       ginaPerson,
       samPerson: await student(northside.school.id, "Sam"),
       skyPerson: await student(northside.school.id, "Sky"),
       wrenPerson: await student(westbrook.school.id, "Wren"),
-      bobAdmin: (await server().signIn(BOB)).inSchool(westbrook.school.id),
+      bobAdmin: (await server().sessionFor(bob)).inSchool(westbrook.school.id),
+      accounts: { alice, gina },
     };
   }
 
@@ -460,7 +463,7 @@ describe("Guardian links", () => {
 
   describe("what a Guardian reaches", () => {
     async function gina(world: World): Promise<TestClient> {
-      return (await server().signIn(GINA)).inSchool(world.northsideId);
+      return (await server().sessionFor(world.accounts.gina)).inSchool(world.northsideId);
     }
 
     it("reaches the Student they are linked to, and no other", async () => {
@@ -555,7 +558,7 @@ describe("Guardian links", () => {
     }
 
     async function clientsFor(world: World): Promise<Clients> {
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.accounts.alice);
       const samLink = await createLink(world.aliceAdmin, linkBody(world));
       const westbrookGuardian = await server().createPerson({
         schoolId: world.westbrookId,
@@ -570,7 +573,7 @@ describe("Guardian links", () => {
       return {
         ...world,
         aliceIn: (schoolId) => alice.inSchool(schoolId),
-        gina: (await server().signIn(GINA)).inSchool(world.northsideId),
+        gina: (await server().sessionFor(world.accounts.gina)).inSchool(world.northsideId),
         samLink,
         wrenLinkId: wrenLink.id,
       };

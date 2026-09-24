@@ -131,8 +131,8 @@ describe("Audit coverage for authentication and refusals", () => {
       });
       expect(failed.status).not.toBe(201);
 
-      const alice = await server().signIn(ALICE);
-      const bob = await server().signIn(BOB);
+      const alice = await server().sessionFor(world.alice);
+      const bob = await server().sessionFor(world.bob);
       const atNorthside = await alice.inSchool(world.northside.id).get("/audit-records");
       const northsideFailures = withAction(await trailOf(alice, world.northside.id), "authentication.failed");
       const eastfieldFailures = withAction(await trailOf(bob, world.eastfield.id), "authentication.failed");
@@ -165,8 +165,8 @@ describe("Audit coverage for authentication and refusals", () => {
 
       await server().client.post("/api/session", body);
 
-      const alice = await server().signIn(ALICE);
-      const bob = await server().signIn(BOB);
+      const alice = await server().sessionFor(world.alice);
+      const bob = await server().sessionFor(world.bob);
       for (const [administrator, schoolId] of [
         [alice, world.northside.id],
         [bob, world.eastfield.id],
@@ -193,7 +193,7 @@ describe("Audit coverage for authentication and refusals", () => {
   describe("refusals", () => {
     it("records the true reason for an absent, a cross-School, and a forbidden Person, and serves none of it", async () => {
       const world = await arrange();
-      const sam = (await server().signIn(SAM)).inSchool(world.northside.id);
+      const sam = (await server().sessionFor(world.sam)).inSchool(world.northside.id);
 
       const absent = await sam.get(`/persons/${ABSENT_ID}`);
       const crossSchool = await sam.get(`/persons/${world.westbrook.bobId}`);
@@ -205,7 +205,7 @@ describe("Audit coverage for authentication and refusals", () => {
         expect(JSON.stringify(observable(response))).not.toMatch(/absent|outside|forbidden|reason/i);
       }
 
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.alice);
       expect(withAction(await trailOf(alice, world.northside.id), "access.refused")).toEqual(
         [
           { reason: "absent", id: ABSENT_ID },
@@ -225,8 +225,8 @@ describe("Audit coverage for authentication and refusals", () => {
 
     it("records a cross-School refusal in the School addressed, never in the School whose record was named", async () => {
       const world = await arrange();
-      const alice = await server().signIn(ALICE);
-      const bob = await server().signIn(BOB);
+      const alice = await server().sessionFor(world.alice);
+      const bob = await server().sessionFor(world.bob);
 
       await alice.inSchool(world.northside.id).get(`/persons/${world.westbrook.bobId}`);
 
@@ -239,7 +239,7 @@ describe("Audit coverage for authentication and refusals", () => {
 
       await server().client.inSchool(world.northside.id).get(`/persons/${world.northside.samId}`);
 
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.alice);
       expect(withAction(await trailOf(alice, world.northside.id), "access.refused")).toEqual([
         expect.objectContaining({
           actorPersonId: null,
@@ -255,11 +255,11 @@ describe("Audit coverage for authentication and refusals", () => {
 
     it("records a caller with no Person in the School by opaque account identifier alone", async () => {
       const world = await arrange();
-      const sam = await server().signIn(SAM);
+      const sam = await server().sessionFor(world.sam);
 
       await sam.inSchool(world.eastfield.id).get("/persons?password=hunter2");
 
-      const bob = await server().signIn(BOB);
+      const bob = await server().sessionFor(world.bob);
       const response = await bob.inSchool(world.eastfield.id).get("/audit-records");
       expect(withAction(await trailOf(bob, world.eastfield.id), "access.refused")).toEqual([
         expect.objectContaining({
@@ -275,13 +275,13 @@ describe("Audit coverage for authentication and refusals", () => {
 
     it("records a request for a route that does not exist within a School", async () => {
       const world = await arrange();
-      const sam = (await server().signIn(SAM)).inSchool(world.northside.id);
+      const sam = (await server().sessionFor(world.sam)).inSchool(world.northside.id);
 
       const unrouted = await sam.get("/no-such-thing");
       const absent = await sam.get(`/persons/${ABSENT_ID}`);
 
       expect(observable(unrouted)).toEqual(observable(absent));
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.alice);
       expect(withAction(await trailOf(alice, world.northside.id), "access.refused")).toContainEqual(
         expect.objectContaining({
           actorPersonId: world.northside.samId,
@@ -293,13 +293,13 @@ describe("Audit coverage for authentication and refusals", () => {
 
     it("bounds an overlong request in the record without changing the refusal", async () => {
       const world = await arrange();
-      const sam = (await server().signIn(SAM)).inSchool(world.northside.id);
+      const sam = (await server().sessionFor(world.sam)).inSchool(world.northside.id);
 
       const refused = await sam.get(`/persons/${"x".repeat(2000)}`);
       const absent = await sam.get(`/persons/${ABSENT_ID}`);
 
       expect(observable(refused)).toEqual(observable(absent));
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.alice);
       const [, recorded] = withAction(await trailOf(alice, world.northside.id), "access.refused");
       expect(recorded!.reason).toBe("malformed-url");
       expect(recorded!.target.id).toHaveLength(256);
@@ -316,13 +316,13 @@ describe("Audit coverage for authentication and refusals", () => {
       ["an unrouted path of the same shape", `/nothing/${"x".repeat(101)}`],
     ])("refuses and records %s like an absent Person", async (_case, path) => {
       const world = await arrange();
-      const sam = (await server().signIn(SAM)).inSchool(world.northside.id);
+      const sam = (await server().sessionFor(world.sam)).inSchool(world.northside.id);
 
       const refused = await sam.get(path);
       const absent = await sam.get(`/persons/${ABSENT_ID}`);
 
       expect(observable(refused)).toEqual(observable(absent));
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.alice);
       const [, recorded] = withAction(await trailOf(alice, world.northside.id), "access.refused");
       expect(recorded).toMatchObject({
         actorPersonId: world.northside.samId,
@@ -332,7 +332,7 @@ describe("Audit coverage for authentication and refusals", () => {
 
     it("records nothing for a refusal addressed to a School that does not exist", async () => {
       const world = await arrange();
-      const sam = await server().signIn(SAM);
+      const sam = await server().sessionFor(world.sam);
 
       const refused = await sam.inSchool(ABSENT_ID).get("/persons");
       const malformed = await sam.inSchool("not-a-uuid").get("/persons");
@@ -348,8 +348,8 @@ describe("Audit coverage for authentication and refusals", () => {
 
   it("records no successful routine read", async () => {
     const world = await arrange();
-    const alice = await server().signIn(ALICE);
-    const sam = await server().signIn(SAM);
+    const alice = await server().sessionFor(world.alice);
+    const sam = await server().sessionFor(world.sam);
     const before = await trailOf(alice, world.northside.id);
 
     for (const [client, path] of [
@@ -368,7 +368,7 @@ describe("Audit coverage for authentication and refusals", () => {
 
   it("leaves a visible trail of a caller probing many identifiers, who sees only uniform refusals", async () => {
     const world = await arrange();
-    const sam = (await server().signIn(SAM)).inSchool(world.northside.id);
+    const sam = (await server().sessionFor(world.sam)).inSchool(world.northside.id);
     const probed = [
       ...Array.from({ length: 20 }, () => randomUUID()),
       world.northside.classmateId,
@@ -383,7 +383,7 @@ describe("Audit coverage for authentication and refusals", () => {
     }
 
     expect(new Set(responses.map((response) => JSON.stringify(response))).size).toBe(1);
-    const alice = await server().signIn(ALICE);
+    const alice = await server().sessionFor(world.alice);
     const refusals = withAction(await trailOf(alice, world.northside.id), "access.refused");
     expect(refusals).toHaveLength(probed.length);
     expect(refusals.every((record) => record.actorPersonId === world.northside.samId)).toBe(true);

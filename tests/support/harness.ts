@@ -5,11 +5,8 @@ import type { FastifyInstance, InjectOptions } from "fastify";
 import { appendAuditRecord, type AuditEntry } from "../../src/audit/index.ts";
 import { toConnectionString } from "../../src/db/connection-string.ts";
 import { createPool, type Database } from "../../src/db/pool.ts";
-import {
-  createUserAccount,
-  type Credentials,
-  type UserAccount,
-} from "../../src/authentication/index.ts";
+import { startBrowserSession, type Credentials, type UserAccount } from "../../src/authentication/index.ts";
+import { hashPassword } from "../../src/authentication/passwords.ts";
 import { grantMembership, recordEnrollment, type Role } from "../../src/access/index.ts";
 import {
   createPerson,
@@ -31,6 +28,23 @@ const PUBLIC_ORIGIN = parsePublicOrigin("https://schoolgrid.test");
  * that is the browser suite's seam.
  */
 const WEB_APP_FIXTURE = new URL("./web-app/", import.meta.url);
+
+/**
+ * Each password an account is arranged with, hashed at production cost the
+ * first time it is used and reused from then on. Tests share a handful of
+ * passwords, so arranging an account almost never costs a hash. A test of
+ * hashing itself creates its account through the Authentication module instead.
+ */
+const passwordHashes = new Map<string, Promise<string>>();
+
+function hashOnce(password: string): Promise<string> {
+  let hash = passwordHashes.get(password);
+  if (hash === undefined) {
+    hash = hashPassword(password);
+    passwordHashes.set(password, hash);
+  }
+  return hash;
+}
 
 export type Method = NonNullable<InjectOptions["method"]>;
 
@@ -91,6 +105,11 @@ export function setCookiesOf(response: TestResponse): string[] {
   return [response.headers["set-cookie"] ?? []].flat();
 }
 
+/** The session token in a cookie as a browser sends it back. */
+function tokenOf(cookie: string): string {
+  return cookie.slice(cookie.indexOf("=") + 1);
+}
+
 /**
  * What a browser sends back for the one cookie a response set: its name and
  * value, without the attributes.
@@ -146,7 +165,11 @@ export interface TestServer {
   database: Database;
   /** A connection as the schema owner, for what only a migration may do. */
   ownerDatabase: Database;
-  /** Arranges a User account. Accounts are provisioned, never self-registered. */
+  /**
+   * Arranges a User account. Accounts are provisioned, never self-registered.
+   * Its password verifies at sign-in, but its hash is shared with every other
+   * account arranged with the same password, so no hashing is done here.
+   */
   createAccount(credentials: Credentials): Promise<UserAccount>;
   /**
    * Arranges a Platform Administrator, made as a deployment makes one: by the
@@ -212,6 +235,17 @@ export interface TestServer {
    * no `Origin`: give it one with `withOrigin`.
    */
   signInWithCookie(credentials: Credentials): Promise<TestClient>;
+  /**
+   * Arranges a Session for this account, stored exactly as sign-in stores one,
+   * and returns a client presenting it as a Bearer token, as `signIn` does.
+   * For every test whose subject is not signing in: it verifies no password.
+   */
+  sessionFor(account: UserAccount): Promise<TestClient>;
+  /**
+   * The same, returning a client sending back the Session's cookie, as
+   * `signInWithCookie` does. That client sends no `Origin` either.
+   */
+  cookieSessionFor(account: UserAccount): Promise<TestClient>;
 }
 
 function connectionString(database: string): string {
@@ -338,6 +372,16 @@ export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: Tes
   let ownerPool: Database;
   let databaseName: string;
 
+  /**
+   * What a browser sends back for a Session started for this account. The
+   * Session is the same whichever form it is presented in: only sign-in
+   * decides between a cookie and a Bearer token.
+   */
+  async function sessionCookieFor(account: UserAccount): Promise<string> {
+    const { cookie } = await startBrowserSession(pool, account);
+    return cookie.split(";")[0]!;
+  }
+
   beforeEach(async () => {
     const { templateDatabase } = inject("postgres");
     databaseName = `test_${randomUUID().replaceAll("-", "")}`;
@@ -368,7 +412,13 @@ export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: Tes
       routes,
       database: pool,
       ownerDatabase: ownerPool,
-      createAccount: (credentials) => createUserAccount(pool, credentials),
+      createAccount: async ({ username, password }) => {
+        const { rows } = await pool.query<UserAccount>(
+          `INSERT INTO app.user_account (username, password_hash) VALUES ($1, $2) RETURNING id, username`,
+          [username, await hashOnce(password)],
+        );
+        return rows[0]!;
+      },
       createPlatformAdministrator: ({ account, displayName }) =>
         createPlatformAdministrator(ownerPool, {
           userAccountId: account.id,
@@ -435,6 +485,8 @@ export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: Tes
         }
         return client.withCookie(cookieSentBackFor(response));
       },
+      sessionFor: async (account) => client.withBearer(tokenOf(await sessionCookieFor(account))),
+      cookieSessionFor: async (account) => client.withCookie(await sessionCookieFor(account)),
     };
   });
 

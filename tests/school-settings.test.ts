@@ -36,45 +36,30 @@ describe("School settings", () => {
 
   /** Northside keeps its time in New York, and Westbrook in Manila. */
   async function arrange(): Promise<World> {
+    const alice = await server().createAccount(ALICE);
+    const bob = await server().createAccount(BOB);
+    const frankie = await server().createAccount(FRANKIE);
+    const sam = await server().createAccount(SAM);
+    const gina = await server().createAccount(GINA);
     const northside = await server().provisionSchool({
       name: "Northside",
       timezone: "America/New_York",
-      administrator: await server().createAccount(ALICE),
+      administrator: alice,
     });
-    const westbrook = await server().provisionSchool({
-      name: "Westbrook",
-      timezone: "Asia/Manila",
-      administrator: await server().createAccount(BOB),
-    });
+    const westbrook = await server().provisionSchool({ name: "Westbrook", timezone: "Asia/Manila", administrator: bob });
     const schoolId = northside.school.id;
-    await server().createPerson({
-      schoolId,
-      displayName: "Frankie",
-      account: await server().createAccount(FRANKIE),
-      role: "faculty",
-    });
-    const sam = await server().createPerson({
-      schoolId,
-      displayName: "Sam",
-      account: await server().createAccount(SAM),
-      role: "student",
-    });
-    await server().enroll(sam);
-    await server().createPerson({
-      schoolId,
-      displayName: "Gina",
-      account: await server().createAccount(GINA),
-      role: "guardian",
-    });
+    await server().createPerson({ schoolId, displayName: "Frankie", account: frankie, role: "faculty" });
+    await server().enroll(await server().createPerson({ schoolId, displayName: "Sam", account: sam, role: "student" }));
+    await server().createPerson({ schoolId, displayName: "Gina", account: gina, role: "guardian" });
     return {
       northsideId: schoolId,
       westbrookId: westbrook.school.id,
       aliceId: northside.schoolAdministrator.id,
-      alice: (await server().signIn(ALICE)).inSchool(schoolId),
-      bob: (await server().signIn(BOB)).inSchool(westbrook.school.id),
-      frankie: (await server().signIn(FRANKIE)).inSchool(schoolId),
-      sam: (await server().signIn(SAM)).inSchool(schoolId),
-      gina: (await server().signIn(GINA)).inSchool(schoolId),
+      alice: (await server().sessionFor(alice)).inSchool(schoolId),
+      bob: (await server().sessionFor(bob)).inSchool(westbrook.school.id),
+      frankie: (await server().sessionFor(frankie)).inSchool(schoolId),
+      sam: (await server().sessionFor(sam)).inSchool(schoolId),
+      gina: (await server().sessionFor(gina)).inSchool(schoolId),
     };
   }
 
