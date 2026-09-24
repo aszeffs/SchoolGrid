@@ -93,7 +93,7 @@ describe("Platform Administrator", () => {
     ])("requires a timezone the database knows, creating nothing given %s", async (_case, timezone) => {
       const patAccount = await server().createAccount(PAT);
       await server().createPlatformAdministrator({ account: patAccount });
-      const aliceAccount = await server().createAccount(ALICE);
+      await server().createAccount(ALICE);
       const pat = await server().sessionFor(patAccount);
 
       const refused = await pat.post("/api/platform/schools", {
