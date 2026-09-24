@@ -31,7 +31,7 @@ function linkedStudents(page: Page) {
   return page.getByRole("table", { name: "Students you are linked to" }).getByRole("row");
 }
 
-/** Every role that lands here is told what is not built, in the glossary's own terms. */
+/** A Guardian landing here is told what is not built, in the glossary's own terms. */
 async function expectSaysWhatIsNotBuilt(page: Page): Promise<void> {
   const notBuilt = page.getByRole("main").getByText(/not built yet/);
   await expect(notBuilt.first()).toBeVisible();
@@ -59,8 +59,11 @@ test("a Student lands on their account, which names their School, their role and
   expect(await factsOn(page)).toMatchObject({ Ended: "Open" });
   // A Student is linked to nobody, so that record is not on their sheet at all.
   await expect(page.getByRole("heading", { name: "Students you are linked to" })).toHaveCount(0);
-  await expectSaysWhatIsNotBuilt(page);
+  // Their classes replace the note on what is not built.
+  await expect(page.getByRole("main").getByText(/not built yet/)).toHaveCount(0);
   await audit(page);
+  await page.getByRole("main").getByRole("link", { name: "Your classes" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
 });
 
 test("a Guardian sees each Student they are linked to, and what that link lets them read", async ({

@@ -124,7 +124,7 @@ export interface Section {
  */
 export const SECTIONS: readonly Section[] = [
   { name: "account", label: "Your account", reachedBy: null },
-  { name: "classes", label: "Your classes", reachedBy: ["faculty"] },
+  { name: "classes", label: "Your classes", reachedBy: ["faculty", "student"] },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
   { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },

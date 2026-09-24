@@ -1,22 +1,25 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useState, type ComponentProps, type FormEvent } from "react";
 import { MAX_NAME_LENGTH } from "../../src/validation/bounds.ts";
 import {
   api,
   readAll,
   type ApiResult,
   type ConflictDetail,
+  type Enrollment,
   type ListedPerson,
   type Membership,
   type ReachedSchool,
   type TaughtClassOffering as Offering,
   type TeachingAssignment,
 } from "./api.ts";
+import { ChangeDates } from "./ChangeDates.tsx";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
+import { Roster } from "./Roster.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { byName, dayOf, hasEnded, schoolDay } from "./standing.ts";
@@ -31,15 +34,16 @@ interface Assignable {
 }
 
 /**
- * One Class Offering: the Course it offers, the Term it runs in, and the
- * Faculty assigned to teach it. It opens from its own URL, so a bookmark to it
- * works.
+ * One Class Offering: the Course it offers, the Term it runs in, the Faculty
+ * assigned to teach it, and its roster. It opens from its own URL, so a
+ * bookmark to it works.
  *
- * A School Administrator reads it with the ways to assign Faculty, change or
- * end an assignment, relabel the offering and delete it. A Faculty member ever
- * assigned to it reads it and changes nothing. Anyone else, and an offering
- * that does not exist or is another School's, is the one "not available"
- * state, as any refusal is (ADR-0002).
+ * A School Administrator reads it with the ways to assign Faculty, roster
+ * Students, change or end either, relabel the offering and delete it. A
+ * Faculty member ever assigned to it reads it and changes nothing. A Student
+ * ever rostered in it reads it without the roster, which the server does not
+ * send them. Anyone else, and an offering that does not exist or is another
+ * School's, is the one "not available" state, as any refusal is (ADR-0002).
  */
 export function ClassOffering({ school, classOfferingId }: { school: ReachedSchool; classOfferingId: string }) {
   const { schoolId } = school;
@@ -49,18 +53,26 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
     async (schoolId: string) => {
       if (!administers) {
         const answered = await api.classOffering(schoolId, classOfferingId);
-        return answered.ok ? { ok: true as const, body: { ...answered.body, assignable: [] } } : answered;
+        return answered.ok ? { ok: true as const, body: { ...answered.body, assignable: [], rosterable: [] } } : answered;
       }
       const answered = await readAll([
         api.classOffering(schoolId, classOfferingId),
         api.memberships(schoolId),
         api.persons(schoolId),
+        api.enrollments(schoolId),
       ]);
       if (!answered.ok) {
         return answered;
       }
-      const [{ classOffering }, { memberships }, { persons }] = answered.body;
-      return { ok: true as const, body: { classOffering, assignable: assignableFaculty(memberships, persons) } };
+      const [{ classOffering }, { memberships }, { persons }, { enrollments }] = answered.body;
+      return {
+        ok: true as const,
+        body: {
+          classOffering,
+          assignable: assignableFaculty(memberships, persons),
+          rosterable: rosterableStudents(classOffering, enrollments, persons),
+        },
+      };
     },
     [classOfferingId, administers],
   );
@@ -80,12 +92,18 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
           administers={administers}
           offering={showing.records.classOffering}
           assignable={showing.records.assignable}
+          rosterable={showing.records.rosterable}
           busy={busy || deleting}
           onAssign={(assignment) => change(() => api.assignTeaching(schoolId, classOfferingId, assignment))}
           onChangeDates={(assignment, bounds) =>
             change(() => api.changeTeachingAssignment(schoolId, assignment.id, bounds))
           }
           onEnd={(assignment) => change(() => api.endTeachingAssignment(schoolId, assignment.id))}
+          onRoster={(rostering) => change(() => api.rosterStudents(schoolId, classOfferingId, rostering))}
+          onChangeRosterDates={(membership, bounds) =>
+            change(() => api.changeRosterMembership(schoolId, membership.id, bounds))
+          }
+          onEndRoster={(membership) => change(() => api.endRosterMembership(schoolId, membership.id))}
           onRelabel={(label) => change(() => api.relabelClassOffering(schoolId, classOfferingId, label))}
           onDelete={async () => {
             setDeleting(true);
@@ -119,6 +137,26 @@ function assignableFaculty(memberships: Membership[], persons: ListedPerson[]): 
     .sort(byName((each) => each.person.displayName));
 }
 
+/**
+ * The Students with an open Enrollment who are not on this roster now, by name:
+ * the only ones the server rosters without overlapping a membership they hold.
+ * One whose membership has ended may be rostered again, from a later day.
+ */
+function rosterableStudents(offering: Offering, enrollments: Enrollment[], persons: ListedPerson[]): ListedPerson[] {
+  const today = dayOf(new Date());
+  const enrolled = new Set(
+    enrollments.filter((enrollment) => enrollment.endedAt === null).map((enrollment) => enrollment.studentPersonId),
+  );
+  const onRoster = new Set(
+    (offering.rosterMemberships ?? [])
+      .filter((membership) => (membership.lastDate ?? offering.term.lastDate) >= today)
+      .map((membership) => membership.person.id),
+  );
+  return persons
+    .filter((person) => enrolled.has(person.id) && !onRoster.has(person.id))
+    .sort(byName((person) => person.displayName));
+}
+
 /** What is waiting on a confirmation: which assignment, and which of the two changes to it. */
 type Confirming = { kind: "dates" | "end"; assignment: TeachingAssignment };
 
@@ -127,10 +165,14 @@ function OfferingSheet({
   administers,
   offering,
   assignable,
+  rosterable,
   busy,
   onAssign,
   onChangeDates,
   onEnd,
+  onRoster,
+  onChangeRosterDates,
+  onEndRoster,
   onRelabel,
   onDelete,
 }: {
@@ -138,6 +180,7 @@ function OfferingSheet({
   administers: boolean;
   offering: Offering;
   assignable: Assignable[];
+  rosterable: ListedPerson[];
   busy: boolean;
   onAssign: (assignment: { personId: string; firstDate?: string; lastDate?: string }) => Promise<ApiResult<unknown>>;
   onChangeDates: (
@@ -145,6 +188,9 @@ function OfferingSheet({
     bounds: { firstDate: string; lastDate: string | null },
   ) => Promise<ApiResult<unknown>>;
   onEnd: (assignment: TeachingAssignment) => Promise<ApiResult<unknown>>;
+  onRoster: ComponentProps<typeof Roster>["onRoster"];
+  onChangeRosterDates: ComponentProps<typeof Roster>["onChangeDates"];
+  onEndRoster: ComponentProps<typeof Roster>["onEnd"];
   onRelabel: (label: string | null) => Promise<ApiResult<unknown>>;
   onDelete: () => Promise<ApiResult<unknown>>;
 }) {
@@ -211,7 +257,7 @@ function OfferingSheet({
   const legend = (
     <>
       <h2>Key</h2>
-      <p>One Course, offered for one Term, and who teaches it.</p>
+      <p>One Course, offered for one Term, who teaches it, and who is in it.</p>
       <dl>
         <Key term="Class Offering">
           A Course offered for one Term. Offering it in another Term is another Class Offering.
@@ -221,7 +267,12 @@ function OfferingSheet({
           One Faculty member teaching this offering, from one School date to another inside its Term. Several may teach
           it at once.
         </Key>
-        <Key term="End of Term">An assignment still open: it runs until the Term&rsquo;s last day.</Key>
+        {offering.rosterMemberships !== undefined && (
+          <Key term="Roster membership">
+            One Student in this offering, from one School date to another inside its Term.
+          </Key>
+        )}
+        <Key term="End of Term">Still open: it runs until the Term&rsquo;s last day.</Key>
       </dl>
     </>
   );
@@ -385,7 +436,25 @@ function OfferingSheet({
               </>
             )}
           </form>
+        </>
+      )}
 
+      {offering.rosterMemberships !== undefined && (
+        <Roster
+          schoolId={schoolId}
+          administers={administers}
+          offering={offering}
+          roster={offering.rosterMemberships}
+          rosterable={rosterable}
+          busy={busy}
+          onRoster={onRoster}
+          onChangeDates={onChangeRosterDates}
+          onEnd={onEndRoster}
+        />
+      )}
+
+      {administers && (
+        <>
           <form onSubmit={relabel} aria-label="Relabel this Class Offering">
             <h2>Relabel</h2>
             <label>
@@ -418,7 +487,7 @@ function OfferingSheet({
 
       {confirming?.kind === "dates" && (
         <ChangeDates
-          assignment={confirming.assignment}
+          held={confirming.assignment}
           whose={whose(confirming.assignment)}
           term={term}
           busy={busy}
@@ -490,64 +559,6 @@ function OfferingSheet({
   );
 }
 
-/** Asks for an assignment's new dates, inside its Term, and names what they mean before they are set. */
-function ChangeDates({
-  assignment,
-  whose,
-  term,
-  busy,
-  onCancel,
-  onSave,
-}: {
-  assignment: TeachingAssignment;
-  whose: string;
-  term: Offering["term"];
-  busy: boolean;
-  onCancel: () => void;
-  onSave: (bounds: { firstDate: string; lastDate: string | null }) => void;
-}) {
-  const [firstDate, setFirstDate] = useState(assignment.firstDate);
-  const [lastDate, setLastDate] = useState(assignment.lastDate ?? "");
-  const inOrder = lastDate === "" || lastDate >= firstDate;
-  return (
-    <ConfirmDialog
-      title={`Change the dates of ${whose}?`}
-      confirm="Save the dates"
-      busy={busy || firstDate === "" || !inOrder}
-      onCancel={onCancel}
-      onConfirm={() => onSave({ firstDate, lastDate: lastDate === "" ? null : lastDate })}
-    >
-      <p>
-        Both days are taught, and both fall inside {term.name}. Left without an end, it runs to the Term&rsquo;s last
-        day.
-      </p>
-      <label>
-        From
-        <input
-          type="date"
-          name="firstDate"
-          required
-          min={term.firstDate}
-          max={term.lastDate}
-          value={firstDate}
-          onChange={(event) => setFirstDate(event.currentTarget.value)}
-        />
-      </label>
-      <label>
-        Until (optional)
-        <input
-          type="date"
-          name="lastDate"
-          min={firstDate === "" ? term.firstDate : firstDate}
-          max={term.lastDate}
-          value={lastDate}
-          onChange={(event) => setLastDate(event.currentTarget.value)}
-        />
-      </label>
-    </ConfirmDialog>
-  );
-}
-
 /** Why an assignment was not made or changed, or the offering not deleted, in the words of the rule. */
 function assignmentConflictMessage(conflict: ConflictDetail): string {
   switch (conflict.conflict) {
@@ -556,7 +567,9 @@ function assignmentConflictMessage(conflict: ConflictDetail): string {
     case "teaching_assignment_outside_term":
       return "Those days fall outside the Term. A Teaching assignment runs between the Term’s first and last days.";
     case "dependent":
-      return "Faculty have been assigned to this offering, and it is not deleted once they have: the assignments are the record of who taught it.";
+      return conflict.dependent === "roster_membership"
+        ? "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was in the class."
+        : "Faculty have been assigned to this offering, and it is not deleted once they have: the assignments are the record of who taught it.";
     default:
       return "That change could not be made.";
   }

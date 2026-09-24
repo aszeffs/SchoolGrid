@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { MAX_REASON_LENGTH } from "../../src/validation/bounds.ts";
 import { api, readAll, type Enrollment, type GuardianLink, type ReachedSchool } from "./api.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
@@ -203,6 +203,8 @@ function EnrollmentsSheet({
 
       {ending !== null && (
         <EndEnrollment
+          schoolId={schoolId}
+          enrollment={ending}
           student={nameOf(ending.studentPersonId)}
           guardians={guardiansOf(ending, guardianLinks).map((link) => nameOf(link.guardianPersonId))}
           busy={busy}
@@ -226,14 +228,22 @@ function guardiansOf(enrollment: Enrollment, links: GuardianLink[]): GuardianLin
  * The confirmation for the app's most consequential action, naming the cascade
  * in the glossary's terms and with the counts, and asking why: an Enrollment
  * does not end without a reason, which goes on its Audit record.
+ *
+ * The Roster memberships it ends are counted by the server, which knows which
+ * School date today is: each still running after today ends today, and one not
+ * yet begun is removed (CONTEXT.md: Enrollment).
  */
 function EndEnrollment({
+  schoolId,
+  enrollment,
   student,
   guardians,
   busy,
   onCancel,
   onEnd,
 }: {
+  schoolId: string;
+  enrollment: Enrollment;
   student: string;
   guardians: string[];
   busy: boolean;
@@ -241,7 +251,21 @@ function EndEnrollment({
   onEnd: (reason: string) => void;
 }) {
   const [reason, setReason] = useState("");
+  const [rostered, setRostered] = useState<number | null>(null);
   const links = guardians.length === 1 ? "1 Guardian link" : `${guardians.length} Guardian links`;
+
+  useEffect(() => {
+    let current = true;
+    void api.enrollmentConsequences(schoolId, enrollment.id).then((answered) => {
+      if (current && answered.ok) {
+        setRostered(answered.body.consequences.rosterMemberships);
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [schoolId, enrollment.id]);
+
   return (
     <ConfirmDialog
       title={`End ${student}’s Enrollment?`}
@@ -251,9 +275,18 @@ function EndEnrollment({
       onConfirm={() => onEnd(reason)}
     >
       <p>{student} departs the School. Ending this Enrollment also ends:</p>
-      <ul className="consequences">
+      <ul className="consequences" aria-live="polite">
         <li>
-          <strong>0 open Roster memberships.</strong> Rostering is not built yet, so {student} holds none.
+          {rostered === null ? (
+            "Counting the Roster memberships this ends…"
+          ) : (
+            <>
+              <strong>{rostered === 1 ? "1 open Roster membership" : `${rostered} open Roster memberships`}.</strong>{" "}
+              {rostered === 0
+                ? `${student} is on no roster past today.`
+                : `Those of ${student}’s still running end today; any not yet begun is removed.`}
+            </>
+          )}
         </li>
         <li>
           <strong>{links}.</strong>{" "}

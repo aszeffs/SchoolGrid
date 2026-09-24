@@ -192,14 +192,14 @@ test("a Faculty member finds their classes in the navigation and reads who teach
 });
 
 test("a Faculty member with no class is told so, and other roles are not offered the page", async ({ page, audit }) => {
-  const { severalRoles, student, schools } = seeded();
+  const { severalRoles, guardian, schools } = seeded();
   await signIn(page, severalRoles);
   await openSection(page, "Your classes");
   await expect(page.getByRole("main")).toContainText("You have no classes yet.");
   await audit(page);
   await page.getByRole("button", { name: "Sign out" }).click();
 
-  await signIn(page, student);
+  await signIn(page, guardian);
   await expect(page.getByRole("navigation")).toBeVisible();
   await expect(page.getByRole("navigation").getByRole("link", { name: "Your classes" })).toHaveCount(0);
   await page.goto(`/schools/${await schoolIdOf(page, schools[0]!)}/classes`);
