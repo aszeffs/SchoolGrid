@@ -129,15 +129,17 @@ describe("Browser sessions", () => {
   /**
    * Alice administers Northside, where a Student is enrolled and linked to a
    * Guardian, an unclaimed Person is invited, and an Academic Year is planned
-   * with a Course offered in it; Pat is a Platform Administrator. Each is
+   * with a Course offered in it, which Alice also teaches as Faculty, so the
+   * routes only Faculty reach answer her too; Pat is a Platform Administrator. Each is
    * signed in twice, once with each form of session.
    */
   async function arrange() {
     await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
-    const { school } = await server().provisionSchool({
+    const { school, schoolAdministrator } = await server().provisionSchool({
       name: "Northside",
       administrator: await server().createAccount(ALICE),
     });
+    await server().grantMembership({ person: schoolAdministrator, role: "faculty" });
     const aliceBearer = (await server().signIn(ALICE)).inSchool(school.id);
     const student = await server().createPerson({ schoolId: school.id, displayName: "Sam", role: "student" });
     const guardian = await server().createPerson({ schoolId: school.id, displayName: "Gina", role: "guardian" });
@@ -168,6 +170,10 @@ describe("Browser sessions", () => {
     const course = await aliceBearer.post("/courses", { name: "Algebra I" });
     const courseId = (course.body as { course: { id: string } }).course.id;
     const offering = await aliceBearer.post("/class-offerings", { courseId, termId });
+    const classOfferingId = (offering.body as { classOffering: { id: string } }).classOffering.id;
+    const assigned = await aliceBearer.post(`/class-offerings/${classOfferingId}/teaching-assignments`, {
+      personId: schoolAdministrator.id,
+    });
     expect([
       enrolled.status,
       linked.status,
@@ -178,7 +184,8 @@ describe("Browser sessions", () => {
       divided.status,
       course.status,
       offering.status,
-    ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201]);
+      assigned.status,
+    ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201, 201]);
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -190,7 +197,8 @@ describe("Browser sessions", () => {
       academicYearId,
       exceptionId: (holiday.body as { academicYear: { exceptions: { id: string }[] } }).academicYear.exceptions[0]!.id,
       courseId,
-      classOfferingId: (offering.body as { classOffering: { id: string } }).classOffering.id,
+      classOfferingId,
+      teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
     };
     return {
       school,

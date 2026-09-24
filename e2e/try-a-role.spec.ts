@@ -14,11 +14,11 @@ const ABOUT_THE_DATA = [/invented/i, /anyone can change/i, /resets every night/i
 
 /**
  * The parts of the glossary whose screens are not built. A role's line may
- * name one only to say so: three of the four roles reach nothing but People
- * (SECTIONS in web/src/routes.ts), and a line selling the academic screens
- * would mis-sell them.
+ * name one only to say so: Students and Guardians reach nothing but their own
+ * account and People (SECTIONS in web/src/routes.ts), and a line selling the
+ * academic screens would mis-sell them.
  */
-const NOT_BUILT = /Class Offering|Attendance|Term result|published academic records/;
+const NOT_BUILT = /Attendance|Term result|published academic records/;
 
 test("without demo mode the sign-in page offers no roles to try", async ({ page }) => {
   // Asserted once the page has been told there are none, or an absent panel

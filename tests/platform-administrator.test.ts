@@ -217,6 +217,11 @@ describe("Platform Administrator", () => {
       const course = await world.alice.post("/courses", { name: "Algebra I" });
       const courseId = (course.body as { course: { id: string } }).course.id;
       const offering = await world.alice.post("/class-offerings", { courseId, termId });
+    const faculty = await server().createPerson({ schoolId: world.schoolId, displayName: "Frankie", role: "faculty" });
+    const classOfferingId = (offering.body as { classOffering: { id: string } }).classOffering.id;
+    const assigned = await world.alice.post(`/class-offerings/${classOfferingId}/teaching-assignments`, {
+      personId: faculty.id,
+    });
       expect([
         enrolled.status,
         linked.status,
@@ -238,7 +243,8 @@ describe("Platform Administrator", () => {
         academicYearId,
         exceptionId: (holiday.body as { academicYear: { exceptions: { id: string }[] } }).academicYear.exceptions[0]!.id,
         courseId,
-        classOfferingId: (offering.body as { classOffering: { id: string } }).classOffering.id,
+        classOfferingId,
+        teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
       } as Record<string, string>;
     }
 
@@ -334,6 +340,11 @@ describe("Platform Administrator", () => {
           { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId" },
           { method: "PATCH", url: "/api/schools/:schoolId/class-offerings/:classOfferingId" },
           { method: "DELETE", url: "/api/schools/:schoolId/class-offerings/:classOfferingId" },
+          { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/teaching-assignments" },
+          { method: "PATCH", url: "/api/schools/:schoolId/teaching-assignments/:teachingAssignmentId" },
+          { method: "DELETE", url: "/api/schools/:schoolId/teaching-assignments/:teachingAssignmentId" },
+          { method: "GET", url: "/api/schools/:schoolId/memberships/:membershipId/consequences" },
+          { method: "GET", url: "/api/schools/:schoolId/account/class-offerings" },
         ]),
       );
 

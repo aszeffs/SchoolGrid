@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Authenticator } from "../authentication/index.ts";
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
 import type { Database } from "../db/pool.ts";
+import { schoolDateAt } from "../calendar/index.ts";
 import { transactionTime, withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { fieldsOf, instantFrom, reasonFrom, reasonOnly } from "../http/request-body.ts";
@@ -9,6 +10,8 @@ import { registerSchoolScope } from "../http/school-scope.ts";
 import { findPerson } from "../identity/index.ts";
 import { registerEnrollmentRoutes } from "./enrollment-routes.ts";
 import { registerGuardianLinkRoutes } from "./guardian-link-routes.ts";
+import { endTeachingWithMembership, registerTeachingAssignmentRoutes } from "./teaching-assignment-routes.ts";
+import { countTeachingAssignmentsRunningPast } from "./teaching-assignments.ts";
 import {
   authorizeGrantMembershipTo,
   authorizeManageMembership,
@@ -189,6 +192,7 @@ export function registerAccessRoutes(
           after: changed,
           reason: change.reason,
         });
+        await endTeachingWithMembership(transaction, actor, changed, change.reason);
         return { membership: present(changed) };
       });
     });
@@ -210,11 +214,33 @@ export function registerAccessRoutes(
           after: revoked,
           reason,
         });
+        await endTeachingWithMembership(transaction, actor, revoked, reason);
         return { membership: present(revoked) };
       });
     });
 
+    /*
+     * What ending a membership at this instant would end with it, counted so a
+     * confirmation can name it before anything changes: a Faculty membership's
+     * Teaching assignments. Ending it now is revoking it, which ends it no
+     * earlier than its start. The instant is `endsAt`, or now when none is
+     * named.
+     */
+    scope.get("/memberships/:membershipId/consequences", async (actor, { params, query }) => {
+      const membershipId = params["membershipId"]!;
+      const membership = authorizeManageMembership(actor, membershipId, await findMembership(database, membershipId));
+      const at = query["endsAt"] === undefined ? await transactionTime(database) : instantFrom(query["endsAt"], "endsAt");
+      if (membership.role !== "faculty") {
+        return { consequences: { teachingAssignments: 0 } };
+      }
+      const endsAt = at < membership.startsAt ? membership.startsAt : at;
+      const endsOn = (await schoolDateAt(database, { schoolId: membership.schoolId, at: endsAt }))!;
+      const person = { id: membership.personId, schoolId: membership.schoolId };
+      return { consequences: { teachingAssignments: await countTeachingAssignmentsRunningPast(database, person, endsOn) } };
+    });
+
     registerGuardianLinkRoutes(scope, database);
+    registerTeachingAssignmentRoutes(scope, database);
     registerEnrollmentRoutes(scope, database);
   });
 }

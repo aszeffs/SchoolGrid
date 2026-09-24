@@ -107,7 +107,7 @@ test("an account reaching one School goes straight into it, and sees only what i
   const header = page.getByRole("banner");
   await expect(header.getByText(schools[0]!, { exact: true })).toBeVisible();
   await expect(header.getByText(`Signed in as ${faculty.displayName}`)).toBeVisible();
-  await expect(navLinks(page)).toHaveText(["Your account", "People"]);
+  await expect(navLinks(page)).toHaveText(["Your account", "Your classes", "People"]);
   // With nowhere else to go, no switcher is offered.
   await expect(header.getByText("Switch School")).toHaveCount(0);
 
@@ -115,7 +115,7 @@ test("an account reaching one School goes straight into it, and sees only what i
   const seen = await navigationsSeen(page);
   expect(seen.length).toBeGreaterThan(0);
   for (const links of seen) {
-    expect(links).toEqual(["Your account", "People"]);
+    expect(links).toEqual(["Your account", "Your classes", "People"]);
   }
 
   // Asked for by its URL, a page their roles do not reach still asks for its

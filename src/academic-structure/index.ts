@@ -387,11 +387,16 @@ async function replaceTerms(
     if (before.name === term.name && before.firstDate === term.firstDate && before.lastDate === term.lastDate) {
       continue;
     }
-    const { rows } = await transaction.query<Term>(
-      `UPDATE app.term SET name = $3, first_date = $4, last_date = $5
-       WHERE school_id = $1 AND id = $2
-       RETURNING ${TERM_COLUMNS}`,
-      [before.schoolId, before.id, term.name, term.firstDate, term.lastDate],
+    // A Teaching assignment left outside the Term's new bounds would be stranded.
+    const { rows } = await withConstraintsNamed(
+      { teaching_assignment_inside_term: { conflict: "dependent", dependent: "teaching_assignment" } },
+      () =>
+        transaction.query<Term>(
+          `UPDATE app.term SET name = $3, first_date = $4, last_date = $5
+           WHERE school_id = $1 AND id = $2
+           RETURNING ${TERM_COLUMNS}`,
+          [before.schoolId, before.id, term.name, term.firstDate, term.lastDate],
+        ),
     );
     changed.push({ before, after: rows[0]! });
   }

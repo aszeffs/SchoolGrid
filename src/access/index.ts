@@ -20,17 +20,26 @@ import {
   type Membership,
   type Role,
 } from "./memberships.ts";
+import { schoolDateAt } from "../calendar/index.ts";
+import { transactionTime } from "../db/transaction.ts";
+import {
+  classOfferingIdsTaughtBy,
+  classOfferingsTaughtBy,
+  teachingAssignmentsOn,
+  type TeachingAssignment,
+} from "./teaching-assignments.ts";
 
 /**
  * The Access module is the sole authority on whether an actor may do something
- * to a target. It owns School memberships, Guardian links, and Enrollments, and
- * nothing outside it reads one: an Actor's roles, links, and Enrollment are kept
+ * to a target. It owns School memberships, Guardian links, Enrollments, and
+ * Teaching assignments, and nothing outside it reads one: an Actor's roles, links, and Enrollment are kept
  * here rather than on the Actor, so a handler holding an Actor can ask this
  * module for a decision but cannot make the decision itself.
  */
 export { grantMembership, ROLES, type Membership, type Role } from "./memberships.ts";
 export { recordEnrollment, type Enrollment } from "./enrollments.ts";
 export { linkGuardian, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
+export type { TeachingAssignment } from "./teaching-assignments.ts";
 
 /**
  * Why a request was refused. It is written to the Audit record, where a School
@@ -102,6 +111,13 @@ interface Standing {
    * return with nothing written to say so.
    */
   enrolled: boolean;
+  /**
+   * The Class Offerings the Actor was ever assigned to teach. Unlike a link or
+   * an Enrollment, these outlast the Faculty membership: one who taught an
+   * offering keeps reading its history while they hold any role in the School
+   * (CONTEXT.md: Teaching assignment).
+   */
+  taughtClassOfferingIds: ReadonlySet<string>;
 }
 
 // Keyed by the Actor object this module handed out. An Actor built anywhere
@@ -149,8 +165,9 @@ export async function resolveActor(
   // whatever else they still hold.
   const linkedStudents = roles.has("guardian") ? await linkedStudentIds(database, person) : new Set<string>();
   const enrolled = roles.has("student") && (await hasOpenEnrollment(database, person));
+  const taught = await classOfferingIdsTaughtBy(database, person);
   const actor: Actor = Object.freeze({ person, schoolId: person.schoolId });
-  standingOf.set(actor, { roles, linkedStudentIds: linkedStudents, enrolled });
+  standingOf.set(actor, { roles, linkedStudentIds: linkedStudents, enrolled, taughtClassOfferingIds: taught });
   return actor;
 }
 
@@ -322,6 +339,78 @@ export async function ownAccount(database: Queryable, actor: Actor): Promise<Own
         : [{ student: { id: student.id, displayName: student.displayName }, accessProfile: link.accessProfile }];
     }),
   };
+}
+
+/** A Teaching assignment as served: whose it is, by display name alone, and its bounds. */
+export interface ServedTeachingAssignment {
+  id: string;
+  person: { id: string; displayName: string };
+  firstDate: string;
+  lastDate: string | null;
+}
+
+/**
+ * These Teaching assignments as served, in the order a Class Offering lists
+ * them: by when each begins, then by whose it is. Only a caller already
+ * permitted to read them asks.
+ */
+export async function serveTeachingAssignments(
+  database: Queryable,
+  assignments: readonly TeachingAssignment[],
+): Promise<ServedTeachingAssignment[]> {
+  // Read through the Identity module, as ownAccount reads linked Students.
+  const persons = await findPersons(
+    database,
+    assignments.map((assignment) => assignment.personId),
+  );
+  const served = assignments.map(({ id, personId, firstDate, lastDate }) => ({
+    id,
+    person: { id: personId, displayName: persons.get(personId)?.displayName ?? "" },
+    firstDate,
+    lastDate,
+  }));
+  return served.sort(
+    (a, b) =>
+      a.firstDate.localeCompare(b.firstDate) ||
+      a.person.displayName.localeCompare(b.person.displayName) ||
+      a.id.localeCompare(b.id),
+  );
+}
+
+/**
+ * Each of these Class Offerings' Teaching assignments as served, by offering.
+ * Only for offerings the caller has already been permitted to read.
+ */
+export async function teachingAssignmentsServedOn(
+  database: Queryable,
+  classOfferingIds: readonly string[],
+): Promise<Map<string, ServedTeachingAssignment[]>> {
+  const assignments = await teachingAssignmentsOn(database, classOfferingIds);
+  const offeringOf = new Map(assignments.map((assignment) => [assignment.id, assignment.classOfferingId]));
+  const byOffering = new Map(classOfferingIds.map((id) => [id, [] as ServedTeachingAssignment[]]));
+  for (const served of await serveTeachingAssignments(database, assignments)) {
+    byOffering.get(offeringOf.get(served.id)!)?.push(served);
+  }
+  return byOffering;
+}
+
+/**
+ * The Class Offerings the actor was ever assigned to teach: those where an
+ * assignment of theirs still runs today or later, and those where every one
+ * has ended. Only for an actor already permitted to list them.
+ */
+export async function ownClassOfferings(
+  database: Queryable,
+  actor: Actor,
+): Promise<{ current: Set<string>; past: Set<string> }> {
+  const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
+  const taught = await classOfferingsTaughtBy(database, actor.person, today);
+  const current = new Set<string>();
+  const past = new Set<string>();
+  for (const [id, { current: isCurrent }] of taught) {
+    (isCurrent ? current : past).add(id);
+  }
+  return { current, past };
 }
 
 function holds(actor: Actor, role: Role): boolean {
@@ -631,10 +720,8 @@ export function authorizeManageTerm<T extends { schoolId: string }>(actor: Actor
 }
 
 /**
- * Returns the Class Offering the actor may read, relabel, or delete, and
- * refuses otherwise. For now only a School Administrator reaches one; the
- * slices that give Faculty and Students their own Class Offerings widen
- * reading it.
+ * Returns the Class Offering the actor may relabel, delete, or assign Faculty
+ * to, and refuses otherwise. Only a School Administrator changes one.
  */
 export function authorizeManageClassOffering<O extends { schoolId: string }>(
   actor: Actor,
@@ -644,6 +731,81 @@ export function authorizeManageClassOffering<O extends { schoolId: string }>(
   const reason = decideManageRelationships(actor, target);
   if (reason !== null) {
     throw new Refused(reason, { type: "class_offering", id: classOfferingId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Class Offering the actor may read, with its Teaching
+ * assignments, and refuses otherwise. A School Administrator reads every one
+ * in their School. Anyone ever assigned to teach one reads it, ended
+ * assignments included, even once their Faculty membership has ended, and no
+ * other (CONTEXT.md: Teaching assignment).
+ * Of the Persons it names they are told display names alone, so this grants
+ * nothing about those Persons beyond it.
+ */
+export function authorizeReadClassOffering<O extends { id: string; schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
+  const reason =
+    outOfReach(actor, target) ??
+    (holds(actor, "school_administrator") || hasTaught(actor, target!) ? null : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "class_offering", id: classOfferingId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the School whose Class Offerings the actor may list as the ones they
+ * teach and taught, and refuses otherwise. Only a Faculty member has any: the
+ * slice giving Students their own classes widens this.
+ */
+export function authorizeReadOwnClassOfferings(actor: Actor): string {
+  if (!holds(actor, "faculty")) {
+    throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+  }
+  return actor.schoolId;
+}
+
+function hasTaught(actor: Actor, offering: { id: string }): boolean {
+  return standingOf.get(actor)?.taughtClassOfferingIds.has(offering.id) ?? false;
+}
+
+/**
+ * Returns the Person the actor may assign to teach, and refuses otherwise.
+ * Whether that Person holds a Faculty membership is a matter of the request,
+ * checked once this has permitted it.
+ */
+export function authorizeAssignTeaching(actor: Actor, personId: string, target: Person | null): Person {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "person", id: personId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the School whose Teaching assignments the actor may make, and
+ * refuses otherwise. They are managed as memberships are: by a School
+ * Administrator, in the School they are acting in, asked before the body is
+ * read.
+ */
+export function authorizeManageTeachingAssignments(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/** Returns the Teaching assignment the actor may change or end, and refuses otherwise. */
+export function authorizeManageTeachingAssignment<A extends TeachingAssignment>(
+  actor: Actor,
+  teachingAssignmentId: string,
+  target: A | null,
+): A {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "teaching_assignment", id: teachingAssignmentId });
   }
   return target!;
 }

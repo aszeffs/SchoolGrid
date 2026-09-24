@@ -20,6 +20,7 @@ import { SchoolSettings } from "./SchoolSettings.tsx";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
+import { YourClasses } from "./YourClasses.tsx";
 
 type State =
   | { kind: "loading" }
@@ -193,6 +194,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
   switch (route.name) {
     case "account":
       return <Account school={school} />;
+    case "classes":
+      return <YourClasses school={school} />;
     case "persons":
       return <Persons school={school} />;
     case "invitations":

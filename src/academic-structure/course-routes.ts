@@ -3,6 +3,10 @@ import {
   authorizeManageClassOffering,
   authorizeManageCourse,
   authorizeManageTerm,
+  authorizeReadClassOffering,
+  authorizeReadOwnClassOfferings,
+  ownClassOfferings,
+  teachingAssignmentsServedOn,
   type Actor,
 } from "../access/index.ts";
 import type { AuditValues } from "../audit/index.ts";
@@ -205,14 +209,40 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
     });
   });
 
+  // Read by a School Administrator, and by anyone ever assigned to teach it, with its Teaching assignments.
   scope.get("/class-offerings/:classOfferingId", async (actor, { params }) => {
     const classOfferingId = params["classOfferingId"]!;
-    const offering = authorizeManageClassOffering(
-      actor,
-      classOfferingId,
-      await findClassOffering(database, classOfferingId),
+    const offering = authorizeReadClassOffering(actor, classOfferingId, await findClassOffering(database, classOfferingId));
+    const assignments = await teachingAssignmentsServedOn(database, [offering.id]);
+    return { classOffering: { ...presentOffering(offering), teachingAssignments: assignments.get(offering.id)! } };
+  });
+
+  /*
+   * The Class Offerings a Faculty member teaches or taught, each with its
+   * Teaching assignments: those still running today or later first, in Term
+   * order, then those over, the most recent first.
+   */
+  scope.get("/account/class-offerings", async (actor) => {
+    const schoolId = authorizeReadOwnClassOfferings(actor);
+    const { current, past } = await ownClassOfferings(database, actor);
+    const offerings = (await classOfferingsInSchool(database, schoolId)).filter(
+      (offering) => current.has(offering.id) || past.has(offering.id),
     );
-    return { classOffering: presentOffering(offering) };
+    const assignments = await teachingAssignmentsServedOn(
+      database,
+      offerings.map((offering) => offering.id),
+    );
+    const served = (offering: DescribedClassOffering) => ({
+      ...presentOffering(offering),
+      teachingAssignments: assignments.get(offering.id)!,
+    });
+    return {
+      current: offerings.filter((offering) => current.has(offering.id)).map(served),
+      past: offerings
+        .filter((offering) => past.has(offering.id))
+        .reverse()
+        .map(served),
+    };
   });
 
   scope.patch("/class-offerings/:classOfferingId", async (actor, { params, body }) => {

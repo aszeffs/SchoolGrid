@@ -50,8 +50,17 @@ export function dayAfter(moment: Date): string {
   const next = new Date(moment);
   next.setHours(0, 0, 0, 0);
   next.setDate(next.getDate() + 1);
+  return dayOf(next);
+}
+
+/**
+ * This moment's day in the reader's own time zone, as a date field writes it.
+ * Near enough to the School's date to decide what a page offers; what is
+ * recorded is decided by the server, in the School's timezone.
+ */
+export function dayOf(moment: Date): string {
   const pad = (value: number, width = 2) => String(value).padStart(width, "0");
-  return `${pad(next.getFullYear(), 4)}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+  return `${pad(moment.getFullYear(), 4)}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`;
 }
 
 /**
