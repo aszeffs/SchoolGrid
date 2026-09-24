@@ -112,6 +112,9 @@ function termsFrom(value: unknown, year: DividedAcademicYear): ProposedTerm[] {
  * The Academic Year the actor may change or delete, locked for the rest of
  * the transaction with its Terms. The decision comes first and the lock
  * second: see lockAcademicYear.
+ *
+ * A year deleted between the two is decided again as the absent year it now
+ * is, so the caller is refused as for any other.
  */
 async function lockPermitted(
   transaction: Queryable,
@@ -123,40 +126,30 @@ async function lockPermitted(
     academicYearId,
     await findAcademicYear(transaction, academicYearId),
   );
-  return lockAcademicYear(transaction, permitted);
+  const locked = await lockAcademicYear(transaction, permitted);
+  return locked ?? authorizeManageAcademicYear<DividedAcademicYear>(actor, academicYearId, null);
 }
 
-async function recordYearChange(
+/** How each kind of record this module changes is named and written in the Audit record. */
+const YEAR_RECORD = { type: "academic_year", values: yearValues } as const;
+const TERM_RECORD = { type: "term", values: termValues } as const;
+
+/** Records one change to a year or a Term: its creation, deletion, or change. */
+async function recordChange<T extends { id: string }>(
   transaction: Queryable,
   actor: Actor,
-  { before, after }: Changed<AcademicYear>,
+  { type, values }: { type: string; values: (record: T) => AuditValues },
+  { before, after }: Changed<T>,
   reason: string | null,
 ): Promise<void> {
   await appendAuditRecord(transaction, {
     schoolId: actor.schoolId,
     actorPersonId: actor.person.id,
-    action: before === null ? "academic_year.created" : after === null ? "academic_year.deleted" : "academic_year.changed",
-    target: { type: "academic_year", id: (after ?? before)!.id },
+    action: `${type}.${before === null ? "created" : after === null ? "deleted" : "changed"}`,
+    target: { type, id: (after ?? before)!.id },
     reason,
-    before: before === null ? null : yearValues(before),
-    after: after === null ? null : yearValues(after),
-  });
-}
-
-async function recordTermChange(
-  transaction: Queryable,
-  actor: Actor,
-  { before, after }: Changed<Term>,
-  reason: string | null,
-): Promise<void> {
-  await appendAuditRecord(transaction, {
-    schoolId: actor.schoolId,
-    actorPersonId: actor.person.id,
-    action: before === null ? "term.created" : after === null ? "term.deleted" : "term.changed",
-    target: { type: "term", id: (after ?? before)!.id },
-    reason,
-    before: before === null ? null : termValues(before),
-    after: after === null ? null : termValues(after),
+    before: before === null ? null : values(before),
+    after: after === null ? null : values(after),
   });
 }
 
@@ -189,7 +182,7 @@ export function registerAcademicStructureRoutes(
       const { reason, ...year } = parseCreation(body);
       return withTransaction(database, async (transaction) => {
         const created = await createAcademicYear(transaction, { schoolId, ...year });
-        await recordYearChange(transaction, actor, { before: null, after: created }, reason);
+        await recordChange(transaction, actor, YEAR_RECORD, { before: null, after: created }, reason);
         return { academicYear: present(created) };
       });
     });
@@ -200,10 +193,10 @@ export function registerAcademicStructureRoutes(
         const { reason, ...proposed } = parseChange(body, year);
         const changed = await changeAcademicYear(transaction, year, proposed);
         if (changed.changedYear !== null) {
-          await recordYearChange(transaction, actor, changed.changedYear, reason);
+          await recordChange(transaction, actor, YEAR_RECORD, changed.changedYear, reason);
         }
         for (const term of changed.changedTerms) {
-          await recordTermChange(transaction, actor, term, reason);
+          await recordChange(transaction, actor, TERM_RECORD, term, reason);
         }
         return { academicYear: present(changed.year) };
       });
@@ -214,7 +207,7 @@ export function registerAcademicStructureRoutes(
         const year = await lockPermitted(transaction, actor, params["academicYearId"]!);
         const reason = reasonOnly(body);
         await deleteAcademicYear(transaction, year);
-        await recordYearChange(transaction, actor, { before: year, after: null }, reason);
+        await recordChange(transaction, actor, YEAR_RECORD, { before: year, after: null }, reason);
         return { academicYear: present(year) };
       });
     });

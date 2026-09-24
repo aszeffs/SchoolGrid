@@ -47,9 +47,11 @@ export const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
  * end can be set for: the start of today has already gone by.
  */
 export function dayAfter(moment: Date): string {
-  const next = new Date(moment.getFullYear(), moment.getMonth(), moment.getDate() + 1);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+  const next = new Date(moment);
+  next.setHours(0, 0, 0, 0);
+  next.setDate(next.getDate() + 1);
+  const pad = (value: number, width = 2) => String(value).padStart(width, "0");
+  return `${pad(next.getFullYear(), 4)}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
 }
 
 /**
@@ -68,7 +70,10 @@ export function schoolDateAfter(date: string): string {
 
 function localDay(date: string): Date {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return new Date(year, month - 1, day);
+  // Not `new Date(year, …)`, which reads years 0 to 99 as 1900 to 1999.
+  const local = new Date(0, 0, 1);
+  local.setFullYear(year, month - 1, day);
+  return local;
 }
 
 /** The start of a day a date field names, in the reader's own time zone, as the API takes a moment. */

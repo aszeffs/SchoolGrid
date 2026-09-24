@@ -79,15 +79,6 @@ export async function academicYearsInSchool(database: Queryable, schoolId: strin
   }));
 }
 
-/** Whether the School has any Academic Year, which fixes its timezone (ADR-0011). */
-export async function hasAcademicYear(database: Queryable, schoolId: string): Promise<boolean> {
-  const { rows } = await database.query<{ exists: boolean }>(
-    `SELECT EXISTS (SELECT 1 FROM app.academic_year WHERE school_id = $1) AS exists`,
-    [schoolId],
-  );
-  return rows[0]!.exists;
-}
-
 /** The Academic Year with this identifier, in whichever School holds it, or null. */
 export async function findAcademicYear(database: Queryable, academicYearId: string): Promise<AcademicYear | null> {
   if (!UUID.test(academicYearId)) {
@@ -102,38 +93,39 @@ export async function findAcademicYear(database: Queryable, academicYearId: stri
 
 /**
  * Locks an Academic Year until the transaction ends, so no other change to it
- * or its Terms can interleave, and returns it as it now stands with its Terms.
+ * or its Terms can interleave, and returns it as it now stands with its Terms,
+ * or null if it was deleted since it was found.
  *
  * Only for a year the caller has already been permitted to change: a lock
  * taken first would let a caller who may not act hold up those who may.
  */
-export async function lockAcademicYear(transaction: Queryable, year: AcademicYear): Promise<DividedAcademicYear> {
+export async function lockAcademicYear(
+  transaction: Queryable,
+  year: AcademicYear,
+): Promise<DividedAcademicYear | null> {
   const { rows } = await transaction.query<AcademicYear>(
     `SELECT ${ACADEMIC_YEAR_COLUMNS} FROM app.academic_year
      WHERE school_id = $1 AND id = $2
      FOR UPDATE`,
     [year.schoolId, year.id],
   );
-  const terms = await transaction.query<Term>(
-    `SELECT ${TERM_COLUMNS} FROM app.term WHERE school_id = $1 AND academic_year_id = $2 ORDER BY first_date`,
-    [year.schoolId, year.id],
-  );
-  return { ...rows[0]!, terms: terms.rows };
+  if (rows[0] === undefined) {
+    return null;
+  }
+  return { ...rows[0], terms: await termsOf(transaction, year) };
 }
 
 /**
  * Creates an Academic Year with no Terms yet, or refuses one overlapping
  * another in its School.
  *
- * The School's row is share-locked first, so a change of its timezone, which
- * locks it for update, cannot slip between a check that the School has no
- * Academic Year and this one being created.
+ * The database fixes its School's timezone in the same transaction
+ * (migrations/0013), for good: deleting the year later does not free it.
  */
 export async function createAcademicYear(
   transaction: Queryable,
   { schoolId, name, firstDate, lastDate }: Omit<AcademicYear, "id">,
 ): Promise<DividedAcademicYear> {
-  await transaction.query(`SELECT 1 FROM app.school WHERE id = $1 FOR SHARE`, [schoolId]);
   const { rows } = await withOverlapRefused(() =>
     transaction.query<AcademicYear>(
       `INSERT INTO app.academic_year (school_id, name, first_date, last_date)
@@ -163,16 +155,14 @@ export async function changeAcademicYear(
   proposed: { name: string; firstDate: SchoolDate; lastDate: SchoolDate; terms: ProposedTerm[] | null },
 ): Promise<{ year: DividedAcademicYear; changedYear: Changed<AcademicYear> | null; changedTerms: Changed<Term>[] }> {
   const bounds = { firstDate: proposed.firstDate, lastDate: proposed.lastDate };
-  if (proposed.terms === null) {
-    // The Terms stay as they are, so bounds they no longer cover strand them.
-    if (coverConflict(bounds, year.terms) !== null) {
-      throw new Conflict({ conflict: "dependent", dependent: "term" });
-    }
-  } else {
-    const conflict = coverConflict(bounds, proposed.terms);
-    if (conflict !== null) {
-      throw new Conflict(conflict);
-    }
+  const conflict = coverConflict(bounds, proposed.terms ?? year.terms);
+  if (conflict !== null) {
+    // Terms kept as they are and left outside the year would be stranded.
+    throw new Conflict(
+      proposed.terms === null && conflict.conflict === "term_outside_academic_year"
+        ? { conflict: "dependent", dependent: "term" }
+        : conflict,
+    );
   }
 
   let changedYear: Changed<AcademicYear> | null = null;
@@ -192,11 +182,7 @@ export async function changeAcademicYear(
 
   const changedTerms =
     proposed.terms === null ? [] : await replaceTerms(transaction, year, year.terms, proposed.terms);
-  const terms = await transaction.query<Term>(
-    `SELECT ${TERM_COLUMNS} FROM app.term WHERE school_id = $1 AND academic_year_id = $2 ORDER BY first_date`,
-    [year.schoolId, year.id],
-  );
-  return { year: { ...current, terms: terms.rows }, changedYear, changedTerms };
+  return { year: { ...current, terms: await termsOf(transaction, year) }, changedYear, changedTerms };
 }
 
 /**
@@ -208,6 +194,15 @@ export async function deleteAcademicYear(transaction: Queryable, year: DividedAc
     throw new Conflict({ conflict: "dependent", dependent: "term" });
   }
   await transaction.query(`DELETE FROM app.academic_year WHERE school_id = $1 AND id = $2`, [year.schoolId, year.id]);
+}
+
+/** A year's Terms, in order. */
+async function termsOf(database: Queryable, year: AcademicYear): Promise<Term[]> {
+  const { rows } = await database.query<Term>(
+    `SELECT ${TERM_COLUMNS} FROM app.term WHERE school_id = $1 AND academic_year_id = $2 ORDER BY first_date`,
+    [year.schoolId, year.id],
+  );
+  return rows;
 }
 
 /** A year as it stands apart from its Terms, which are recorded as records of their own. */

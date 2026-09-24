@@ -1,4 +1,3 @@
-import { hasAcademicYear } from "../academic-structure/index.ts";
 import { authorizeManageSchoolSettings } from "../access/index.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import { offeredTimezones } from "../calendar/index.ts";
@@ -22,10 +21,7 @@ export function registerSchoolSettingsRoutes(scope: SchoolScope, database: Datab
     const schoolId = authorizeManageSchoolSettings(actor);
     // The actor's own School, so it exists.
     const settings = (await schoolSettingsOf(database, schoolId))!;
-    return {
-      settings: { ...settings, timezoneFixed: await hasAcademicYear(database, schoolId) },
-      timezones: await offeredTimezones(database),
-    };
+    return { settings, timezones: await offeredTimezones(database) };
   });
 
   scope.patch("/settings", async (actor, { body }) => {
@@ -35,14 +31,14 @@ export function registerSchoolSettingsRoutes(scope: SchoolScope, database: Datab
     const reason = reasonFrom(fields["reason"]);
     return withTransaction(database, async (transaction) => {
       const before = (await lockSchoolSettings(transaction, schoolId))!;
-      const timezoneFixed = await hasAcademicYear(transaction, schoolId);
       // Stating the timezone the School already has changes nothing, so nothing is recorded.
       if (before.timezone === timezone) {
-        return { settings: { ...before, timezoneFixed } };
+        return { settings: before };
       }
-      // The School row is locked, and creating an Academic Year share-locks it,
-      // so none can be created between this and the change.
-      if (timezoneFixed) {
+      // The School row is locked, and creating an Academic Year fixes the
+      // timezone by updating it, so none can be created between this and the
+      // change.
+      if (before.timezoneFixed) {
         throw new Conflict({ conflict: "timezone_fixed" });
       }
       const after = await setSchoolTimezone(transaction, { schoolId, timezone });
@@ -55,7 +51,7 @@ export function registerSchoolSettingsRoutes(scope: SchoolScope, database: Datab
         before: { timezone: before.timezone },
         after: { timezone: after.timezone },
       });
-      return { settings: { ...after, timezoneFixed } };
+      return { settings: after };
     });
   });
 }

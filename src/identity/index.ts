@@ -23,11 +23,16 @@ export interface Person {
 /**
  * What a School Administrator configures about their School. Its timezone is
  * an IANA identifier the database knows (migrations/0012); what it means for a
- * School date is the School calendar's to work out.
+ * School date is the School calendar's to work out. It is fixed for good once
+ * the School's first Academic Year exists, which the database records
+ * (migrations/0013).
  */
 export interface SchoolSettings {
   timezone: string;
+  timezoneFixed: boolean;
 }
+
+const SCHOOL_SETTINGS_COLUMNS = `timezone, timezone_fixed AS "timezoneFixed"`;
 
 /** A School is always created with a timezone: nothing names a School date without one. */
 export async function createSchool(
@@ -35,7 +40,7 @@ export async function createSchool(
   { name, timezone }: { name: string; timezone: string },
 ): Promise<School & SchoolSettings> {
   const { rows } = await database.query<School & SchoolSettings>(
-    `INSERT INTO app.school (name, timezone) VALUES ($1, $2) RETURNING id, name, timezone`,
+    `INSERT INTO app.school (name, timezone) VALUES ($1, $2) RETURNING id, name, ${SCHOOL_SETTINGS_COLUMNS}`,
     [name, timezone],
   );
   return rows[0]!;
@@ -51,7 +56,7 @@ export async function lockSchoolSettings(transaction: Queryable, schoolId: strin
     return null;
   }
   const { rows } = await transaction.query<SchoolSettings>(
-    `SELECT timezone FROM app.school WHERE id = $1 FOR UPDATE`,
+    `SELECT ${SCHOOL_SETTINGS_COLUMNS} FROM app.school WHERE id = $1 FOR UPDATE`,
     [schoolId],
   );
   return rows[0] ?? null;
@@ -62,9 +67,10 @@ export async function schoolSettingsOf(database: Queryable, schoolId: string): P
   if (!couldIdentify(schoolId)) {
     return null;
   }
-  const { rows } = await database.query<SchoolSettings>(`SELECT timezone FROM app.school WHERE id = $1`, [
-    schoolId,
-  ]);
+  const { rows } = await database.query<SchoolSettings>(
+    `SELECT ${SCHOOL_SETTINGS_COLUMNS} FROM app.school WHERE id = $1`,
+    [schoolId],
+  );
   return rows[0] ?? null;
 }
 
@@ -74,7 +80,7 @@ export async function setSchoolTimezone(
   { schoolId, timezone }: { schoolId: string; timezone: string },
 ): Promise<SchoolSettings> {
   const { rows } = await transaction.query<SchoolSettings>(
-    `UPDATE app.school SET timezone = $2 WHERE id = $1 RETURNING timezone`,
+    `UPDATE app.school SET timezone = $2 WHERE id = $1 RETURNING ${SCHOOL_SETTINGS_COLUMNS}`,
     [schoolId, timezone],
   );
   return rows[0]!;

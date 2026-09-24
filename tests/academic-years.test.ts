@@ -409,6 +409,36 @@ describe("Academic Years and Terms", () => {
       expect(await trailOf(world.alice, "academic_year.deleted")).toEqual([]);
     });
 
+    it("deleted while a change to it waits is refused as a year that does not exist", async () => {
+      const world = await arrange();
+      const year = await create(world.alice);
+      const holder = await server().ownerDatabase.connect();
+      try {
+        await holder.query("BEGIN");
+        await holder.query("SELECT 1 FROM app.academic_year WHERE id = $1 FOR UPDATE", [year.id]);
+        const { rows } = await holder.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+        const waiting = world.alice.patch(`/academic-years/${year.id}`, { name: "Renamed" });
+        await expect
+          .poll(async () => {
+            const blocked = await server().ownerDatabase.query(
+              "SELECT 1 FROM pg_stat_activity WHERE $1 = ANY (pg_blocking_pids(pid))",
+              [rows[0]!.pid],
+            );
+            return blocked.rowCount;
+          })
+          .toBe(1);
+        await holder.query("DELETE FROM app.academic_year WHERE id = $1", [year.id]);
+        await holder.query("COMMIT");
+
+        const response = await waiting;
+        const refusal = await world.alice.patch(`/academic-years/${ABSENT_ID}`, { name: "Renamed" });
+
+        expect(observable(response)).toEqual(observable(refusal));
+      } finally {
+        holder.release();
+      }
+    });
+
     it("is not created or changed when its Audit record cannot be written", async () => {
       const world = await arrange();
       const year = await create(world.alice);
@@ -660,7 +690,7 @@ describe("Academic Years and Terms", () => {
       expect(await trailOf(world.alice, "term.created")).toHaveLength(5);
     });
 
-    it("hold the year's bounds: a change that would strand them is refused, naming them", async () => {
+    it("hold the year's bounds: shrinking it past them strands them, and growing it leaves a gap", async () => {
       const world = await arrange();
       const year = await createDivided(world.alice);
       const before = await stored();
@@ -668,10 +698,10 @@ describe("Academic Years and Terms", () => {
       const shrunk = await world.alice.patch(`/academic-years/${year.id}`, { lastDate: "2027-06-15" });
       const grown = await world.alice.patch(`/academic-years/${year.id}`, { firstDate: "2026-08-15" });
 
-      for (const response of [shrunk, grown]) {
-        expect(response.status).toBe(409);
-        expect(response.body).toEqual({ status: "conflict", conflict: "dependent", dependent: "term" });
-      }
+      expect(shrunk.status).toBe(409);
+      expect(shrunk.body).toEqual({ status: "conflict", conflict: "dependent", dependent: "term" });
+      expect(grown.status).toBe(409);
+      expect(grown.body).toEqual({ status: "conflict", conflict: "term_gap" });
       expect(await stored()).toEqual(before);
     });
 
@@ -811,6 +841,29 @@ describe("Academic Years and Terms", () => {
           database.query("UPDATE app.school SET timezone = 'America/Chicago' WHERE id = $1", [world.northsideId]),
         ).rejects.toThrow(/timezone is fixed/);
       }
+    });
+
+    it("stays fixed once the School's only Academic Year is deleted, even against a direct write", async () => {
+      const world = await arrange();
+      const year = await create(world.alice);
+      expect((await world.alice.delete(`/academic-years/${year.id}`)).status).toBe(200);
+
+      const response = await world.alice.patch("/settings", { timezone: "America/Chicago" });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual({ status: "conflict", conflict: "timezone_fixed" });
+      expect(await settingsOf(world.alice)).toEqual({ timezone: "America/New_York", timezoneFixed: true });
+      for (const database of [server().database, server().ownerDatabase]) {
+        await expect(
+          database.query("UPDATE app.school SET timezone = 'America/Chicago' WHERE id = $1", [world.northsideId]),
+        ).rejects.toThrow(/timezone is fixed/);
+      }
+      await expect(
+        server().database.query("UPDATE app.school SET timezone_fixed = false WHERE id = $1", [world.northsideId]),
+      ).rejects.toThrow(/permission denied/);
+      await expect(
+        server().ownerDatabase.query("UPDATE app.school SET timezone_fixed = false WHERE id = $1", [world.northsideId]),
+      ).rejects.toThrow(/timezone is fixed/);
     });
 
     it("of another School stays free to change", async () => {

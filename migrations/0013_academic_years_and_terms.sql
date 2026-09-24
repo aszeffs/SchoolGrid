@@ -65,17 +65,40 @@ GRANT UPDATE (name, first_date, last_date) ON app.term TO schoolgrid_app;
 
 -- A School's timezone is fixed once its first Academic Year exists (ADR-0011):
 -- moving it would shift the School date of every instant already bounded
--- against it. Held here as well as in the service, so a direct write is
--- refused too, whoever makes it.
+-- against it. Deleting that year later does not free it, since what was
+-- bounded against the timezone meanwhile may outlive the year, so the School
+-- records that it is fixed rather than the rule asking whether a year exists
+-- now.
 --
--- The service creates an Academic Year holding its School's row share-locked,
--- and changes the timezone holding it locked for update, so neither can land
--- between the other's check and its write.
+-- The database sets it, whoever creates the year, and holds both it and the
+-- timezone against every role, the schema owner included. The application
+-- may not write it at all.
+ALTER TABLE app.school ADD COLUMN timezone_fixed boolean NOT NULL DEFAULT false;
+
+-- Runs as the schema owner, since the application may not write the column.
+-- Updating the School's row locks it, and a change of timezone locks it too,
+-- so neither can land between the other's check and its write.
+CREATE FUNCTION app.fix_school_timezone() RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+  UPDATE app.school SET timezone_fixed = true WHERE id = NEW.school_id AND NOT timezone_fixed;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER academic_year_fixes_school_timezone
+  AFTER INSERT ON app.academic_year
+  FOR EACH ROW
+  EXECUTE FUNCTION app.fix_school_timezone();
+
 CREATE FUNCTION app.refuse_fixed_timezone_change() RETURNS trigger
   LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM app.academic_year WHERE school_id = NEW.id) THEN
+  IF OLD.timezone_fixed AND (NOT NEW.timezone_fixed OR NEW.timezone IS DISTINCT FROM OLD.timezone) THEN
     RAISE EXCEPTION 'a School''s timezone is fixed once its first Academic Year exists'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -84,7 +107,6 @@ END
 $$;
 
 CREATE TRIGGER school_timezone_is_fixed
-  BEFORE UPDATE OF timezone ON app.school
+  BEFORE UPDATE OF timezone, timezone_fixed ON app.school
   FOR EACH ROW
-  WHEN (OLD.timezone IS DISTINCT FROM NEW.timezone)
   EXECUTE FUNCTION app.refuse_fixed_timezone_change();

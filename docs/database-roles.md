@@ -63,7 +63,7 @@ Provisioning names the School's timezone, as an IANA identifier the database kno
 { "name": "Northside", "timezone": "America/New_York", "schoolAdministrator": { "username": "<username>", "displayName": "<name>" } }
 ```
 
-The School Administrator can correct it until the School's first Academic Year exists. After that it is fixed (ADR-0011), and a trigger refuses a change from any role, the schema owner included.
+The School Administrator can correct it until the School's first Academic Year exists. After that it is fixed for good (ADR-0011), even if that year is later deleted: the database records it in `app.school.timezone_fixed`, which `schoolgrid_app` cannot write, and a trigger refuses a change of either from any role, the schema owner included.
 
 ## Adding a table
 
