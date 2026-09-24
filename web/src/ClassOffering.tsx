@@ -138,20 +138,16 @@ function assignableFaculty(memberships: Membership[], persons: ListedPerson[]): 
 }
 
 /**
- * The Students with an open Enrollment who are not on this roster now, by name:
- * the only ones the server rosters without overlapping a membership they hold.
- * One whose membership has ended may be rostered again, from a later day.
+ * The Students with an open Enrollment who have never been on this roster, by
+ * name: rostered with the Term's bounds, as the dialog does unless told
+ * otherwise, anyone else would overlap a membership they hold, and refuse the
+ * whole request.
  */
 function rosterableStudents(offering: Offering, enrollments: Enrollment[], persons: ListedPerson[]): ListedPerson[] {
-  const today = dayOf(new Date());
   const enrolled = new Set(
     enrollments.filter((enrollment) => enrollment.endedAt === null).map((enrollment) => enrollment.studentPersonId),
   );
-  const onRoster = new Set(
-    (offering.rosterMemberships ?? [])
-      .filter((membership) => (membership.lastDate ?? offering.term.lastDate) >= today)
-      .map((membership) => membership.person.id),
-  );
+  const onRoster = new Set((offering.rosterMemberships ?? []).map((membership) => membership.person.id));
   return persons
     .filter((person) => enrolled.has(person.id) && !onRoster.has(person.id))
     .sort(byName((person) => person.displayName));

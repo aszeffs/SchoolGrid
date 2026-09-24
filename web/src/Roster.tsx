@@ -141,7 +141,7 @@ export function Roster({
       {administers &&
         (rosterable.length === 0 ? (
           <p className="empty">
-            Every Student with an open Enrollment is on this roster already. To roster someone else, start their
+            Every Student with an open Enrollment has been on this roster already. To roster someone else, start their
             Enrollment on <Link to={{ name: "enrollments", schoolId }}>Enrollments</Link> first.
           </p>
         ) : (

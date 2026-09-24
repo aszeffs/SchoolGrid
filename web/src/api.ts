@@ -423,13 +423,16 @@ export const api = {
     request<{ enrollments: Enrollment[] }>("GET", inSchool(schoolId, "/enrollments")),
   enroll: (schoolId: string, studentPersonId: string) =>
     request<{ enrollment: Enrollment }>("POST", inSchool(schoolId, "/enrollments"), { studentPersonId }),
-  /** An Enrollment does not end without a reason. Every Guardian link to the Student ends with it. */
   /** What ending an Enrollment now would end with it. */
   enrollmentConsequences: (schoolId: string, enrollmentId: string) =>
     request<{ consequences: { rosterMemberships: number } }>(
       "GET",
       inSchool(schoolId, `/enrollments/${encodeURIComponent(enrollmentId)}/consequences`),
     ),
+  /**
+   * An Enrollment does not end without a reason. The Student's open Roster
+   * memberships and every Guardian link to them end with it.
+   */
   endEnrollment: (schoolId: string, enrollmentId: string, reason: string) =>
     request<{ enrollment: Enrollment }>(
       "DELETE",

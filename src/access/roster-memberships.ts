@@ -98,7 +98,7 @@ export async function findRosterMembership(
  * Locks a membership until the transaction ends, and returns it as it now
  * stands with the last School date of its Term, or null if it was deleted since
  * it was found. Only for a membership the caller has already been permitted to
- * change: see lockMembership.
+ * change: see lockPermittedMembership in ./roster-membership-routes.ts.
  */
 export async function lockRosterMembership(
   transaction: Queryable,
