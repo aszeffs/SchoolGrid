@@ -52,6 +52,25 @@ export function dayAfter(moment: Date): string {
   return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
 }
 
+/**
+ * A School date, written `YYYY-MM-DD`, as a reader expects a day. It is the
+ * day the School saw, so it is read as that day wherever the reader is,
+ * rather than as a moment their own timezone could move.
+ */
+export function schoolDay(date: string): string {
+  return DAY.format(localDay(date));
+}
+
+/** The School date after this one, as a date field writes it. */
+export function schoolDateAfter(date: string): string {
+  return dayAfter(localDay(date));
+}
+
+function localDay(date: string): Date {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  return new Date(year, month - 1, day);
+}
+
 /** The start of a day a date field names, in the reader's own time zone, as the API takes a moment. */
 export function startOfDay(day: string): string {
   return new Date(`${day}T00:00`).toISOString();

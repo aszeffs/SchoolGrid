@@ -128,7 +128,8 @@ describe("Browser sessions", () => {
 
   /**
    * Alice administers Northside, where a Student is enrolled and linked to a
-   * Guardian, and an unclaimed Person is invited; Pat is a Platform
+   * Guardian, an unclaimed Person is invited, and an Academic Year is planned;
+   * Pat is a Platform
    * Administrator. Each is signed in twice, once with each form of session.
    */
   async function arrange() {
@@ -150,7 +151,14 @@ describe("Browser sessions", () => {
     const invited = await aliceBearer.post("/invitations", {
       personId: (await server().createPerson({ schoolId: school.id, displayName: "Riley" })).id,
     });
-    expect([enrolled.status, linked.status, memberships.status, invited.status]).toEqual([201, 201, 200, 201]);
+    const academicYear = await aliceBearer.post("/academic-years", {
+      name: "2026–27",
+      firstDate: "2026-09-01",
+      lastDate: "2027-06-30",
+    });
+    expect([enrolled.status, linked.status, memberships.status, invited.status, academicYear.status]).toEqual([
+      201, 201, 200, 201, 201,
+    ]);
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -159,6 +167,7 @@ describe("Browser sessions", () => {
       guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
       membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
       invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
+      academicYearId: (academicYear.body as { academicYear: { id: string } }).academicYear.id,
     };
     return {
       school,

@@ -1,4 +1,5 @@
 import type { Role } from "../../src/access/roles.ts";
+import type { ConflictDetail } from "../../src/http/conflict.ts";
 
 /**
  * The API, reached on the page's own origin.
@@ -9,7 +10,14 @@ import type { Role } from "../../src/access/roles.ts";
  * every change, which is what the server checks the cookie against.
  */
 
-export type ApiResult<T> = { ok: true; body: T } | { ok: false };
+/**
+ * What a request answered. A failure carries a conflict only when the server
+ * permitted the change and the School's records could not take it; every
+ * other failure carries nothing.
+ */
+export type ApiResult<T> = { ok: true; body: T } | { ok: false; conflict?: ConflictDetail };
+
+export type { ConflictDetail };
 
 /** A response that was sent and read, or null for a network failure. */
 interface Sent {
@@ -37,13 +45,25 @@ async function send(method: string, path: string, body?: unknown): Promise<Sent 
  * request, a server error and a network failure are all `ok: false`: the app
  * has one state for all of them, and never explains a refusal the API
  * deliberately did not explain (ADR-0002).
+ *
+ * A conflict is not a refusal. The server answers one only once it has
+ * permitted the caller, to say which rule of the School's records a change
+ * would break, and a form says so in its own words.
  */
 async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
   const sent = await send(method, path, body);
+  if (sent !== null && sent.status === 409 && isConflict(sent.body)) {
+    const { status: _status, ...conflict } = sent.body;
+    return { ok: false, conflict };
+  }
   if (sent === null || sent.status < 200 || sent.status >= 300) {
     return { ok: false };
   }
   return { ok: true, body: sent.body as T };
+}
+
+function isConflict(body: unknown): body is { status: "conflict" } & ConflictDetail {
+  return typeof body === "object" && body !== null && (body as { status?: unknown }).status === "conflict";
 }
 
 /** What an answer carries when it is answered. */
@@ -196,6 +216,33 @@ export interface AuditPage {
 export interface SchoolSettings {
   /** An IANA timezone identifier, such as `America/New_York`: where the School's days begin and end. */
   timezone: string;
+  /** Whether the timezone can no longer change, as it cannot once the School has an Academic Year. */
+  timezoneFixed: boolean;
+}
+
+/** One Term of an Academic Year, bounded by School dates written `YYYY-MM-DD`, both inclusive. */
+export interface Term {
+  id: string;
+  name: string;
+  firstDate: string;
+  lastDate: string;
+}
+
+/** An Academic Year, bounded by School dates, with its Terms in order. None while it is not yet divided. */
+export interface AcademicYear {
+  id: string;
+  name: string;
+  firstDate: string;
+  lastDate: string;
+  terms: Term[];
+}
+
+/** A Term as a change states it: one of the year's own by its identifier, or a new one without. */
+export interface ProposedTerm {
+  id?: string;
+  name: string;
+  firstDate: string;
+  lastDate: string;
 }
 
 /** What the running site was built from. Either is absent when the server does not know it. */
@@ -322,6 +369,31 @@ export const api = {
     request<{ settings: SchoolSettings; timezones: string[] }>("GET", inSchool(schoolId, "/settings")),
   setTimezone: (schoolId: string, timezone: string) =>
     request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { timezone }),
+  academicYears: (schoolId: string) =>
+    request<{ academicYears: AcademicYear[] }>("GET", inSchool(schoolId, "/academic-years")),
+  createAcademicYear: (schoolId: string, year: { name: string; firstDate: string; lastDate: string }) =>
+    request<{ academicYear: AcademicYear }>("POST", inSchool(schoolId, "/academic-years"), year),
+  /**
+   * Changes a year's name and bounds, and states the whole of its Terms: one
+   * left out is deleted. Every part lands together or none does, so the
+   * boundary between two Terms moves in one change.
+   */
+  changeAcademicYear: (
+    schoolId: string,
+    academicYearId: string,
+    change: { name: string; firstDate: string; lastDate: string; terms: ProposedTerm[] },
+  ) =>
+    request<{ academicYear: AcademicYear }>(
+      "PATCH",
+      inSchool(schoolId, `/academic-years/${encodeURIComponent(academicYearId)}`),
+      change,
+    ),
+  /** Refused while the year still has Terms. */
+  deleteAcademicYear: (schoolId: string, academicYearId: string) =>
+    request<{ academicYear: AcademicYear }>(
+      "DELETE",
+      inSchool(schoolId, `/academic-years/${encodeURIComponent(academicYearId)}`),
+    ),
   inspectInvitation: (secret: string) =>
     request<InvitationInspection>("POST", "/invitations/inspect", { secret }),
   redeemInvitation,

@@ -567,6 +567,29 @@ export function authorizeReadSchoolCalendar(actor: Actor): string {
   return authorizeManageRelationships(actor);
 }
 
+/**
+ * Returns the School whose academic structure the actor may read and change,
+ * and refuses otherwise. For now that is its Academic Years and their Terms,
+ * and only a School Administrator shapes them, in the School they are acting
+ * in. Asked before a request's body is read, as for memberships.
+ */
+export function authorizeManageAcademicStructure(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/** Returns the Academic Year the actor may change or delete, and refuses otherwise. */
+export function authorizeManageAcademicYear<Y extends { schoolId: string }>(
+  actor: Actor,
+  academicYearId: string,
+  target: Y | null,
+): Y {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "academic_year", id: academicYearId });
+  }
+  return target!;
+}
+
 function authorizeManageRelationships(actor: Actor): string {
   const reason = decideManageRelationships(actor, { schoolId: actor.schoolId });
   if (reason !== null) {
