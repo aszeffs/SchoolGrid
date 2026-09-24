@@ -128,9 +128,9 @@ describe("Browser sessions", () => {
 
   /**
    * Alice administers Northside, where a Student is enrolled and linked to a
-   * Guardian, an unclaimed Person is invited, and an Academic Year is planned;
-   * Pat is a Platform
-   * Administrator. Each is signed in twice, once with each form of session.
+   * Guardian, an unclaimed Person is invited, and an Academic Year is planned
+   * with a Course offered in it; Pat is a Platform Administrator. Each is
+   * signed in twice, once with each form of session.
    */
   async function arrange() {
     await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
@@ -161,6 +161,13 @@ describe("Browser sessions", () => {
       date: "2026-11-26",
       instructional: false,
     });
+    const divided = await aliceBearer.patch(`/academic-years/${academicYearId}`, {
+      terms: [{ name: "Whole year", firstDate: "2026-09-01", lastDate: "2027-06-30" }],
+    });
+    const termId = (divided.body as { academicYear: { terms: { id: string }[] } }).academicYear.terms[0]!.id;
+    const course = await aliceBearer.post("/courses", { name: "Algebra I" });
+    const courseId = (course.body as { course: { id: string } }).course.id;
+    const offering = await aliceBearer.post("/class-offerings", { courseId, termId });
     expect([
       enrolled.status,
       linked.status,
@@ -168,7 +175,10 @@ describe("Browser sessions", () => {
       invited.status,
       academicYear.status,
       holiday.status,
-    ]).toEqual([201, 201, 200, 201, 201, 201]);
+      divided.status,
+      course.status,
+      offering.status,
+    ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201]);
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -179,6 +189,8 @@ describe("Browser sessions", () => {
       invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
       academicYearId,
       exceptionId: (holiday.body as { academicYear: { exceptions: { id: string }[] } }).academicYear.exceptions[0]!.id,
+      courseId,
+      classOfferingId: (offering.body as { classOffering: { id: string } }).classOffering.id,
     };
     return {
       school,

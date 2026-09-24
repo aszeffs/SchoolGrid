@@ -703,6 +703,40 @@ describe("Academic Years and Terms", () => {
       expect(await trailOf(world.alice, "term.created")).toHaveLength(5);
     });
 
+    it("are not deleted while one has Class Offerings, naming them, though their bounds may still move", async () => {
+      const world = await arrange();
+      const year = await createDivided(world.alice);
+      const [fall, spring] = year.terms;
+      const course = await world.alice.post("/courses", { name: "Algebra I" });
+      const offered = await world.alice.post("/class-offerings", {
+        courseId: (course.body as { course: { id: string } }).course.id,
+        termId: fall!.id,
+      });
+      expect([course.status, offered.status]).toEqual([201, 201]);
+      const before = await stored();
+
+      // Leaving Fall out deletes it, whether its dates go to Spring or to a new Term.
+      const merged = await world.alice.patch(`/academic-years/${year.id}`, {
+        terms: [{ id: spring!.id, name: "Whole year", firstDate: YEAR.firstDate, lastDate: YEAR.lastDate }],
+      });
+      const replaced = await world.alice.patch(`/academic-years/${year.id}`, { terms: HALVES });
+
+      for (const response of [merged, replaced]) {
+        expect(response.status).toBe(409);
+        expect(response.body).toEqual({ status: "conflict", conflict: "dependent", dependent: "class_offering" });
+      }
+      expect(await stored()).toEqual(before);
+      expect(await trailOf(world.alice, "term.deleted", "term.created", "term.changed")).toHaveLength(2);
+
+      const moved = await world.alice.patch(`/academic-years/${year.id}`, {
+        terms: [
+          { id: fall!.id, name: "Fall", firstDate: "2026-09-01", lastDate: "2027-01-31" },
+          { id: spring!.id, name: "Spring", firstDate: "2027-02-01", lastDate: "2027-06-30" },
+        ],
+      });
+      expect(moved.status).toBe(200);
+    });
+
     it("hold the year's bounds: shrinking it past them strands them, and growing it leaves a gap", async () => {
       const world = await arrange();
       const year = await createDivided(world.alice);

@@ -5,7 +5,7 @@ import {
   authorizeManageInstructionalDayException,
   type Actor,
 } from "../access/index.ts";
-import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
+import type { AuditValues } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
 import { instructionalDaysInSchool, WEEKDAYS, type SchoolDate, type Weekday } from "../calendar/index.ts";
 import type { Database } from "../db/pool.ts";
@@ -13,6 +13,8 @@ import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { boundedText, fieldsOf, reasonFrom, reasonOnly, schoolDateFrom } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
+import { recordChange } from "./audit.ts";
+import { registerCourseRoutes } from "./course-routes.ts";
 import {
   academicYearsInSchool,
   addException,
@@ -24,7 +26,6 @@ import {
   removeException,
   WORKING_WEEK,
   type AcademicYear,
-  type Changed,
   type DividedAcademicYear,
   type InstructionalDayException,
   type ProposedTerm,
@@ -202,25 +203,6 @@ const YEAR_RECORD = { type: "academic_year", values: yearValues } as const;
 const TERM_RECORD = { type: "term", values: termValues } as const;
 const EXCEPTION_RECORD = { type: "instructional_day_exception", values: exceptionValues } as const;
 
-/** Records one change to a year, a Term, or an exception: its creation, deletion, or change. */
-async function recordChange<T extends { id: string }>(
-  transaction: Queryable,
-  actor: Actor,
-  { type, values }: { type: string; values: (record: T) => AuditValues },
-  { before, after }: Changed<T>,
-  reason: string | null,
-): Promise<void> {
-  await appendAuditRecord(transaction, {
-    schoolId: actor.schoolId,
-    actorPersonId: actor.person.id,
-    action: `${type}.${before === null ? "created" : after === null ? "deleted" : "changed"}`,
-    target: { type, id: (after ?? before)!.id },
-    reason,
-    before: before === null ? null : values(before),
-    after: after === null ? null : values(after),
-  });
-}
-
 /**
  * A School's Academic Years, their Terms, and their Instructional days,
  * shaped by its School Administrator: every decision is the Access module's,
@@ -316,5 +298,7 @@ export function registerAcademicStructureRoutes(
         return presentOne(transaction, changed);
       });
     });
+
+    registerCourseRoutes(scope, database);
   });
 }

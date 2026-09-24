@@ -570,9 +570,9 @@ export function authorizeReadSchoolCalendar(actor: Actor): string {
 /**
  * Returns the School whose academic structure the actor may read and change,
  * and refuses otherwise. For now that is its Academic Years, their Terms and
- * Instructional days, and only a School Administrator shapes them, in the
- * School they are acting in. Asked before a request's body is read, as for
- * memberships.
+ * Instructional days, its Courses and its Class Offerings, and only a School
+ * Administrator shapes them, in the School they are acting in. Asked before a
+ * request's body is read, as for memberships.
  */
 export function authorizeManageAcademicStructure(actor: Actor): string {
   return authorizeManageRelationships(actor);
@@ -604,6 +604,46 @@ export function authorizeManageInstructionalDayException<E extends { schoolId: s
   const reason = decideManageRelationships(actor, target);
   if (reason !== null) {
     throw new Refused(reason, { type: "instructional_day_exception", id: exceptionId });
+  }
+  return target!;
+}
+
+/** Returns the Course the actor may change, delete, or offer, and refuses otherwise. */
+export function authorizeManageCourse<C extends { schoolId: string }>(
+  actor: Actor,
+  courseId: string,
+  target: C | null,
+): C {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "course", id: courseId });
+  }
+  return target!;
+}
+
+/** Returns the Term the actor may offer a Course in, and refuses otherwise. */
+export function authorizeManageTerm<T extends { schoolId: string }>(actor: Actor, termId: string, target: T | null): T {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "term", id: termId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Class Offering the actor may read, relabel, or delete, and
+ * refuses otherwise. For now only a School Administrator reaches one; the
+ * slices that give Faculty and Students their own Class Offerings widen
+ * reading it.
+ */
+export function authorizeManageClassOffering<O extends { schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "class_offering", id: classOfferingId });
   }
   return target!;
 }
