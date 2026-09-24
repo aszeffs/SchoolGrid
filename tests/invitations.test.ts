@@ -83,48 +83,42 @@ describe("Invitations", () => {
     const northside = await server().provisionSchool({ name: "Northside", administrator: alice });
     const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
     const schoolId = northside.school.id;
+    const anneAccount = await server().createAccount(ANNE);
     const anne = await server().createPerson({
       schoolId,
       displayName: "Anne",
-      account: await server().createAccount(ANNE),
+      account: anneAccount,
       role: "school_administrator",
     });
     const samAccount = await server().createAccount(SAM);
     const sam = await server().createPerson({ schoolId, displayName: "Sam", account: samAccount, role: "student" });
     await server().enroll(sam);
-    for (const [displayName, credentials, role] of [
-      ["Gina", GINA, "guardian"],
-      ["Fran", FRAN, "faculty"],
-    ] as const) {
-      await server().createPerson({
-        schoolId,
-        displayName,
-        account: await server().createAccount(credentials),
-        role,
-      });
-    }
+    const ginaAccount = await server().createAccount(GINA);
+    const franAccount = await server().createAccount(FRAN);
+    await server().createPerson({ schoolId, displayName: "Gina", account: ginaAccount, role: "guardian" });
+    await server().createPerson({ schoolId, displayName: "Fran", account: franAccount, role: "faculty" });
     const patAccount = await server().createAccount(PAT);
     await server().createPlatformAdministrator({ account: patAccount });
     await server().createPerson({ schoolId, displayName: "Pat", account: patAccount, role: "school_administrator" });
     const riley = await server().createPerson({ schoolId, displayName: "Riley" });
     const casey = await server().createPerson({ schoolId, displayName: "Casey" });
     const wren = await server().createPerson({ schoolId: westbrook.school.id, displayName: "Wren" });
-    const inNorthside = async (credentials: typeof ALICE) => (await server().signIn(credentials)).inSchool(schoolId);
+    const inNorthside = async (account: UserAccount) => (await server().sessionFor(account)).inSchool(schoolId);
     return {
       northsideId: schoolId,
       westbrookId: westbrook.school.id,
       aliceId: northside.schoolAdministrator.id,
-      alice: await inNorthside(ALICE),
-      anne: await inNorthside(ANNE),
+      alice: await inNorthside(alice),
+      anne: await inNorthside(anneAccount),
       anneId: anne.id,
-      sam: await inNorthside(SAM),
-      gina: await inNorthside(GINA),
-      fran: await inNorthside(FRAN),
+      sam: await inNorthside(samAccount),
+      gina: await inNorthside(ginaAccount),
+      fran: await inNorthside(franAccount),
       samAccount,
-      bob: await inNorthside(BOB),
+      bob: await inNorthside(bob),
       bobAccount: bob,
       riley,
-      pat: await inNorthside(PAT),
+      pat: await inNorthside(patAccount),
       rileyId: riley.id,
       caseyId: casey.id,
       wrenId: wren.id,
@@ -475,7 +469,7 @@ describe("Invitations", () => {
 
     it("refuses revoking another School's Invitation exactly as an absent one", async () => {
       const world = await arrange();
-      const westbrook = (await server().signIn(BOB)).inSchool(world.westbrookId);
+      const westbrook = (await server().sessionFor(world.bobAccount)).inSchool(world.westbrookId);
       const { invitation } = await issue(westbrook, world.wrenId);
 
       const refused = await world.alice.delete(`/invitations/${invitation.id}`);
@@ -715,7 +709,8 @@ describe("Invitations", () => {
     const PATH = "/api/invitations/redeem-signed-in";
 
     /** Bob as a browser on the public origin: Westbrook's School Administrator, with no Person at Northside. */
-    const bobInBrowser = async () => (await server().signInWithCookie(BOB)).withOrigin(server().publicOrigin);
+    const bobInBrowser = async (world: World) =>
+      (await server().cookieSessionFor(world.bobAccount)).withOrigin(server().publicOrigin);
     const redeemAs = (client: TestClient, secret: string) => client.post(PATH, { secret });
 
     const personsOf = async (account: UserAccount) =>
@@ -734,7 +729,7 @@ describe("Invitations", () => {
     it("attaches the Person to the account, marks the Invitation redeemed, and audits it", async () => {
       const world = await arrange();
       const { invitation, link } = await issue(world.alice, world.rileyId);
-      const bob = await bobInBrowser();
+      const bob = await bobInBrowser(world);
 
       const redeemed = await redeemAs(bob, secretOf(link));
 
@@ -763,7 +758,7 @@ describe("Invitations", () => {
       const world = await arrange();
       const { link } = await issue(world.alice, world.rileyId);
 
-      const redeemed = await redeemAs(await server().signIn(BOB), secretOf(link));
+      const redeemed = await redeemAs(await server().sessionFor(world.bobAccount), secretOf(link));
 
       expect(redeemed.status).toBe(204);
       expect(await pending(world)).toEqual([]);
@@ -772,7 +767,7 @@ describe("Invitations", () => {
     it("lets one login reach both Schools once granted, leaving the two Persons unrelated", async () => {
       const world = await arrange();
       const { link } = await issue(world.alice, world.rileyId);
-      const bob = await bobInBrowser();
+      const bob = await bobInBrowser(world);
       await redeemAs(bob, secretOf(link));
       await server().grantMembership({ person: world.riley, role: "faculty" });
 
@@ -795,7 +790,7 @@ describe("Invitations", () => {
       it("is refused exactly as an unknown secret, leaving the Invitation pending and auditing why", async () => {
         const world = await arrange();
         const { invitation, link } = await issue(world.alice, world.rileyId);
-        const sam = (await server().signInWithCookie(SAM)).withOrigin(server().publicOrigin);
+        const sam = (await server().cookieSessionFor(world.samAccount)).withOrigin(server().publicOrigin);
 
         const refused = await redeemAs(sam, secretOf(link));
 
@@ -808,10 +803,10 @@ describe("Invitations", () => {
       it("leaves the link working for another account", async () => {
         const world = await arrange();
         const { link } = await issue(world.alice, world.rileyId);
-        const sam = (await server().signInWithCookie(SAM)).withOrigin(server().publicOrigin);
+        const sam = (await server().cookieSessionFor(world.samAccount)).withOrigin(server().publicOrigin);
         await redeemAs(sam, secretOf(link));
 
-        const redeemed = await redeemAs(await bobInBrowser(), secretOf(link));
+        const redeemed = await redeemAs(await bobInBrowser(world), secretOf(link));
 
         expect(redeemed.status).toBe(204);
         expect(await pending(world)).toEqual([]);
@@ -841,7 +836,7 @@ describe("Invitations", () => {
           "already redeemed",
           async (w) => {
             const { link } = await issue(w.alice, w.rileyId);
-            await redeemAs(await server().signIn(BOB), secretOf(link));
+            await redeemAs(await server().sessionFor(w.bobAccount), secretOf(link));
             return secretOf(link);
           },
         ],
@@ -851,7 +846,7 @@ describe("Invitations", () => {
       it.each(cases)("is refused when %s, byte-identically to one that matches nothing", async (_case, makeSecret) => {
         const world = await arrange();
         const secret = await makeSecret(world);
-        const bob = await bobInBrowser();
+        const bob = await bobInBrowser(world);
 
         const refused = await redeemAs(bob, secret);
 
@@ -867,8 +862,8 @@ describe("Invitations", () => {
         await world.alice.delete(`/invitations/${invitation.id}`);
         const before = (await trail(world)).length;
 
-        await redeemAs(await server().signIn(BOB), secretOf(link));
-        await redeemAs(await server().signIn(BOB), UNKNOWN_SECRET);
+        await redeemAs(await server().sessionFor(world.bobAccount), secretOf(link));
+        await redeemAs(await server().sessionFor(world.bobAccount), UNKNOWN_SECRET);
 
         const recorded = (await trail(world)).slice(0, -before);
         expect(recorded.map(({ action, reason, target }) => [action, reason, target])).toEqual([
@@ -878,21 +873,25 @@ describe("Invitations", () => {
     });
 
     describe("a caller without a usable session", () => {
-      const callers: [string, () => Promise<TestClient>, string][] = [
+      const callers: [string, (world: World) => Promise<TestClient>, string][] = [
         ["no session", async () => server().client.withOrigin(server().publicOrigin), "unauthenticated"],
         [
           "a stale session",
-          async () => {
-            const bob = await bobInBrowser();
+          async (world) => {
+            const bob = await bobInBrowser(world);
             expect((await bob.delete("/api/session")).status).toBe(204);
             return bob;
           },
           "unauthenticated",
         ],
-        ["a cookie session sent without the public Origin", async () => server().signInWithCookie(BOB), "cross-origin"],
+        [
+          "a cookie session sent without the public Origin",
+          async (world) => server().cookieSessionFor(world.bobAccount),
+          "cross-origin",
+        ],
         [
           "a cookie session sent from another Origin",
-          async () => (await server().signInWithCookie(BOB)).withOrigin("https://attacker.test"),
+          async (world) => (await server().cookieSessionFor(world.bobAccount)).withOrigin("https://attacker.test"),
           "cross-origin",
         ],
       ];
@@ -900,11 +899,12 @@ describe("Invitations", () => {
       it.each(callers)("is refused with %s, leaving the Invitation pending and auditing why", async (_case, caller, reason) => {
         const world = await arrange();
         const { invitation, link } = await issue(world.alice, world.rileyId);
-        const client = await caller();
+        const client = await caller(world);
 
         const refused = await redeemAs(client, secretOf(link));
 
-        expect(observable(refused)).toEqual(observable(await redeemAs(await server().signIn(BOB), UNKNOWN_SECRET)));
+        const unknown = await redeemAs(await server().sessionFor(world.bobAccount), UNKNOWN_SECRET);
+        expect(observable(refused)).toEqual(observable(unknown));
         expect(await pending(world)).toEqual([invitation]);
         expect(await personsOf(world.bobAccount)).toHaveLength(1);
         expect(await refusalsFor(world, invitation.id)).toEqual([reason]);
@@ -915,7 +915,7 @@ describe("Invitations", () => {
       const world = await arrange();
       const riley = await issue(world.alice, world.rileyId);
       const casey = await issue(world.alice, world.caseyId);
-      const bob = await bobInBrowser();
+      const bob = await bobInBrowser(world);
 
       const redeemed = await Promise.all([redeemAs(bob, secretOf(riley.link)), redeemAs(bob, secretOf(casey.link))]);
 
@@ -936,9 +936,10 @@ describe("Invitations", () => {
       const { link } = await issue(world.alice, world.rileyId);
       const wrenAccount = await server().createAccount({ username: "wren", password: "a westbrook staple, long" });
       await server().createPerson({ schoolId: world.westbrookId, displayName: "Wren's twin", account: wrenAccount });
-      const wren = await server().signIn({ username: "wren", password: "a westbrook staple, long" });
+      const wren = await server().sessionFor(wrenAccount);
+      const bob = await server().sessionFor(world.bobAccount);
 
-      const redeemed = await Promise.all([redeemAs(await server().signIn(BOB), secretOf(link)), redeemAs(wren, secretOf(link))]);
+      const redeemed = await Promise.all([redeemAs(bob, secretOf(link)), redeemAs(wren, secretOf(link))]);
 
       expect(redeemed.map(({ status }) => status).sort()).toEqual([204, 404]);
       const { rows } = await server().ownerDatabase.query<{ user_account_id: string }>(

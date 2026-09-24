@@ -80,21 +80,23 @@ describe("Instructional days", () => {
   }
 
   async function arrange(): Promise<World> {
+    const aliceAccount = await server().createAccount(ALICE);
+    const bobAccount = await server().createAccount(BOB);
     const northside = await server().provisionSchool({
       name: "Northside",
       timezone: "America/New_York",
-      administrator: await server().createAccount(ALICE),
+      administrator: aliceAccount,
     });
     const westbrook = await server().provisionSchool({
       name: "Westbrook",
       timezone: "Asia/Manila",
-      administrator: await server().createAccount(BOB),
+      administrator: bobAccount,
     });
     return {
       northsideId: northside.school.id,
       aliceId: northside.schoolAdministrator.id,
-      alice: (await server().signIn(ALICE)).inSchool(northside.school.id),
-      bob: (await server().signIn(BOB)).inSchool(westbrook.school.id),
+      alice: (await server().sessionFor(aliceAccount)).inSchool(northside.school.id),
+      bob: (await server().sessionFor(bobAccount)).inSchool(westbrook.school.id),
     };
   }
 
@@ -102,32 +104,36 @@ describe("Instructional days", () => {
   async function arrangeWithCallers(): Promise<WithCallers> {
     const world = await arrange();
     const schoolId = world.northsideId;
+    const frankie = await server().createAccount(FRANKIE);
+    const sam = await server().createAccount(SAM);
+    const gina = await server().createAccount(GINA);
+    const pat = await server().createAccount(PAT);
     await server().createPerson({
       schoolId,
       displayName: "Frankie",
-      account: await server().createAccount(FRANKIE),
+      account: frankie,
       role: "faculty",
     });
-    const sam = await server().createPerson({
+    const samPerson = await server().createPerson({
       schoolId,
       displayName: "Sam",
-      account: await server().createAccount(SAM),
+      account: sam,
       role: "student",
     });
-    await server().enroll(sam);
+    await server().enroll(samPerson);
     await server().createPerson({
       schoolId,
       displayName: "Gina",
-      account: await server().createAccount(GINA),
+      account: gina,
       role: "guardian",
     });
-    await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
+    await server().createPlatformAdministrator({ account: pat });
     return {
       ...world,
-      frankie: (await server().signIn(FRANKIE)).inSchool(schoolId),
-      sam: (await server().signIn(SAM)).inSchool(schoolId),
-      gina: (await server().signIn(GINA)).inSchool(schoolId),
-      pat: (await server().signIn(PAT)).inSchool(schoolId),
+      frankie: (await server().sessionFor(frankie)).inSchool(schoolId),
+      sam: (await server().sessionFor(sam)).inSchool(schoolId),
+      gina: (await server().sessionFor(gina)).inSchool(schoolId),
+      pat: (await server().sessionFor(pat)).inSchool(schoolId),
     };
   }
 

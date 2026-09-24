@@ -24,11 +24,12 @@ describe("the API is served under /api", () => {
    * path that once named a School is no longer a refusal in that School.
    */
   it("answers nothing at a route's old path, and records nothing there", async () => {
+    const account = await server().createAccount(ALICE);
     const { school, schoolAdministrator } = await server().provisionSchool({
       name: "Northside",
-      administrator: await server().createAccount(ALICE),
+      administrator: account,
     });
-    const alice = await server().signIn(ALICE);
+    const alice = await server().sessionFor(account);
 
     const answered: string[] = [];
     for (const { method, url } of server().routes) {

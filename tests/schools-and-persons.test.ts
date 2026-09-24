@@ -22,7 +22,7 @@ describe("Schools and Persons", () => {
       role: "guardian",
     });
 
-    const caller = await server().signIn(ALICE);
+    const caller = await server().sessionFor(alice);
     const response = await caller.get("/api/schools");
 
     expect(response.status).toBe(200);
@@ -42,7 +42,7 @@ describe("Schools and Persons", () => {
     });
     const student = await server().createPerson({ schoolId: school.id, displayName: "Sam Student" });
 
-    const caller = (await server().signIn(ALICE)).inSchool(school.id);
+    const caller = (await server().sessionFor(alice)).inSchool(school.id);
     const read = await caller.get(`/persons/${student.id}`);
     const listed = await caller.get("/persons");
 
@@ -69,7 +69,7 @@ describe("Schools and Persons", () => {
     });
     await server().createPerson({ schoolId: school.id, displayName: "Other Student" });
 
-    const caller = (await server().signIn(SAM)).inSchool(school.id);
+    const caller = (await server().sessionFor(sam)).inSchool(school.id);
     const listed = await caller.get("/persons");
     const self = await caller.get(`/persons/${samPerson.id}`);
 
@@ -90,7 +90,7 @@ describe("Schools and Persons", () => {
       role: "guardian",
     });
 
-    const caller = await server().signIn(ALICE);
+    const caller = await server().sessionFor(alice);
     const atNorthside = await caller.inSchool(northside.school.id).get("/persons");
     const atWestbrook = await caller.inSchool(westbrook.school.id).get("/persons");
 
@@ -127,8 +127,8 @@ describe("Schools and Persons", () => {
         displayName: "Classmate",
       });
       return {
-        sam: await server().signIn(SAM),
-        alice: await server().signIn(ALICE),
+        sam: await server().sessionFor(sam),
+        alice: await server().sessionFor(alice),
         northsideId: northside.school.id,
         westbrookId: westbrook.school.id,
         classmateId: classmate.id,

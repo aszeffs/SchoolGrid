@@ -50,13 +50,11 @@ describe("the web app", () => {
     });
 
     it("is answered identically whoever asks, so it reveals nothing about the caller", async () => {
-      const { school } = await server().provisionSchool({
-        name: "Northside",
-        administrator: await server().createAccount(ALICE),
-      });
+      const account = await server().createAccount(ALICE);
+      const { school } = await server().provisionSchool({ name: "Northside", administrator: account });
       const anonymous = await navigating(server().client).get(`/schools/${school.id}`);
 
-      for (const caller of [await server().signIn(ALICE), await server().signInWithCookie(ALICE)]) {
+      for (const caller of [await server().sessionFor(account), await server().cookieSessionFor(account)]) {
         expect(observable(await navigating(caller).get(`/schools/${school.id}`))).toEqual(
           observable(anonymous),
         );
@@ -152,11 +150,9 @@ describe("the web app", () => {
     });
 
     it("still records a navigation refused within a School in that School's Audit records", async () => {
-      const { school } = await server().provisionSchool({
-        name: "Northside",
-        administrator: await server().createAccount(ALICE),
-      });
-      const alice = await server().signIn(ALICE);
+      const account = await server().createAccount(ALICE);
+      const { school } = await server().provisionSchool({ name: "Northside", administrator: account });
+      const alice = await server().sessionFor(account);
 
       await navigating(alice).get(`/api/schools/${school.id}/no-such-route`);
 

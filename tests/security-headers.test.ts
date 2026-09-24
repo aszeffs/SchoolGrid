@@ -84,8 +84,9 @@ describe("security headers", () => {
     });
 
     it("are on a malformed-request rejection", async () => {
-      await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
-      const pat = await server().signIn(PAT);
+      const account = await server().createAccount(PAT);
+      await server().createPlatformAdministrator({ account });
+      const pat = await server().sessionFor(account);
 
       const response = await pat.post("/api/platform/schools", {});
 
@@ -110,11 +111,12 @@ describe("security headers", () => {
      * leave them off by accident.
      */
     it("are on the response of every registered route", async () => {
+      const account = await server().createAccount(ALICE);
       const { school, schoolAdministrator } = await server().provisionSchool({
         name: "Northside",
-        administrator: await server().createAccount(ALICE),
+        administrator: account,
       });
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(account);
 
       expect(server().routes.length).toBeGreaterThan(0);
       const lacking: string[] = [];

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { UserAccount } from "../src/authentication/index.ts";
 import type { Person } from "../src/identity/index.ts";
 import { observable, useTestServer, type TestClient } from "./support/harness.ts";
 
@@ -44,6 +45,7 @@ describe("School memberships", () => {
     /** Bob: Westbrook's School Administrator. */
     bobAdmin: TestClient;
     westbrookAdminId: string;
+    accounts: Record<"alice" | "terry" | "sam", UserAccount>;
   }
 
   async function arrange(): Promise<World> {
@@ -68,10 +70,11 @@ describe("School memberships", () => {
       northsideId: northside.school.id,
       westbrookId: westbrook.school.id,
       aliceId: northside.schoolAdministrator.id,
-      aliceAdmin: (await server().signIn(ALICE)).inSchool(northside.school.id),
+      aliceAdmin: (await server().sessionFor(alice)).inSchool(northside.school.id),
       terryPerson,
       samPerson,
-      bobAdmin: (await server().signIn(BOB)).inSchool(westbrook.school.id),
+      bobAdmin: (await server().sessionFor(bob)).inSchool(westbrook.school.id),
+      accounts: { alice, terry, sam },
       westbrookAdminId: westbrook.schoolAdministrator.id,
     };
   }
@@ -124,7 +127,7 @@ describe("School memberships", () => {
       });
       const { membership } = response.body as { membership: Membership };
       expect(await membershipsOf(world.aliceAdmin, world.terryPerson.id)).toEqual([membership]);
-      expect(await reachesSchool(await server().signIn(TERRY), world.terryPerson)).toBe(true);
+      expect(await reachesSchool(await server().sessionFor(world.accounts.terry), world.terryPerson)).toBe(true);
     });
 
     it("lists every membership in the School, and nothing from another School", async () => {
@@ -244,7 +247,7 @@ describe("School memberships", () => {
         startsAt: new Date(Date.now() + HOUR_MS).toISOString(),
       });
 
-      expect(await reachesSchool(await server().signIn(TERRY), world.terryPerson)).toBe(false);
+      expect(await reachesSchool(await server().sessionFor(world.accounts.terry), world.terryPerson)).toBe(false);
     });
 
     it("grants no access once a membership has ended", async () => {
@@ -256,7 +259,7 @@ describe("School memberships", () => {
         endsAt: new Date(Date.now() - HOUR_MS),
       });
 
-      expect(await reachesSchool(await server().signIn(TERRY), world.terryPerson)).toBe(false);
+      expect(await reachesSchool(await server().sessionFor(world.accounts.terry), world.terryPerson)).toBe(false);
     });
 
     it("grants a School Administrator's reach only while that membership lasts", async () => {
@@ -265,7 +268,7 @@ describe("School memberships", () => {
         startsAt: new Date(Date.now() - 2 * HOUR_MS),
         endsAt: new Date(Date.now() - HOUR_MS),
       });
-      const sam = (await server().signIn(SAM)).inSchool(world.northsideId);
+      const sam = (await server().sessionFor(world.accounts.sam)).inSchool(world.northsideId);
 
       const absent = await sam.get(`/persons/${ABSENT_ID}`);
       const listing = await sam.get("/memberships");
@@ -350,7 +353,7 @@ describe("School memberships", () => {
       expect(await membershipsOf(world.aliceAdmin, world.terryPerson.id)).toEqual(
         expect.arrayContaining([revoked, guardian]),
       );
-      expect(await reachesSchool(await server().signIn(TERRY), world.terryPerson)).toBe(true);
+      expect(await reachesSchool(await server().sessionFor(world.accounts.terry), world.terryPerson)).toBe(true);
     });
 
     it("takes away only the revoked role's reach", async () => {
@@ -360,7 +363,7 @@ describe("School memberships", () => {
         role: "school_administrator",
       });
       await grant(world.aliceAdmin, { personId: world.terryPerson.id, role: "guardian" });
-      const terry = (await server().signIn(TERRY)).inSchool(world.northsideId);
+      const terry = (await server().sessionFor(world.accounts.terry)).inSchool(world.northsideId);
       expect((await terry.get("/memberships")).status).toBe(200);
 
       await world.aliceAdmin.delete(`/memberships/${administrator.id}`);
@@ -375,14 +378,14 @@ describe("School memberships", () => {
       const world = await arrange();
       const faculty = await grant(world.aliceAdmin, { personId: world.terryPerson.id, role: "faculty" });
       const guardian = await grant(world.aliceAdmin, { personId: world.terryPerson.id, role: "guardian" });
-      const terry = await server().signIn(TERRY);
+      const terry = await server().sessionFor(world.accounts.terry);
       expect(((await terry.get("/api/schools")).body as { schools: unknown[] }).schools).toHaveLength(1);
 
       await world.aliceAdmin.delete(`/memberships/${faculty.id}`);
       await world.aliceAdmin.delete(`/memberships/${guardian.id}`);
 
       const self = await terry.inSchool(world.northsideId).get(`/persons/${world.terryPerson.id}`);
-      const absent = await (await server().signIn(SAM))
+      const absent = await (await server().sessionFor(world.accounts.sam))
         .inSchool(world.northsideId)
         .get(`/persons/${ABSENT_ID}`);
       expect(observable(self)).toEqual(observable(absent));
@@ -619,9 +622,9 @@ describe("School memberships", () => {
     }
 
     async function clientsFor(world: World): Promise<Clients> {
-      const alice = await server().signIn(ALICE);
-      const sam = (await server().signIn(SAM)).inSchool(world.northsideId);
-      const terry = (await server().signIn(TERRY)).inSchool(world.northsideId);
+      const alice = await server().sessionFor(world.accounts.alice);
+      const sam = (await server().sessionFor(world.accounts.sam)).inSchool(world.northsideId);
+      const terry = (await server().sessionFor(world.accounts.terry)).inSchool(world.northsideId);
       return {
         ...world,
         aliceAdmin: Object.assign(alice.inSchool(world.northsideId), {

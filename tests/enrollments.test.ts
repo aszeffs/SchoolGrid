@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { UserAccount } from "../src/authentication/index.ts";
 import type { Person } from "../src/identity/index.ts";
 import { observable, useTestServer, type TestClient } from "./support/harness.ts";
 
@@ -58,6 +59,7 @@ describe("Enrollment", () => {
     wrenPerson: Person;
     wrenEnrollment: Enrollment;
     bobAdmin: TestClient;
+    accounts: Record<"alice" | "sam" | "gina", UserAccount>;
   }
 
   async function arrange(): Promise<World> {
@@ -67,7 +69,7 @@ describe("Enrollment", () => {
     const gina = await server().createAccount(GINA);
     const northside = await server().provisionSchool({ name: "Northside", administrator: alice });
     const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
-    const bobAdmin = (await server().signIn(BOB)).inSchool(westbrook.school.id);
+    const bobAdmin = (await server().sessionFor(bob)).inSchool(westbrook.school.id);
     const wrenPerson = await server().createPerson({
       schoolId: westbrook.school.id,
       displayName: "Wren",
@@ -77,7 +79,7 @@ describe("Enrollment", () => {
       northsideId: northside.school.id,
       westbrookId: westbrook.school.id,
       aliceId: northside.schoolAdministrator.id,
-      aliceAdmin: (await server().signIn(ALICE)).inSchool(northside.school.id),
+      aliceAdmin: (await server().sessionFor(alice)).inSchool(northside.school.id),
       samPerson: await server().createPerson({
         schoolId: northside.school.id,
         displayName: "Sam",
@@ -98,6 +100,7 @@ describe("Enrollment", () => {
       wrenPerson,
       wrenEnrollment: await enroll(bobAdmin, wrenPerson),
       bobAdmin,
+      accounts: { alice, sam, gina },
     };
   }
 
@@ -191,7 +194,7 @@ describe("Enrollment", () => {
       const world = await arrange();
       await enroll(world.aliceAdmin, world.samPerson);
 
-      const sam = (await server().signIn(SAM)).inSchool(world.northsideId);
+      const sam = (await server().sessionFor(world.accounts.sam)).inSchool(world.northsideId);
 
       expect((await sam.get(`/persons/${world.samPerson.id}`)).body).toEqual({
         person: { id: world.samPerson.id, displayName: "Sam" },
@@ -354,7 +357,7 @@ describe("Enrollment", () => {
   describe("a departed Student", () => {
     async function departed(world: World): Promise<TestClient> {
       await end(world.aliceAdmin, await enroll(world.aliceAdmin, world.samPerson));
-      return (await server().signIn(SAM)).inSchool(world.northsideId);
+      return (await server().sessionFor(world.accounts.sam)).inSchool(world.northsideId);
     }
 
     it("still reaches the School and their own record", async () => {
@@ -363,7 +366,7 @@ describe("Enrollment", () => {
       const sam = await departed(world);
 
       expect((await sam.get(`/persons/${world.samPerson.id}`)).status).toBe(200);
-      expect((await (await server().signIn(SAM)).get("/api/schools")).body).toEqual({
+      expect((await (await server().sessionFor(world.accounts.sam)).get("/api/schools")).body).toEqual({
         schools: [{ id: world.northsideId, name: "Northside" }],
       });
     });
@@ -445,7 +448,7 @@ describe("Enrollment", () => {
           ),
         ),
       );
-      const gina = (await server().signIn(GINA)).inSchool(world.northsideId);
+      const gina = (await server().sessionFor(world.accounts.gina)).inSchool(world.northsideId);
       const absent = await gina.get(`/persons/${ABSENT_ID}`);
       expect(observable(await gina.get(`/persons/${world.samPerson.id}`))).toEqual(observable(absent));
     });
@@ -460,7 +463,7 @@ describe("Enrollment", () => {
       await end(world.aliceAdmin, samEnrollment);
 
       expect((await linksOf(world.aliceAdmin)).find((each) => each.id === skyLink.id)).toEqual(skyLink);
-      const gina = (await server().signIn(GINA)).inSchool(world.northsideId);
+      const gina = (await server().sessionFor(world.accounts.gina)).inSchool(world.northsideId);
       expect((await gina.get(`/persons/${world.skyPerson.id}`)).status).toBe(200);
       expect((await gina.get("/persons")).body).toEqual({
         persons: [
@@ -505,8 +508,8 @@ describe("Enrollment", () => {
     it("walks Enrollment, departure, and return, widening again with no step but the new Enrollment", async () => {
       const world = await arrange();
       await enroll(world.aliceAdmin, world.skyPerson);
-      const sam = (await server().signIn(SAM)).inSchool(world.northsideId);
-      const gina = (await server().signIn(GINA)).inSchool(world.northsideId);
+      const sam = (await server().sessionFor(world.accounts.sam)).inSchool(world.northsideId);
+      const gina = (await server().sessionFor(world.accounts.gina)).inSchool(world.northsideId);
       const absentResponse = await sam.get(`/persons/${ABSENT_ID}`);
       expect(absentResponse.status).not.toBe(200);
       const absent = observable(absentResponse);
@@ -617,7 +620,7 @@ describe("Enrollment", () => {
     // membership ended while they were away is granted one afresh.
     it("returns after their Student membership ended, once granted a new one", async () => {
       const world = await arrange();
-      const sam = (await server().signIn(SAM)).inSchool(world.northsideId);
+      const sam = (await server().sessionFor(world.accounts.sam)).inSchool(world.northsideId);
       const absentResponse = await world.aliceAdmin.get(`/persons/${ABSENT_ID}`);
       expect(absentResponse.status).not.toBe(200);
       await end(world.aliceAdmin, await enroll(world.aliceAdmin, world.samPerson), "Moved away");
@@ -683,12 +686,12 @@ describe("Enrollment", () => {
     }
 
     async function clientsFor(world: World): Promise<Clients> {
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.accounts.alice);
       return {
         ...world,
         aliceIn: (schoolId) => alice.inSchool(schoolId),
-        sam: (await server().signIn(SAM)).inSchool(world.northsideId),
-        gina: (await server().signIn(GINA)).inSchool(world.northsideId),
+        sam: (await server().sessionFor(world.accounts.sam)).inSchool(world.northsideId),
+        gina: (await server().sessionFor(world.accounts.gina)).inSchool(world.northsideId),
         samEnrollment: await enroll(world.aliceAdmin, world.samPerson),
       };
     }

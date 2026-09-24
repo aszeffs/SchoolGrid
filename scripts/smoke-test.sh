@@ -33,6 +33,9 @@
 # credentials and with DEMO_MODE on. SCHOOLGRID_DEMO_ORIGIN tells the command
 # where. The first container keeps DEMO_MODE off, as every other deployment does.
 #
+# On the way out, pass or fail, it prints the most /api requests each of those
+# two containers was sent in any one minute, against the rate limit it ran with.
+#
 # Usage: scripts/smoke-test.sh <image-ref> [command...]
 
 set -euo pipefail
@@ -65,6 +68,9 @@ HOST_PORT="${HOST_PORT:-3000}"
 OWNERLESS_HOST_PORT="${OWNERLESS_HOST_PORT:-3001}"
 SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-90}"
 SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
+# The rate limit every container here runs with: see `start_image` for why it
+# is wider than production's, and `report_headroom` for how close it came.
+RATE_LIMIT_MAX="${SMOKE_RATE_LIMIT_MAX:-1000}"
 
 # `localhost` rather than the loopback address. Browsers keep a `Secure` cookie
 # over plain http only on a host they treat as a secure context, and the image's
@@ -109,12 +115,59 @@ print_container_logs() {
   done
 }
 
+# Prints the most /api requests container $1 was sent in any one rate-limit
+# window, against the limit it ran with, and warns once that passes 80%. $2
+# names the container.
+#
+# The browser suite's requests all reach a container from one address, so the
+# limit sees the whole suite as one client. A 429 already fails the suite (the
+# `throttled` fixture in e2e/test.ts); this is the warning before that, while
+# raising SMOKE_RATE_LIMIT_MAX is still a choice rather than a fix. It never
+# fails the run itself.
+#
+# Counted from Fastify's own "incoming request" lines, whose `time` is epoch
+# milliseconds. A sliding window, so the peak is at least what any of the
+# limiter's fixed windows saw. The window is production's (DEFAULT_RATE_LIMIT
+# in src/config.ts), which nothing here overrides.
+report_headroom() {
+  local id="$1"
+  local name="$2"
+  local log="$workdir/headroom-${id}.log"
+  docker logs "$id" > "$log" 2>&1 || return 1
+
+  local peak
+  peak="$(
+    { grep -E '"msg"[[:space:]]*:[[:space:]]*"incoming request"' "$log" || true; } \
+      | { grep -E '"url"[[:space:]]*:[[:space:]]*"/api([/?"])' || true; } \
+      | sed -nE 's/.*"time"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' \
+      | sort -n \
+      | awk -v window=60000 '
+          { at[NR] = $1; while (at[NR] - at[first + 1] >= window) first++; if (NR - first > peak) peak = NR - first }
+          END { print peak + 0 }
+        '
+  )" || return 1
+
+  echo "rate limit: ${name} was sent at most ${peak} /api requests in any 60s window, of RATE_LIMIT_MAX ${RATE_LIMIT_MAX}"
+  if [ $(( peak * 100 )) -gt $(( RATE_LIMIT_MAX * 80 )) ]; then
+    echo "warning: that is above 80% of the limit. Raise SMOKE_RATE_LIMIT_MAX before the browser suite is throttled." >&2
+  fi
+}
+
 # Runs on every exit, so a failure between `docker create` and the end of the
 # script cannot leave a container holding a published port on the runner.
 cleanup() {
   local code=$?
   if [ "$code" -ne 0 ]; then
     print_container_logs
+  fi
+  # Pass or fail: headroom that is running out shows before it fails a run.
+  # Called with `||`, so a failure inside cannot end the cleanup early.
+  if [ -n "${container:-}" ]; then
+    echo
+    report_headroom "$container" "the container at ${ORIGIN}" || echo "(the rate limit headroom at ${ORIGIN} could not be measured)" >&2
+  fi
+  if [ -n "${demo:-}" ]; then
+    report_headroom "$demo" "the demo at ${DEMO_ORIGIN}" || echo "(the rate limit headroom at ${DEMO_ORIGIN} could not be measured)" >&2
   fi
   local id
   for id in ${containers[@]+"${containers[@]}"}; do
@@ -198,9 +251,8 @@ APPLIED_MIGRATIONS="SELECT count(*) FROM public.schema_migrations"
 # suite paced: pacing would slow every run to protect a limit this container
 # does not need, and would still break as specs are added. Whether the width
 # is enough is checked on every run, not assumed: e2e/test.ts fails any test
-# that had a request throttled, and says to raise this. Measured with the
-# School settings specs added (#153), the suite peaked at 574 /api requests in
-# one 60-second window.
+# that had a request throttled, and says to raise this, and `report_headroom`
+# prints how close each run came.
 start_image() {
   local into="$1"
   local port="$2"
@@ -210,7 +262,7 @@ start_image() {
     --publish "127.0.0.1:${port}:3000"
     --env "DATABASE_URL=postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
     --env "PUBLIC_ORIGIN=http://localhost:${port}"
-    --env "RATE_LIMIT_MAX=${SMOKE_RATE_LIMIT_MAX:-1000}"
+    --env "RATE_LIMIT_MAX=${RATE_LIMIT_MAX}"
   )
   if [ "$mode" = "with-owner" ]; then
     args+=(--env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}")

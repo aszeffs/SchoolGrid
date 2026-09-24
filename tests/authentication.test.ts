@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createUserAccount } from "../src/authentication/index.ts";
 import {
   cookieSentBackFor,
   observable,
@@ -160,9 +161,11 @@ describe("User account authentication", () => {
       }
     });
 
+    // The harness shares one hash between accounts arranged with the same
+    // password, so the two tests below create theirs as the application does.
     it("stores the same password differently for two accounts", async () => {
-      await server().createAccount(ALICE);
-      await server().createAccount({ username: "bob", password: ALICE.password });
+      await createUserAccount(server().database, ALICE);
+      await createUserAccount(server().database, { username: "bob", password: ALICE.password });
 
       const { rows } = await server().database.query<{ password_hash: string }>(
         "SELECT password_hash FROM app.user_account",
@@ -170,6 +173,16 @@ describe("User account authentication", () => {
 
       expect(rows).toHaveLength(2);
       expect(rows[0]!.password_hash).not.toBe(rows[1]!.password_hash);
+    });
+
+    it("hashes a password with scrypt at OWASP's cost: N=2^15, r=8, p=3", async () => {
+      await createUserAccount(server().database, ALICE);
+
+      const { rows } = await server().database.query<{ password_hash: string }>(
+        "SELECT password_hash FROM app.user_account",
+      );
+
+      expect(rows[0]!.password_hash).toMatch(/^scrypt\$32768\$8\$3\$[^$]+\$[^$]+$/);
     });
   });
 
