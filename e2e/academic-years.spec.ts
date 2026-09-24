@@ -276,6 +276,140 @@ test("a year is changed from the keyboard alone, with focus in sight", async ({ 
   await expect(page.getByRole("button", { name: `Change ${year.name} renamed` })).toBeFocused();
 });
 
+/** The days from `first` to `last` falling on these ISO weekdays (1 is Monday), counted. */
+function daysOn(first: string, last: string, weekdays: number[]): number {
+  let count = 0;
+  for (const day = new Date(`${first}T00:00:00Z`); day <= new Date(`${last}T00:00:00Z`); day.setUTCDate(day.getUTCDate() + 1)) {
+    count += weekdays.includes(((day.getUTCDay() + 6) % 7) + 1) ? 1 : 0;
+  }
+  return count;
+}
+
+/** The first date on or after `from` falling on this ISO weekday. */
+function firstOn(from: string, weekday: number): string {
+  const day = new Date(`${from}T00:00:00Z`);
+  while (((day.getUTCDay() + 6) % 7) + 1 !== weekday) {
+    day.setUTCDate(day.getUTCDate() + 1);
+  }
+  return day.toISOString().slice(0, 10);
+}
+
+/** One day of a year's calendar, by its School date. */
+function dayIn(page: Page, year: Year, date: string) {
+  return page.getByRole("region", { name: year.name }).locator(`button[data-date="${date}"]`);
+}
+
+test("a weekday pattern is set, a holiday and a make-up day are added, and the Term's count follows", async ({
+  page,
+  audit,
+}) => {
+  const { schoolId } = await onAcademicYears(page);
+  const year = await arrangeYear(page, schoolId, { divided: true });
+  const fall = { firstDate: `${year.starts}-09-01`, lastDate: `${year.starts + 1}-01-15` };
+  const fallRow = recordRows(page, `Terms of ${year.name}`).nth(1);
+  await expect(fallRow).toContainText(`${daysOn(fall.firstDate, fall.lastDate, [1, 2, 3, 4, 5])} Instructional days`);
+
+  // Four-day weeks: Friday is no longer a school day.
+  const pattern = page.getByRole("form", { name: `Weekday pattern of ${year.name}` });
+  await pattern.getByLabel("Friday").uncheck();
+  await pattern.getByRole("button", { name: "Save the pattern" }).click();
+  await expect(page.getByRole("status")).toHaveText(`The weekday pattern of ${year.name} is saved.`);
+  const fourDays = daysOn(fall.firstDate, fall.lastDate, [1, 2, 3, 4]);
+  await expect(fallRow).toContainText(`${fourDays} Instructional days`);
+
+  // The year's first Monday taken out, and its first Saturday put in.
+  const holiday = firstOn(fall.firstDate, 1);
+  await dayIn(page, year, holiday).click();
+  await expect(dayIn(page, year, holiday)).toHaveAccessibleName(/: Instructional day$/);
+  await page.getByRole("button", { name: "Take it out as a holiday" }).click();
+  await expect(page.getByRole("status")).toContainText("is taken out as a holiday.");
+  await expect(dayIn(page, year, holiday)).toHaveAccessibleName(/: holiday, taken out$/);
+  await expect(fallRow).toContainText(`${fourDays - 1} Instructional days`);
+
+  const makeUp = firstOn(fall.firstDate, 6);
+  await dayIn(page, year, makeUp).click();
+  await page.getByRole("button", { name: "Put it in as a make-up day" }).click();
+  await expect(page.getByRole("status")).toContainText("is put in as a make-up day.");
+  await expect(dayIn(page, year, makeUp)).toHaveAccessibleName(/: make-up day, put in$/);
+  await expect(fallRow).toContainText(`${fourDays} Instructional days`);
+  await audit(page);
+
+  const { academicYears } = (await (await page.request.get(`/api/schools/${schoolId}/academic-years`)).json()) as {
+    academicYears: { id: string; weekdays: string[]; exceptions: { date: string; instructional: boolean }[] }[];
+  };
+  const held = academicYears.find((each) => each.id === year.id)!;
+  expect(held.weekdays).toEqual(["monday", "tuesday", "wednesday", "thursday"]);
+  // Listed in date order, whichever was added first.
+  expect(held.exceptions.map(({ date, instructional }) => ({ date, instructional }))).toEqual(
+    [
+      { date: holiday, instructional: false },
+      { date: makeUp, instructional: true },
+    ].sort((a, b) => a.date.localeCompare(b.date)),
+  );
+
+  // Returned to the pattern, the holiday is a school day again.
+  await dayIn(page, year, holiday).click();
+  await page.getByRole("button", { name: "Return it to the weekday pattern" }).click();
+  await expect(page.getByRole("status")).toContainText("is returned to the weekday pattern.");
+  await expect(fallRow).toContainText(`${fourDays + 1} Instructional days`);
+});
+
+test("the calendar is worked from the keyboard alone, with focus in sight", async ({ page }) => {
+  const { schoolId } = await onAcademicYears(page);
+  const year = await arrangeYear(page, schoolId, { divided: false });
+  const first = `${year.starts}-09-01`;
+  const region = page.getByRole("region", { name: year.name });
+
+  // The grid is one stop in the Tab order: its first day, until another is moved to.
+  const opening = dayIn(page, year, first);
+  await expect(region.locator('button[data-date][tabindex="0"]')).toHaveCount(1);
+  await opening.focus();
+  expect(await opening.evaluate((node) => getComputedStyle(node).outlineStyle)).not.toBe("none");
+
+  await page.keyboard.press("ArrowRight");
+  await expect(dayIn(page, year, `${year.starts}-09-02`)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(dayIn(page, year, `${year.starts}-09-09`)).toBeFocused();
+  // Going before the year's first day stays on it.
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await expect(opening).toBeFocused();
+  await page.keyboard.press("PageDown");
+  await expect(dayIn(page, year, `${year.starts}-10-01`)).toBeFocused();
+  await expect(region.getByRole("heading", { level: 4 })).toContainText(`${year.starts}`);
+
+  // Choosing a day offers its one change, reached with Tab.
+  const saturday = firstOn(`${year.starts}-10-01`, 6);
+  while (!(await dayIn(page, year, saturday).evaluate((node) => node === document.activeElement))) {
+    await page.keyboard.press("ArrowRight");
+  }
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  const putIn = page.getByRole("button", { name: "Put it in as a make-up day" });
+  await expect(putIn).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("status")).toContainText("is put in as a make-up day.");
+  await expect(page.getByRole("button", { name: "Return it to the weekday pattern" })).toBeFocused();
+});
+
+test("a year with a day taken out is not deleted, and the page says to return it first", async ({ page }) => {
+  const { schoolId } = await onAcademicYears(page);
+  const year = await arrangeYear(page, schoolId, { divided: false });
+  await dayIn(page, year, firstOn(`${year.starts}-09-01`, 1)).click();
+  await page.getByRole("button", { name: "Take it out as a holiday" }).click();
+  await expect(page.getByRole("status")).toContainText("is taken out as a holiday.");
+
+  await page.getByRole("button", { name: `Delete ${year.name}` }).click();
+  const dialog = page.getByRole("dialog", { name: `Delete ${year.name}?` });
+  await expect(dialog).toContainText("return each to the weekday pattern first");
+  await dialog.getByRole("button", { name: "Delete the Academic Year" }).click();
+
+  await expect(page.getByRole("region", { name: year.name }).getByRole("alert")).toContainText(
+    "Return each to the weekday pattern first.",
+  );
+});
+
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 360, height: 740 } });
 
@@ -284,6 +418,14 @@ test.describe("on a phone", () => {
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
       const { schoolId } = await onAcademicYears(page);
       const year = await arrangeYear(page, schoolId, { divided: true });
+      await expectNoSidewaysScroll(page);
+      await audit(page);
+
+      // A day chosen in the calendar, with the change it offers.
+      const day = dayIn(page, year, firstOn(`${year.starts}-09-01`, 1));
+      await day.scrollIntoViewIfNeeded();
+      await day.click();
+      await expect(page.getByRole("button", { name: "Take it out as a holiday" })).toBeInViewport();
       await expectNoSidewaysScroll(page);
       await audit(page);
 

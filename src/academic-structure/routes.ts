@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import { authorizeManageAcademicStructure, authorizeManageAcademicYear, type Actor } from "../access/index.ts";
+import {
+  authorizeManageAcademicStructure,
+  authorizeManageAcademicYear,
+  authorizeManageInstructionalDayException,
+  type Actor,
+} from "../access/index.ts";
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
+import { instructionalDaysInSchool, WEEKDAYS, type SchoolDate, type Weekday } from "../calendar/index.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
@@ -9,14 +15,18 @@ import { boundedText, fieldsOf, reasonFrom, reasonOnly, schoolDateFrom } from ".
 import { registerSchoolScope } from "../http/school-scope.ts";
 import {
   academicYearsInSchool,
+  addException,
   changeAcademicYear,
   createAcademicYear,
   deleteAcademicYear,
   findAcademicYear,
   lockAcademicYear,
+  removeException,
+  WORKING_WEEK,
   type AcademicYear,
   type Changed,
   type DividedAcademicYear,
+  type InstructionalDayException,
   type ProposedTerm,
   type Term,
 } from "./index.ts";
@@ -24,20 +34,43 @@ import {
 /** More Terms than any year is divided into, and few enough not to be worth asking about. */
 const MAX_TERMS = 100;
 
-/** An Academic Year as served, with its Terms in order. The School is the one addressed. */
-function present({ id, name, firstDate, lastDate, terms }: DividedAcademicYear) {
+/**
+ * An Academic Year as served, with its Terms and exceptions in order, and the
+ * Instructional days they make. The School is the one addressed.
+ */
+function present(
+  { id, name, firstDate, lastDate, weekdays, exceptions, terms }: DividedAcademicYear,
+  instructionalDays: SchoolDate[],
+) {
   return {
     id,
     name,
     firstDate,
     lastDate,
+    weekdays,
+    exceptions: exceptions.map((exception) => ({
+      id: exception.id,
+      date: exception.date,
+      instructional: exception.instructional,
+    })),
+    instructionalDays,
     terms: terms.map((term) => ({ id: term.id, name: term.name, firstDate: term.firstDate, lastDate: term.lastDate })),
   };
 }
 
-/** An Academic Year as written to the Audit record: its own values, since each Term has a record of its own. */
-function yearValues({ name, firstDate, lastDate }: AcademicYear): AuditValues {
-  return { name, firstDate, lastDate };
+/** One Academic Year as served, as it stands in this transaction. */
+async function presentOne(transaction: Queryable, year: DividedAcademicYear) {
+  const instructionalDays = await instructionalDaysInSchool(transaction, year.schoolId);
+  return { academicYear: present(year, instructionalDays.get(year.id) ?? []) };
+}
+
+/**
+ * An Academic Year as written to the Audit record: its own values, since each
+ * Term and exception has a record of its own. A value is never nested, so its
+ * pattern is its weekdays in order, separated by commas.
+ */
+function yearValues({ name, firstDate, lastDate, weekdays }: AcademicYear): AuditValues {
+  return { name, firstDate, lastDate, weekdays: weekdays.join(",") };
 }
 
 /** A Term as written to the Audit record, naming the year it belongs to. */
@@ -45,29 +78,63 @@ function termValues({ academicYearId, name, firstDate, lastDate }: Term): AuditV
   return { academicYearId, name, firstDate, lastDate };
 }
 
+/** An exception as written to the Audit record, naming the year it belongs to. */
+function exceptionValues({ academicYearId, date, instructional }: InstructionalDayException): AuditValues {
+  return { academicYearId, date, instructional };
+}
+
 // Validation below runs only once the Access decision has permitted the
 // caller: see InvalidRequest.
 
 function parseCreation(body: unknown) {
-  const fields = fieldsOf(body, ["name", "firstDate", "lastDate", "reason"]);
+  const fields = fieldsOf(body, ["name", "firstDate", "lastDate", "weekdays", "reason"]);
   const bounds = boundsFrom(schoolDateFrom(fields["firstDate"], "firstDate"), schoolDateFrom(fields["lastDate"], "lastDate"));
-  return { name: boundedText(fields["name"], "name"), ...bounds, reason: reasonFrom(fields["reason"]) };
+  return {
+    name: boundedText(fields["name"], "name"),
+    ...bounds,
+    weekdays: fields["weekdays"] === undefined ? [...WORKING_WEEK] : weekdaysFrom(fields["weekdays"]),
+    reason: reasonFrom(fields["reason"]),
+  };
 }
 
 /**
- * A change to an Academic Year: whatever it states of its name and bounds,
- * over what the year already holds, and the whole of its Terms if it states
- * them.
+ * A change to an Academic Year: whatever it states of its name, bounds, and
+ * weekday pattern, over what the year already holds, and the whole of its
+ * Terms if it states them.
  */
 function parseChange(body: unknown, year: DividedAcademicYear) {
-  const fields = fieldsOf(body, ["name", "firstDate", "lastDate", "terms", "reason"]);
+  const fields = fieldsOf(body, ["name", "firstDate", "lastDate", "weekdays", "terms", "reason"]);
   const name = fields["name"] === undefined ? year.name : boundedText(fields["name"], "name");
   const bounds = boundsFrom(
     fields["firstDate"] === undefined ? year.firstDate : schoolDateFrom(fields["firstDate"], "firstDate"),
     fields["lastDate"] === undefined ? year.lastDate : schoolDateFrom(fields["lastDate"], "lastDate"),
   );
+  const weekdays = fields["weekdays"] === undefined ? year.weekdays : weekdaysFrom(fields["weekdays"]);
   const terms = fields["terms"] === undefined ? null : termsFrom(fields["terms"], year);
-  return { name, ...bounds, terms, reason: reasonFrom(fields["reason"]) };
+  return { name, ...bounds, weekdays, terms, reason: reasonFrom(fields["reason"]) };
+}
+
+/** An exception to add: its date, and whether it puts the date in or takes it out. */
+function parseException(body: unknown) {
+  const fields = fieldsOf(body, ["date", "instructional", "reason"]);
+  const instructional = fields["instructional"];
+  if (typeof instructional !== "boolean") {
+    throw new InvalidRequest("instructional must be true or false");
+  }
+  return { date: schoolDateFrom(fields["date"], "date"), instructional, reason: reasonFrom(fields["reason"]) };
+}
+
+/** A weekday pattern: each day named at most once, in any order, and held Monday first. */
+function weekdaysFrom(value: unknown): Weekday[] {
+  const named: unknown[] | null = Array.isArray(value) ? value : null;
+  if (
+    named === null ||
+    !named.every((day) => (WEEKDAYS as readonly unknown[]).includes(day)) ||
+    new Set(named).size !== named.length
+  ) {
+    throw new InvalidRequest(`weekdays must name each of ${WEEKDAYS.join(", ")} at most once`);
+  }
+  return WEEKDAYS.filter((day) => named.includes(day));
 }
 
 function boundsFrom(firstDate: string, lastDate: string) {
@@ -110,8 +177,8 @@ function termsFrom(value: unknown, year: DividedAcademicYear): ProposedTerm[] {
 
 /**
  * The Academic Year the actor may change or delete, locked for the rest of
- * the transaction with its Terms. The decision comes first and the lock
- * second: see lockAcademicYear.
+ * the transaction with its Terms and exceptions. The decision comes first and
+ * the lock second: see lockAcademicYear.
  *
  * A year deleted between the two is decided again as the absent year it now
  * is, so the caller is refused as for any other.
@@ -133,8 +200,9 @@ async function lockPermitted(
 /** How each kind of record this module changes is named and written in the Audit record. */
 const YEAR_RECORD = { type: "academic_year", values: yearValues } as const;
 const TERM_RECORD = { type: "term", values: termValues } as const;
+const EXCEPTION_RECORD = { type: "instructional_day_exception", values: exceptionValues } as const;
 
-/** Records one change to a year or a Term: its creation, deletion, or change. */
+/** Records one change to a year, a Term, or an exception: its creation, deletion, or change. */
 async function recordChange<T extends { id: string }>(
   transaction: Queryable,
   actor: Actor,
@@ -154,16 +222,20 @@ async function recordChange<T extends { id: string }>(
 }
 
 /**
- * A School's Academic Years and their Terms, shaped by its School
- * Administrator: every decision is the Access module's, asked before anything
- * else about the request is looked at, and every change is recorded in the
- * transaction that makes it, one Audit record for each year or Term it
- * touched.
+ * A School's Academic Years, their Terms, and their Instructional days,
+ * shaped by its School Administrator: every decision is the Access module's,
+ * asked before anything else about the request is looked at, and every change
+ * is recorded in the transaction that makes it, one Audit record for each
+ * year, Term, or exception it touched.
  *
  * A year's Terms change together, in the request that changes the year. They
  * cover the year exactly, so moving the boundary between two of them is one
  * change to both; two requests, each moving one side, would each leave a gap
  * or an overlap between them.
+ *
+ * A year's weekday pattern changes with the year too. Its exceptions are added
+ * and removed one at a time, each a record of its own: a holiday turned into a
+ * make-up day is one removed and another added.
  */
 export function registerAcademicStructureRoutes(
   app: FastifyInstance,
@@ -174,7 +246,12 @@ export function registerAcademicStructureRoutes(
     // Every year at once (ADR-0008): a School holds one a year.
     scope.get("/academic-years", async (actor) => {
       const schoolId = authorizeManageAcademicStructure(actor);
-      return { academicYears: (await academicYearsInSchool(database, schoolId)).map(present) };
+      // One snapshot, so each year's Instructional days are those its pattern and exceptions make.
+      return withTransaction(database, async (transaction) => {
+        const years = await academicYearsInSchool(transaction, schoolId);
+        const instructionalDays = await instructionalDaysInSchool(transaction, schoolId);
+        return { academicYears: years.map((year) => present(year, instructionalDays.get(year.id) ?? [])) };
+      });
     });
 
     scope.post("/academic-years", async (actor, { body }) => {
@@ -183,7 +260,7 @@ export function registerAcademicStructureRoutes(
       return withTransaction(database, async (transaction) => {
         const created = await createAcademicYear(transaction, { schoolId, ...year });
         await recordChange(transaction, actor, YEAR_RECORD, { before: null, after: created }, reason);
-        return { academicYear: present(created) };
+        return presentOne(transaction, created);
       });
     });
 
@@ -198,7 +275,7 @@ export function registerAcademicStructureRoutes(
         for (const term of changed.changedTerms) {
           await recordChange(transaction, actor, TERM_RECORD, term, reason);
         }
-        return { academicYear: present(changed.year) };
+        return presentOne(transaction, changed.year);
       });
     });
 
@@ -208,7 +285,35 @@ export function registerAcademicStructureRoutes(
         const reason = reasonOnly(body);
         await deleteAcademicYear(transaction, year);
         await recordChange(transaction, actor, YEAR_RECORD, { before: year, after: null }, reason);
-        return { academicYear: present(year) };
+        // Gone, so it makes no Instructional days now.
+        return { academicYear: present(year, []) };
+      });
+    });
+
+    scope.post("/academic-years/:academicYearId/exceptions", async (actor, { params, body }) => {
+      return withTransaction(database, async (transaction) => {
+        const year = await lockPermitted(transaction, actor, params["academicYearId"]!);
+        const { reason, ...exception } = parseException(body);
+        const { year: changed, added } = await addException(transaction, year, exception);
+        await recordChange(transaction, actor, EXCEPTION_RECORD, { before: null, after: added }, reason);
+        return presentOne(transaction, changed);
+      });
+    });
+
+    scope.delete("/academic-years/:academicYearId/exceptions/:exceptionId", async (actor, { params, body }) => {
+      return withTransaction(database, async (transaction) => {
+        const year = await lockPermitted(transaction, actor, params["academicYearId"]!);
+        const exceptionId = params["exceptionId"]!;
+        // Only the year's own: one of another year, or none at all, is absent from it.
+        const exception = authorizeManageInstructionalDayException(
+          actor,
+          exceptionId,
+          year.exceptions.find((each) => each.id === exceptionId) ?? null,
+        );
+        const reason = reasonOnly(body);
+        const changed = await removeException(transaction, year, exception);
+        await recordChange(transaction, actor, EXCEPTION_RECORD, { before: exception, after: null }, reason);
+        return presentOne(transaction, changed);
       });
     });
   });

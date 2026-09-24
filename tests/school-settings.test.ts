@@ -220,7 +220,7 @@ describe("School settings", () => {
     async function schoolDateAt(client: TestClient, at: string) {
       const response = await client.get(`/school-date?at=${encodeURIComponent(at)}`);
       expect(response.status).toBe(200);
-      return response.body as { schoolDate: string };
+      return response.body as { schoolDate: string; instructionalDay: boolean };
     }
 
     it("is the calendar date in the School's timezone, not in UTC", async () => {
@@ -228,7 +228,11 @@ describe("School settings", () => {
 
       // 03:00 on 24 September in UTC is still the 23rd in New York, and
       // already 11:00 on the 24th in Manila.
-      expect(await schoolDateAt(world.alice, "2026-09-24T03:00:00Z")).toEqual({ schoolDate: "2026-09-23" });
+      expect(await schoolDateAt(world.alice, "2026-09-24T03:00:00Z")).toEqual({
+        schoolDate: "2026-09-23",
+        // Northside has no Academic Year, so none of its days is an Instructional day.
+        instructionalDay: false,
+      });
       expect((await schoolDateAt(world.bob, "2026-09-24T03:00:00Z")).schoolDate).toBe("2026-09-24");
     });
 

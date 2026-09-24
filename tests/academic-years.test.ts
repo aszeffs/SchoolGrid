@@ -31,11 +31,17 @@ interface AcademicYear {
   name: string;
   firstDate: string;
   lastDate: string;
+  weekdays: string[];
+  exceptions: unknown[];
+  instructionalDays: string[];
   terms: Term[];
 }
 
 /** A year running from September to June, as most do. */
 const YEAR = { name: "2026–27", firstDate: "2026-09-01", lastDate: "2027-06-30" };
+
+/** YEAR as its Audit record holds it, with the weekday pattern it is given unless told otherwise. */
+const YEAR_VALUES = { ...YEAR, weekdays: "monday,tuesday,wednesday,thursday,friday" };
 
 /** Two Terms covering YEAR exactly, the second starting the day after the first ends. */
 const HALVES = [
@@ -174,7 +180,14 @@ describe("Academic Years and Terms", () => {
 
       expect(response.status).toBe(201);
       const { academicYear } = response.body as { academicYear: AcademicYear };
-      expect(academicYear).toEqual({ id: expect.any(String), ...YEAR, terms: [] });
+      expect(academicYear).toEqual({
+        id: expect.any(String),
+        ...YEAR,
+        weekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+        exceptions: [],
+        instructionalDays: expect.any(Array),
+        terms: [],
+      });
       expect(await yearsOf(world.alice)).toEqual([academicYear]);
     });
 
@@ -194,7 +207,7 @@ describe("Academic Years and Terms", () => {
           target: { type: "academic_year", id: academicYear.id },
           reason: "Planning next year",
           before: null,
-          after: YEAR,
+          after: YEAR_VALUES,
         },
       ]);
     });
@@ -312,8 +325,8 @@ describe("Academic Years and Terms", () => {
         expect.objectContaining({
           actorPersonId: world.aliceId,
           target: { type: "academic_year", id: year.id },
-          before: YEAR,
-          after: { ...YEAR, name: "Year of the Owl" },
+          before: YEAR_VALUES,
+          after: { ...YEAR_VALUES, name: "Year of the Owl" },
         }),
       ]);
     });
@@ -330,13 +343,13 @@ describe("Academic Years and Terms", () => {
 
       expect(response.status).toBe(200);
       expect(await yearsOf(world.alice)).toEqual([
-        { ...year, firstDate: "2026-08-25", lastDate: "2027-06-20" },
+        { ...year, firstDate: "2026-08-25", lastDate: "2027-06-20", instructionalDays: expect.any(Array) },
       ]);
       expect(await trailOf(world.alice, "academic_year.changed")).toEqual([
         expect.objectContaining({
           reason: "Start a week early",
-          before: YEAR,
-          after: { ...YEAR, firstDate: "2026-08-25", lastDate: "2027-06-20" },
+          before: YEAR_VALUES,
+          after: { ...YEAR_VALUES, firstDate: "2026-08-25", lastDate: "2027-06-20" },
         }),
       ]);
     });
@@ -390,7 +403,7 @@ describe("Academic Years and Terms", () => {
           actorPersonId: world.aliceId,
           target: { type: "academic_year", id: year.id },
           reason: "Entered by mistake",
-          before: YEAR,
+          before: YEAR_VALUES,
           after: null,
         }),
       ]);
@@ -717,7 +730,12 @@ describe("Academic Years and Terms", () => {
 
       expect(response.status).toBe(200);
       expect(await yearsOf(world.alice)).toEqual([
-        { ...year, lastDate: "2027-06-15", terms: [fall, { ...spring, lastDate: "2027-06-15" }] },
+        {
+          ...year,
+          lastDate: "2027-06-15",
+          instructionalDays: expect.any(Array),
+          terms: [fall, { ...spring, lastDate: "2027-06-15" }],
+        },
       ]);
     });
 
