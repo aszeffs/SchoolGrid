@@ -40,7 +40,7 @@ describe("Platform Administrator", () => {
         persons: [{ ...schoolAdministrator, claimed: true }],
       });
       expect((await alice.inSchool(school.id).get("/settings")).body).toEqual(
-        expect.objectContaining({ settings: { timezone: "America/New_York" } }),
+        expect.objectContaining({ settings: { timezone: "America/New_York", timezoneFixed: false } }),
       );
     });
 
@@ -191,7 +191,14 @@ describe("Platform Administrator", () => {
       const invited = await world.alice.post("/invitations", {
         personId: (await server().createPerson({ schoolId: world.schoolId, displayName: "Riley" })).id,
       });
-      expect([enrolled.status, linked.status, memberships.status, invited.status]).toEqual([201, 201, 200, 201]);
+      const academicYear = await world.alice.post("/academic-years", {
+        name: "2026–27",
+        firstDate: "2026-09-01",
+        lastDate: "2027-06-30",
+      });
+      expect([enrolled.status, linked.status, memberships.status, invited.status, academicYear.status]).toEqual([
+        201, 201, 200, 201, 201,
+      ]);
       return {
         schoolId: world.schoolId,
         personId: student.id,
@@ -199,6 +206,7 @@ describe("Platform Administrator", () => {
         guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
         membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
         invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
+        academicYearId: (academicYear.body as { academicYear: { id: string } }).academicYear.id,
       } as Record<string, string>;
     }
 
@@ -276,6 +284,10 @@ describe("Platform Administrator", () => {
           { method: "GET", url: "/api/schools/:schoolId/settings" },
           { method: "PATCH", url: "/api/schools/:schoolId/settings" },
           { method: "GET", url: "/api/schools/:schoolId/school-date" },
+          { method: "GET", url: "/api/schools/:schoolId/academic-years" },
+          { method: "POST", url: "/api/schools/:schoolId/academic-years" },
+          { method: "PATCH", url: "/api/schools/:schoolId/academic-years/:academicYearId" },
+          { method: "DELETE", url: "/api/schools/:schoolId/academic-years/:academicYearId" },
         ]),
       );
 

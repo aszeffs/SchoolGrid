@@ -184,6 +184,8 @@ describe("migrations", () => {
     // School had a name and nothing else.
     async function undoMigration() {
       const owner = server().ownerDatabase;
+      // A later migration's trigger watches the column, so it goes first.
+      await owner.query(`DROP TRIGGER school_timezone_is_fixed ON app.school`);
       await owner.query(`ALTER TABLE app.school DROP COLUMN timezone`);
       await owner.query(`DROP TABLE app.timezone`);
       await owner.query(`GRANT UPDATE, DELETE ON app.school TO schoolgrid_app`);

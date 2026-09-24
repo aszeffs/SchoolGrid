@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AcademicYears } from "./AcademicYears.tsx";
 import { Account } from "./Account.tsx";
 import { api, type ReachedSchool, type Session } from "./api.ts";
 import { AuditRecords } from "./AuditRecords.tsx";
@@ -196,6 +197,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <GuardianLinks school={school} />;
     case "auditRecords":
       return <AuditRecords school={school} />;
+    case "academicYears":
+      return <AcademicYears school={school} />;
     case "settings":
       return <SchoolSettings school={school} />;
   }

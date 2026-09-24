@@ -1,4 +1,4 @@
-import { isKnownTimezone } from "../calendar/index.ts";
+import { isKnownTimezone, type SchoolDate } from "../calendar/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import { MAX_NAME_LENGTH, MAX_REASON_LENGTH } from "../validation/bounds.ts";
 import { InvalidRequest } from "./invalid-request.ts";
@@ -65,6 +65,19 @@ export function instantFrom(value: unknown, field: string): Date {
     throw new InvalidRequest(`${field} must be an ISO 8601 timestamp`);
   }
   return instant;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A School date, written `YYYY-MM-DD`: a day as the School saw it, with no
+ * time and no timezone, since the School's own is what places it.
+ */
+export function schoolDateFrom(value: unknown, field: string): SchoolDate {
+  if (typeof value !== "string" || !ISO_DATE.test(value) || value.startsWith("0000") || !isCalendarDate(value)) {
+    throw new InvalidRequest(`${field} must be a date, written YYYY-MM-DD`);
+  }
+  return value;
 }
 
 /**

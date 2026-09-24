@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, type ReachedSchool, type SchoolSettings as Settings } from "./api.ts";
+import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
@@ -38,6 +39,7 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
     case "ready":
       return (
         <SettingsSheet
+          schoolId={schoolId}
           settings={showing.records.settings}
           timezones={showing.records.timezones}
           busy={busy}
@@ -49,12 +51,14 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
 }
 
 function SettingsSheet({
+  schoolId,
   settings,
   timezones,
   busy,
   changed,
   onSetTimezone,
 }: {
+  schoolId: string;
   settings: Settings;
   timezones: string[];
   busy: boolean;
@@ -89,22 +93,33 @@ function SettingsSheet({
         {changed === null ? "" : `The School now keeps its days in ${changed}.`}
       </p>
 
-      <form onSubmit={onSetTimezone} aria-label="Change the timezone">
-        <h2>Change the timezone</h2>
-        <label>
-          Timezone
-          {/* Keyed on the timezone held, so the choice resets to it once a change lands. */}
-          <select key={settings.timezone} name="timezone" required defaultValue={settings.timezone}>
-            <TimezoneOptions current={settings.timezone} timezones={timezones} />
-          </select>
-        </label>
-        <p className="muted">
-          Choose the city whose clock the School keeps. It can be changed until the first Academic Year exists.
-        </p>
-        <button type="submit" disabled={busy}>
-          Change timezone
-        </button>
-      </form>
+      {settings.timezoneFixed ? (
+        <section aria-labelledby="timezone-fixed">
+          <h2 id="timezone-fixed">The timezone is fixed</h2>
+          <p className="notice">
+            This School has an Academic Year, and its days were planned in {settings.timezone}. Changing the timezone
+            now would move where each of those days begins and ends, so it can no longer change. See the{" "}
+            <Link to={{ name: "academicYears", schoolId }}>Academic Years</Link>.
+          </p>
+        </section>
+      ) : (
+        <form onSubmit={onSetTimezone} aria-label="Change the timezone">
+          <h2>Change the timezone</h2>
+          <label>
+            Timezone
+            {/* Keyed on the timezone held, so the choice resets to it once a change lands. */}
+            <select key={settings.timezone} name="timezone" required defaultValue={settings.timezone}>
+              <TimezoneOptions current={settings.timezone} timezones={timezones} />
+            </select>
+          </label>
+          <p className="muted">
+            Choose the city whose clock the School keeps. It can be changed until the first Academic Year exists.
+          </p>
+          <button type="submit" disabled={busy}>
+            Change timezone
+          </button>
+        </form>
+      )}
     </Sheet>
   );
 }

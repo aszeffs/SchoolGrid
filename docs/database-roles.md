@@ -63,6 +63,8 @@ Provisioning names the School's timezone, as an IANA identifier the database kno
 { "name": "Northside", "timezone": "America/New_York", "schoolAdministrator": { "username": "<username>", "displayName": "<name>" } }
 ```
 
+The School Administrator can correct it until the School's first Academic Year exists. After that it is fixed for good (ADR-0011), even if that year is later deleted: the database records it in `app.school.timezone_fixed`, which `schoolgrid_app` cannot write, and a trigger refuses a change of either from any role, the schema owner included.
+
 ## Adding a table
 
 Nothing grants privileges by default. A migration that creates a table must grant `schoolgrid_app` exactly what the service needs on it. If it forgets, the service gets `permission denied`: the tests fail, because they run as this role too, and the service is never quietly given more access than it should have. Only an append-only table should be granted `SELECT, INSERT` alone.

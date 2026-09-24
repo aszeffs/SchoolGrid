@@ -5,7 +5,8 @@ import { observable, useTestServer, type Method, type TestResponse } from "./sup
 const ALICE = { username: "alice", password: "correct horse battery staple" };
 
 describe("the API is served under /api", () => {
-  const server = useTestServer();
+  // The route enumeration below makes more requests than the default limit allows.
+  const server = useTestServer({ rateLimit: { max: 10_000, windowMs: 60_000 } });
 
   // Every other path on the origin belongs to the web app.
   it("registers every route under /api", () => {

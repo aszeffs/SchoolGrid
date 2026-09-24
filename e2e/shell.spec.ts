@@ -12,6 +12,7 @@ const SECTIONS = [
   { label: "Roles", path: "memberships", heading: "School memberships" },
   { label: "Enrollments", path: "enrollments", heading: "Enrollments" },
   { label: "Guardians", path: "guardian-links", heading: "Guardian links" },
+  { label: "Academic Years", path: "academic-years", heading: "Academic Years" },
   { label: "Audit", path: "audit-records", heading: "Audit" },
   { label: "Settings", path: "settings", heading: "School settings" },
 ];

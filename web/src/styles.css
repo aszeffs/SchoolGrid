@@ -735,6 +735,17 @@ fieldset legend {
   font-weight: 650;
 }
 
+/* One Term among a year's, edited in place: its fields, then the way to remove it. */
+.term-draft {
+  gap: calc(var(--step) * 1.5);
+  padding-bottom: calc(var(--step) * 1.5);
+}
+
+.term-draft > button,
+fieldset > button {
+  justify-self: start;
+}
+
 button {
   display: inline-flex;
   align-items: center;

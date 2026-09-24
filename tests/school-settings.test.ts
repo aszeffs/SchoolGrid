@@ -100,7 +100,7 @@ describe("School settings", () => {
 
       expect(response.status).toBe(200);
       const { settings, timezones } = response.body as { settings: unknown; timezones: string[] };
-      expect(settings).toEqual({ timezone: "America/New_York" });
+      expect(settings).toEqual({ timezone: "America/New_York", timezoneFixed: false });
       expect(timezones).toEqual(expect.arrayContaining(["America/New_York", "Asia/Manila", "Europe/London", "UTC"]));
       expect(timezones).toEqual([...timezones].sort());
     });
@@ -113,7 +113,7 @@ describe("School settings", () => {
       const response = await world.alice.patch("/settings", { timezone: "Europe/London" });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ settings: { timezone: "Europe/London" } });
+      expect(response.body).toEqual({ settings: { timezone: "Europe/London", timezoneFixed: false } });
       expect(await timezoneOf(world.alice)).toBe("Europe/London");
       expect(await trailOf(world.alice, "school.settings_changed")).toEqual([
         {
