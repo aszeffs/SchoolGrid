@@ -606,6 +606,9 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
     case "term_outside_academic_year":
       return "A Term falls outside the year. Every Term runs between the year's first and last days.";
     case "dependent":
+      if (conflict.dependent === "class_offering") {
+        return "A Term these changes would remove has Class Offerings, and a Term is not deleted while it has any. Keep the Term, or delete its Class Offerings first.";
+      }
       if (conflict.dependent === "instructional_day_exception") {
         return attempt === "delete"
           ? "This year still has days taken out or put in, and a year is not deleted while it has any. Return each to the weekday pattern first."
@@ -620,5 +623,10 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
       return "That day is already taken out or put in.";
     case "timezone_fixed":
       return "The School's timezone is fixed.";
+    // Not rules this page's changes can break.
+    case "course_name_taken":
+    case "course_code_taken":
+    case "class_offering_label_taken":
+      return "That change could not be made.";
   }
 }

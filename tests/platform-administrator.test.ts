@@ -176,7 +176,7 @@ describe("Platform Administrator", () => {
     /**
      * One real record for each path parameter a School-scoped route takes,
      * arranged by Northside's School Administrator: a Student, enrolled and
-     * linked to a Guardian, and a membership.
+     * linked to a Guardian, a membership, and a Course offered in a Term.
      */
     async function arrangeRecordsFor(world: { schoolId: string; alice: TestClient }) {
       const student = await server().createPerson({ schoolId: world.schoolId, displayName: "Sam", role: "student" });
@@ -201,6 +201,13 @@ describe("Platform Administrator", () => {
         date: "2026-11-26",
         instructional: false,
       });
+      const divided = await world.alice.patch(`/academic-years/${academicYearId}`, {
+        terms: [{ name: "Whole year", firstDate: "2026-09-01", lastDate: "2027-06-30" }],
+      });
+      const termId = (divided.body as { academicYear: { terms: { id: string }[] } }).academicYear.terms[0]!.id;
+      const course = await world.alice.post("/courses", { name: "Algebra I" });
+      const courseId = (course.body as { course: { id: string } }).course.id;
+      const offering = await world.alice.post("/class-offerings", { courseId, termId });
       expect([
         enrolled.status,
         linked.status,
@@ -208,7 +215,10 @@ describe("Platform Administrator", () => {
         invited.status,
         academicYear.status,
         holiday.status,
-      ]).toEqual([201, 201, 200, 201, 201, 201]);
+        divided.status,
+        course.status,
+        offering.status,
+      ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201]);
       return {
         schoolId: world.schoolId,
         personId: student.id,
@@ -218,6 +228,8 @@ describe("Platform Administrator", () => {
         invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
         academicYearId,
         exceptionId: (holiday.body as { academicYear: { exceptions: { id: string }[] } }).academicYear.exceptions[0]!.id,
+        courseId,
+        classOfferingId: (offering.body as { classOffering: { id: string } }).classOffering.id,
       } as Record<string, string>;
     }
 
@@ -304,6 +316,15 @@ describe("Platform Administrator", () => {
             method: "DELETE",
             url: "/api/schools/:schoolId/academic-years/:academicYearId/exceptions/:exceptionId",
           },
+          { method: "GET", url: "/api/schools/:schoolId/courses" },
+          { method: "POST", url: "/api/schools/:schoolId/courses" },
+          { method: "PATCH", url: "/api/schools/:schoolId/courses/:courseId" },
+          { method: "DELETE", url: "/api/schools/:schoolId/courses/:courseId" },
+          { method: "GET", url: "/api/schools/:schoolId/class-offerings" },
+          { method: "POST", url: "/api/schools/:schoolId/class-offerings" },
+          { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId" },
+          { method: "PATCH", url: "/api/schools/:schoolId/class-offerings/:classOfferingId" },
+          { method: "DELETE", url: "/api/schools/:schoolId/class-offerings/:classOfferingId" },
         ]),
       );
 

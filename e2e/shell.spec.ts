@@ -13,6 +13,8 @@ const SECTIONS = [
   { label: "Enrollments", path: "enrollments", heading: "Enrollments" },
   { label: "Guardians", path: "guardian-links", heading: "Guardian links" },
   { label: "Academic Years", path: "academic-years", heading: "Academic Years" },
+  { label: "Courses", path: "courses", heading: "Courses" },
+  { label: "Class Offerings", path: "class-offerings", heading: "Class Offerings" },
   { label: "Audit", path: "audit-records", heading: "Audit" },
   { label: "Settings", path: "settings", heading: "School settings" },
 ];

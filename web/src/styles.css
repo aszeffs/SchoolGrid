@@ -337,7 +337,7 @@ body {
     background-color var(--settle);
 }
 
-.shell-nav a[aria-current="page"] {
+.shell-nav a[aria-current] {
   background: var(--page);
   border-color: var(--rule);
   color: var(--ink);
@@ -438,6 +438,26 @@ body {
   margin-top: calc(var(--step) * 0.5);
   padding-top: calc(var(--step) * 0.5);
   border-top: 1px solid var(--rule-faint);
+}
+
+/*
+ * Open, the list takes its place in the head, under the button that offers
+ * it, and pushes the sections down: held over them, it would cover the last
+ * of a School Administrator's. On a phone it takes the head's whole width
+ * instead (below).
+ */
+.switcher[open] {
+  text-align: right;
+}
+
+.switcher[open] ul {
+  position: static;
+  margin: calc(var(--step) * 0.75) 0 0 auto;
+  text-align: left;
+}
+
+.shell-head:has(.switcher[open]) > .actions {
+  align-items: flex-start;
 }
 
 .sheet__body {
@@ -792,7 +812,7 @@ button {
     border-color: var(--alarm);
   }
 
-  .shell-nav a:not([aria-current="page"]):hover {
+  .shell-nav a:not([aria-current]):hover {
     background: var(--wash);
     color: var(--ink);
   }
@@ -1470,11 +1490,14 @@ td[aria-selected="true"] > .day {
     align-items: stretch;
   }
 
+  .switcher[open] {
+    text-align: left;
+  }
+
   .switcher[open] ul {
-    position: static;
     width: auto;
     max-width: none;
-    margin-top: var(--step);
+    margin: var(--step) 0 0;
   }
 
   /*
@@ -1506,7 +1529,7 @@ td[aria-selected="true"] > .day {
     text-align: center;
   }
 
-  .shell-nav a[aria-current="page"] {
+  .shell-nav a[aria-current] {
     background: var(--page);
   }
 

@@ -1,6 +1,7 @@
 import { WEEKDAYS, type SchoolDate, type Weekday } from "../calendar/index.ts";
 import type { Queryable } from "../db/transaction.ts";
 import { Conflict, type ConflictDetail } from "../http/conflict.ts";
+import { withConstraintsNamed } from "./constraints.ts";
 
 /**
  * The Academic structure module: a School's Academic Years, the Terms that
@@ -84,8 +85,6 @@ const EXCEPTION_COLUMNS = `id, school_id AS "schoolId", academic_year_id AS "aca
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const POSTGRES_EXCLUSION_VIOLATION = "23P01";
-
 /** An Academic Year as stored, its pattern held as ISO weekday numbers: 1 is Monday. */
 type StoredAcademicYear = Omit<AcademicYear, "weekdays"> & { weekdays: number[] };
 
@@ -129,6 +128,30 @@ export async function findAcademicYear(database: Queryable, academicYearId: stri
     [academicYearId],
   );
   return rows[0] === undefined ? null : fromStored(rows[0]);
+}
+
+/** The Term with this identifier, in whichever School holds it, or null. */
+export async function findTerm(database: Queryable, termId: string): Promise<Term | null> {
+  if (!UUID.test(termId)) {
+    return null;
+  }
+  const { rows } = await database.query<Term>(`SELECT ${TERM_COLUMNS} FROM app.term WHERE id = $1`, [termId]);
+  return rows[0] ?? null;
+}
+
+/**
+ * Holds a Term until the transaction ends, so it cannot be deleted from under
+ * something about to refer to it, and returns it as it now stands, or null if
+ * it was deleted since it was found. Its name and bounds may still change.
+ *
+ * Only for a Term the caller has already been permitted to refer to.
+ */
+export async function holdTerm(transaction: Queryable, term: Term): Promise<Term | null> {
+  const { rows } = await transaction.query<Term>(
+    `SELECT ${TERM_COLUMNS} FROM app.term WHERE school_id = $1 AND id = $2 FOR KEY SHARE`,
+    [term.schoolId, term.id],
+  );
+  return rows[0] ?? null;
 }
 
 /**
@@ -342,7 +365,10 @@ async function replaceTerms(
   const kept = new Set(proposed.flatMap((term) => (term.id === null ? [] : [term.id])));
 
   for (const term of current.filter((each) => !kept.has(each.id))) {
-    await transaction.query(`DELETE FROM app.term WHERE school_id = $1 AND id = $2`, [term.schoolId, term.id]);
+    // A Term with Class Offerings would leave them offered in no Term.
+    await withConstraintsNamed({ class_offering_term_fk: { conflict: "dependent", dependent: "class_offering" } }, () =>
+      transaction.query(`DELETE FROM app.term WHERE school_id = $1 AND id = $2`, [term.schoolId, term.id]),
+    );
     changed.push({ before: term, after: null });
   }
 
@@ -415,22 +441,6 @@ function dayAfter(date: SchoolDate): SchoolDate {
 }
 
 /** Runs a write that the year-overlap constraint may refuse, refusing it as a Conflict instead. */
-async function withOverlapRefused<T>(write: () => Promise<T>): Promise<T> {
-  try {
-    return await write();
-  } catch (error) {
-    if (isAcademicYearOverlap(error)) {
-      throw new Conflict({ conflict: "academic_year_overlap" });
-    }
-    throw error;
-  }
-}
-
-function isAcademicYearOverlap(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: unknown }).code === POSTGRES_EXCLUSION_VIOLATION &&
-    (error as { constraint?: unknown }).constraint === "academic_year_no_overlap"
-  );
+function withOverlapRefused<T>(write: () => Promise<T>): Promise<T> {
+  return withConstraintsNamed({ academic_year_no_overlap: { conflict: "academic_year_overlap" } }, write);
 }

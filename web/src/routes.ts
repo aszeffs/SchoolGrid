@@ -21,6 +21,9 @@ const PATHS = {
   guardianLinks: "/schools/:schoolId/guardian-links",
   auditRecords: "/schools/:schoolId/audit-records",
   academicYears: "/schools/:schoolId/academic-years",
+  courses: "/schools/:schoolId/courses",
+  classOfferings: "/schools/:schoolId/class-offerings",
+  classOffering: "/schools/:schoolId/class-offerings/:classOfferingId",
   settings: "/schools/:schoolId/settings",
 } as const;
 
@@ -89,9 +92,20 @@ function decoded(segment: string): string | null {
   }
 }
 
+/**
+ * The pages within a School that are not sections of their own, each with the
+ * section it is reached from: one record, opened from its list.
+ */
+const WITHIN = {
+  classOffering: "classOfferings",
+} as const satisfies Partial<Record<SchoolRouteName, SchoolRouteName>>;
+
+/** A page within a School that is a section of its own, reached from the navigation with the School alone. */
+type SectionName = Exclude<SchoolRouteName, keyof typeof WITHIN>;
+
 /** One entry in a School's navigation: the page, what it is called, and whose roles reach it. */
 export interface Section {
-  name: SchoolRouteName;
+  name: SectionName;
   label: string;
   /** The roles that reach it; null for every role. */
   reachedBy: readonly Role[] | null;
@@ -115,6 +129,8 @@ export const SECTIONS: readonly Section[] = [
   { name: "enrollments", label: "Enrollments", reachedBy: ["school_administrator"] },
   { name: "guardianLinks", label: "Guardians", reachedBy: ["school_administrator"] },
   { name: "academicYears", label: "Academic Years", reachedBy: ["school_administrator"] },
+  { name: "courses", label: "Courses", reachedBy: ["school_administrator"] },
+  { name: "classOfferings", label: "Class Offerings", reachedBy: ["school_administrator"] },
   { name: "auditRecords", label: "Audit", reachedBy: ["school_administrator"] },
   { name: "settings", label: "Settings", reachedBy: ["school_administrator"] },
 ];
@@ -126,9 +142,10 @@ export function sectionsFor(roles: readonly Role[]): Section[] {
   );
 }
 
-/** The navigation's entry for a page within a School. */
+/** The navigation's entry for a page within a School, or for the list a record's own page is opened from. */
 export function sectionOf(route: SchoolRoute): Section {
-  return SECTIONS.find((section) => section.name === route.name)!;
+  const name = route.name in WITHIN ? WITHIN[route.name as keyof typeof WITHIN] : route.name;
+  return SECTIONS.find((section) => section.name === name)!;
 }
 
 /**

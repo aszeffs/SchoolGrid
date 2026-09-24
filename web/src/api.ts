@@ -257,6 +257,24 @@ export interface ProposedException {
   instructional: boolean;
 }
 
+/** A reusable subject definition, with the code it may go by. */
+export interface Course {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+/**
+ * A Course offered for one Term, told apart from the Course's other offerings
+ * in that Term by its label, and naming the Term's Academic Year.
+ */
+export interface ClassOffering {
+  id: string;
+  label: string | null;
+  course: Course;
+  term: Term & { academicYear: { id: string; name: string } };
+}
+
 /** A Term as a change states it: one of the year's own by its identifier, or a new one without. */
 export interface ProposedTerm {
   id?: string;
@@ -438,6 +456,36 @@ export const api = {
     request<{ academicYear: AcademicYear }>(
       "DELETE",
       inSchool(schoolId, `/academic-years/${encodeURIComponent(academicYearId)}`),
+    ),
+  courses: (schoolId: string) => request<{ courses: Course[] }>("GET", inSchool(schoolId, "/courses")),
+  /** Refused when another Course has the name, or the code, ignoring letter case. */
+  createCourse: (schoolId: string, course: { name: string; code: string | null }) =>
+    request<{ course: Course }>("POST", inSchool(schoolId, "/courses"), course),
+  changeCourse: (schoolId: string, courseId: string, course: { name: string; code: string | null }) =>
+    request<{ course: Course }>("PATCH", inSchool(schoolId, `/courses/${encodeURIComponent(courseId)}`), course),
+  /** Refused while the Course is offered in any Term. */
+  deleteCourse: (schoolId: string, courseId: string) =>
+    request<{ course: Course }>("DELETE", inSchool(schoolId, `/courses/${encodeURIComponent(courseId)}`)),
+  classOfferings: (schoolId: string) =>
+    request<{ classOfferings: ClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
+  classOffering: (schoolId: string, classOfferingId: string) =>
+    request<{ classOffering: ClassOffering }>(
+      "GET",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}`),
+    ),
+  /** Refused when another offering of the Course in the Term has the label, or has none too. */
+  offerCourse: (schoolId: string, offering: { courseId: string; termId: string; label: string | null }) =>
+    request<{ classOffering: ClassOffering }>("POST", inSchool(schoolId, "/class-offerings"), offering),
+  relabelClassOffering: (schoolId: string, classOfferingId: string, label: string | null) =>
+    request<{ classOffering: ClassOffering }>(
+      "PATCH",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}`),
+      { label },
+    ),
+  deleteClassOffering: (schoolId: string, classOfferingId: string) =>
+    request<{ classOffering: ClassOffering }>(
+      "DELETE",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}`),
     ),
   inspectInvitation: (secret: string) =>
     request<InvitationInspection>("POST", "/invitations/inspect", { secret }),

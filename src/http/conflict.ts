@@ -18,11 +18,20 @@ export type ConflictDetail =
   | { conflict: "exception_outside_academic_year" }
   /** An exception would fall on a date that already has one. */
   | { conflict: "exception_date_taken" }
+  /** Another Course in the School has this name, ignoring letter case. */
+  | { conflict: "course_name_taken" }
+  /** Another Course in the School has this code, ignoring letter case. */
+  | { conflict: "course_code_taken" }
+  /**
+   * Another offering of the Course in the Term has this label, ignoring letter
+   * case, or goes without one too.
+   */
+  | { conflict: "class_offering_label_taken" }
   /**
    * Something depends on what would change or go, and would be stranded. Only
    * its kind is named, never a record the caller could not otherwise read.
    */
-  | { conflict: "dependent"; dependent: "term" | "instructional_day_exception" }
+  | { conflict: "dependent"; dependent: "term" | "instructional_day_exception" | "class_offering" }
   /** The School's timezone is fixed once its first Academic Year exists (ADR-0011). */
   | { conflict: "timezone_fixed" };
 
