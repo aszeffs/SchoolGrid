@@ -39,6 +39,7 @@ export function Sheet({
   const aside = busy ? undefined : legend;
   return (
     <div className="sheet">
+      {shell?.banner}
       <header className="sheet__head">
         <div className="sheet__group">
           <p className="sheet__mark">SchoolGrid</p>

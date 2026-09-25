@@ -1,8 +1,8 @@
 # Deployment
 
-The public demo runs on Vercel's Hobby plan against a Neon Postgres database. Production runs the exact image `main` published, verified and deployed by digest from CI alone ([ADR-0005](adr/0005-production-runs-the-verified-image.md)). This page is the one-time setup: follow it top to bottom to rebuild the deployment from nothing.
+The public site runs on Vercel's Hobby plan against a Neon Postgres database. Production runs the exact image `main` published, verified and deployed by digest from CI alone ([ADR-0005](adr/0005-production-runs-the-verified-image.md)). This page is the one-time setup: follow it top to bottom to rebuild the deployment from nothing.
 
-It holds invented data only. Hobby is for non-commercial, personal use, and the demo's sign-ins are public.
+It holds Trial Schools only, of invented data, each deleted two hours after a visitor starts it ([ADR-0012](adr/0012-trial-schools-replace-the-shared-demo.md)). Hobby is for non-commercial, personal use. No sign-in is published: a trial's accounts have no password.
 
 ## What you need
 
@@ -47,7 +47,7 @@ DATABASE_URL="postgresql://schoolgrid_runtime:$RUNTIME_PASSWORD@ep-<name>-pooler
 psql "$DATABASE_URL" -XtAc 'SELECT current_user'   # schoolgrid_runtime
 ```
 
-## 3. The first migrate and seed
+## 3. The first migrate
 
 Migrate with the verified image, as the owner, exactly as the deploy job will:
 
@@ -56,13 +56,7 @@ MIGRATION_DATABASE_URL="$OWNER_URL" docker run --rm -e MIGRATION_DATABASE_URL \
   "$IMAGE@$DIGEST" dist/db/migrate-cli.js
 ```
 
-Then seed the demo School from the repository. The seed is never in the image, and it fails rather than seed twice:
-
-```bash
-psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 --file demo/seed.sql
-```
-
-The seed creates a School Administrator, Faculty, Student and Guardian, whose sign-ins the demo publishes, and an Academic Year around the day it runs: Terms, holidays, Courses, and Class Offerings taught by the Faculty member and attended by the Student among invented classmates. It creates no Platform Administrator, and none is ever published: a Platform Administrator is made by hand, as the owner ([docs/database-roles.md](database-roles.md#making-a-platform-administrator)), and the demo has no need of one.
+Nothing is seeded. Each Trial School is built by the service when a visitor starts it, in one transaction and through the same domain operations the app uses, around the visitor's own today: a Person in each School role, invented Students and Guardians, and an Academic Year of Terms, Courses and Class Offerings. No Platform Administrator is needed; one is made by hand, as the owner, only if ever wanted ([docs/database-roles.md](database-roles.md#making-a-platform-administrator)).
 
 ## 4. The Vercel project
 
@@ -84,8 +78,12 @@ Production environment variables, one `vercel env add <NAME> production` each:
 | `PUBLIC_ORIGIN` | `https://` and the production domain, no trailing slash. |
 | `PORT` | `3000`. Vercel's default is 80; the image listens on 3000. |
 | `CLIENT_ADDRESS_HEADER` | `x-vercel-forwarded-for`. Inside the function every request comes from `127.0.0.1`, so without it every visitor shares one rate-limit count. Vercel overwrites the header, so a caller cannot choose their own. |
-| `DEMO_MODE` | `true` |
+| `TRIALS_ENABLED` | `true`. Lets any visitor start a Trial School (ADR-0012). Off unless set. |
+| `TRIAL_LIVE_CAP` | Optional; `30` unless set. The most Trial Schools live at once, the hard bound on what trials may hold in the free database tier. |
+| `TRIAL_PER_IP_HOUR` | Optional; `2` unless set. The most trials one client address may start an hour, counted per instance. |
 | `LOG_LEVEL` | `info` |
+
+A project set up before Trial Schools still holds `DEMO_MODE`, which nothing reads any more: remove it with `vercel env rm DEMO_MODE production`.
 
 `MIGRATION_DATABASE_URL` is deliberately absent: the service verifies the database is migrated and refuses to start if not. `IMAGE_DIGEST` is not set here; the deploy supplies it per deployment with `--env`.
 
@@ -123,7 +121,7 @@ gh secret set VERCEL_TOKEN --env production --repo "$REPO"
 
 ## Deploying
 
-Deploys come only from the container workflow's `deploy` job on `main`, which calls [`scripts/deploy.sh`](../scripts/deploy.sh). It verifies the digest's provenance, migrates as the owner with that image, deploys, and waits for health, each step only if the one before succeeded. It deploys nothing if a newer commit has reached `main` since, so a slow older run cannot roll production back. The job runs in the `production` concurrency group, one deploy at a time, and the nightly demo reset below shares it.
+Deploys come only from the container workflow's `deploy` job on `main`, which calls [`scripts/deploy.sh`](../scripts/deploy.sh). It verifies the digest's provenance, migrates as the owner with that image, deploys, and waits for health, each step only if the one before succeeded. It deploys nothing if a newer commit has reached `main` since, so a slow older run cannot roll production back. The job runs in the `production` concurrency group, one deploy at a time, and the daily trial sweep below shares it.
 
 The script writes two files into a temporary directory outside the repository and deploys from there, so nothing else is uploaded and neither is committed:
 
@@ -148,18 +146,12 @@ Then `vercel deploy --prod --env IMAGE_DIGEST=<digest>`, and `/api/health` is re
 
 Vercel copies the image into its own registry and serves it under a new manifest digest. What runs is still what the `FROM` pins; `/api/build-info` reports the GHCR digest, the one the attestations cover.
 
-## Resetting the demo
+## Sweeping expired Trial Schools
 
-The demo publishes a sign-in for every School role, so any visitor can change anything in it. The [Demo reset](../.github/workflows/demo-reset.yml) workflow puts it back nightly, at 02:00 Asia/Manila, by calling [`scripts/reset-demo.sh`](../scripts/reset-demo.sh). Run it by hand from the Actions tab (**Demo reset → Run workflow**) to clean up sooner.
-
-It reads the digest from the live `/api/build-info` rather than being told one, so it migrates with the image already serving the database. It then verifies that digest's provenance exactly as the deploy does, drops the `app` schema and the migration record as the owner, migrates with the same image, applies `demo/seed.sql`, and finally checks the database holds only seeded data, with a Term running today, and that every account the demo publishes signs in. Nothing is dropped unless the read and the verification both succeeded.
-
-Dropping the schema deletes the demo's Audit records. That is deliberate and true of the demo alone: the trigger that refuses `TRUNCATE` on `app.audit_record` does not stop a `DROP SCHEMA`, and only the owner can drop it. The Audit records there are invented, made by visitors trying a role.
-
-The reset runs in the `production` environment, for the owner's connection string, and in the `production` concurrency group, so it never overlaps a deploy in either direction. Neither job cancels the other: a reset stopped halfway would leave the demo with no data at all.
+A Trial School is deleted once expired, whenever the next trial starts, with everything in it, its Audit records included. That is the one exception to Audit records being append-only, and the database holds it: the function refuses any School that is not a Trial School past its expiry, and the service may delete nothing else. The [Trial sweep](../.github/workflows/trial-sweep.yml) workflow is the backstop for a quiet spell: daily, it calls `app.delete_expired_trial_schools()` as the owner, the same function a trial start calls, which deletes only Trial Schools past their expiry. It runs in the `production` environment, for the owner's connection string, and in the `production` concurrency group, so it never overlaps a deploy in either direction. Run it by hand from the Actions tab (**Trial sweep → Run workflow**).
 
 ## Checking it
 
 - `GET /api/health` answers `200` with `"database": "reachable"`. The first request after 5 idle minutes wakes both the function and Neon, and takes a few seconds.
 - `GET /api/build-info` shows the commit and the digest that was verified.
-- The sign-in page offers **Try a role**, and each of the four roles signs in.
+- The landing page at `/` offers **Start a trial**, which lands in a Trial School as its School Administrator, and *Viewing as* switches to each of the other three roles.

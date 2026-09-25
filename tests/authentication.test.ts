@@ -113,12 +113,18 @@ describe("User account authentication", () => {
       { table: "user_account", column: "username" },
       { table: "user_account", column: "password_hash" },
       { table: "user_account", column: "created_at" },
+      // Where an account was created and, for a Trial School's role account,
+      // which role's it is: provenance, so a Trial School's deletion takes the
+      // accounts made in it, and never authorization, which a membership alone
+      // grants (ADR-0012).
+      { table: "user_account", column: "created_in_school_id" },
+      { table: "user_account", column: "trial_role" },
       { table: "user_session", column: "token_hash" },
       { table: "user_session", column: "user_account_id" },
       { table: "user_session", column: "created_at" },
       { table: "user_session", column: "expires_at" },
     ]);
-    expect(references).toEqual([{ referenced: "app.user_account" }]);
+    expect(references.map(({ referenced }) => referenced).sort()).toEqual(["app.school", "app.user_account"]);
   });
 
   describe("reading the database yields no credentials", () => {

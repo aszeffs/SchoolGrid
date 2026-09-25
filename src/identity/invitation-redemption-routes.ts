@@ -197,7 +197,9 @@ export function registerInvitationRedemptionRoutes(
 
     try {
       const session = await withTransaction(database, async (transaction) => {
-        const account = await createUserAccount(transaction, credentials);
+        // Created in the Invitation's School, so it goes with it if that is a
+        // Trial School (ADR-0012).
+        const account = await createUserAccount(transaction, credentials, { createdInSchoolId: invitation.schoolId });
         await attach(transaction, invitation, account);
         return startBrowserSession(transaction, account);
       });

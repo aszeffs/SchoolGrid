@@ -26,6 +26,8 @@ So the service checks its own role when it starts. If `DATABASE_URL` could alter
 
 A trigger also rejects updates, deletes and truncates on the table for every role, the owner included. That stops accidents, such as a migration or a manual fix, but it is not the main defence: a superuser can disable a trigger.
 
+There is one exception, and it is fenced in the database too (ADR-0012). A Trial School past its expiry is deleted whole, its Audit records included, by `app.delete_expired_trial_school`, a function owned by the owner and marked `SECURITY DEFINER`. It refuses every School that is not an expired Trial School. `schoolgrid_app` may call it, and `app.delete_expired_trial_schools`, which calls it for each expired trial, but holds no `DELETE` on Schools or Audit records, so a compromised service can erase no real School's trail. The trigger lets a delete through only for a row whose School is an expired Trial School.
+
 ## Setting up a database
 
 The server must be PostgreSQL 18 or newer. Migration `0009` normalises usernames with `casefold()` and the builtin `pg_unicode_fast` collation, both new in 18. Against an older server, `migrate` refuses before applying anything and names the version it found.

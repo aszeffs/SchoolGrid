@@ -1,5 +1,13 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
-import { DEFAULT_RATE_LIMIT, type BuildInfo, type LogLevel, type PublicOrigin, type RateLimit } from "./config.ts";
+import {
+  DEFAULT_RATE_LIMIT,
+  DEFAULT_TRIAL_SETTINGS,
+  type BuildInfo,
+  type LogLevel,
+  type PublicOrigin,
+  type RateLimit,
+  type TrialSettings,
+} from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAcademicStructureRoutes } from "./academic-structure/routes.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
@@ -11,13 +19,13 @@ import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
 import { Conflict } from "./http/conflict.ts";
 import { registerBuildInfoRoute } from "./http/build-info.ts";
-import { registerDemoRoute } from "./http/demo.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } from "./http/security-headers.ts";
 import { cacheControlFor, serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
+import { registerTrialRoutes } from "./trials/routes.ts";
 
 export interface ServerOptions {
   database: Database;
@@ -27,8 +35,8 @@ export interface ServerOptions {
   publicOrigin: PublicOrigin;
   /** What the server was built from, served to anyone. Unless given, it knows nothing. */
   buildInfo?: BuildInfo;
-  /** Whether to publish the demo's sign-ins. See `Config.demoMode`. Off unless given. */
-  demoMode?: boolean;
+  /** Whether Trial Schools are offered, and how many. See `Config.trials`. Off unless given. */
+  trials?: TrialSettings;
   /**
    * The web app, served on every path outside `/api`. Without it, those paths
    * are refused like any other path no route matches.
@@ -52,7 +60,7 @@ export function buildServer({
   rateLimit = DEFAULT_RATE_LIMIT,
   publicOrigin,
   buildInfo = {},
-  demoMode = false,
+  trials = DEFAULT_TRIAL_SETTINGS,
   webApp,
   onRoute,
 }: ServerOptions): FastifyInstance {
@@ -142,7 +150,6 @@ export function buildServer({
       });
 
       registerBuildInfoRoute(api, buildInfo);
-      registerDemoRoute(api, demoMode);
 
       registerAuthenticationRoutes(api, {
         database,
@@ -156,6 +163,7 @@ export function buildServer({
       registerCalendarRoutes(api, database, authenticator);
       registerAcademicStructureRoutes(api, database, authenticator);
       registerPlatformRoutes(api, database, authenticator);
+      registerTrialRoutes(api, { database, authenticator, publicOrigin, settings: trials });
     },
     { prefix: API_PREFIX },
   );

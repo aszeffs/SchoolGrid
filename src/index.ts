@@ -14,7 +14,7 @@ const app = buildServer({
   rateLimit: config.rateLimit,
   publicOrigin: config.publicOrigin,
   buildInfo: config.buildInfo,
-  demoMode: config.demoMode,
+  trials: config.trials,
   ...(webApp === null ? {} : { webApp }),
 });
 if (webApp === null) {

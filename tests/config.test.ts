@@ -228,34 +228,44 @@ describe("loadConfig build info", () => {
   });
 });
 
-describe("loadConfig demo mode", () => {
+describe("loadConfig trials", () => {
   beforeEach(() => {
     vi.stubEnv("DATABASE_URL", "postgres://user:password@localhost:5432/schoolgrid");
     vi.stubEnv("PUBLIC_ORIGIN", "https://schoolgrid.example");
-    vi.stubEnv("DEMO_MODE", undefined);
+    vi.stubEnv("TRIALS_ENABLED", undefined);
+    vi.stubEnv("TRIAL_LIVE_CAP", undefined);
+    vi.stubEnv("TRIAL_PER_IP_HOUR", undefined);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it.each([undefined, "", "false"])("is off when DEMO_MODE is %j", (value) => {
-    vi.stubEnv("DEMO_MODE", value);
-
-    expect(loadConfig().demoMode).toBe(false);
+  it("offers no trials, and caps them at 30 live and 2 an hour per client, when nothing is set", () => {
+    expect(loadConfig().trials).toEqual({ enabled: false, liveCap: 30, perClientPerHour: 2 });
   });
 
-  it("is on when DEMO_MODE is true", () => {
-    vi.stubEnv("DEMO_MODE", "true");
+  it("reads each from the environment", () => {
+    vi.stubEnv("TRIALS_ENABLED", "true");
+    vi.stubEnv("TRIAL_LIVE_CAP", "5");
+    vi.stubEnv("TRIAL_PER_IP_HOUR", "500");
 
-    expect(loadConfig().demoMode).toBe(true);
+    expect(loadConfig().trials).toEqual({ enabled: true, liveCap: 5, perClientPerHour: 500 });
   });
 
-  // It publishes sign-ins, so a value that only looks like a yes must not turn
-  // it on, and one that only looks like a no must not be read as off either.
-  it.each(["1", "yes", "TRUE", "on", "false "])("refuses to start when DEMO_MODE is %j", (value) => {
-    vi.stubEnv("DEMO_MODE", value);
+  // Trials let anyone create a School, so only an exact `true` turns them on.
+  it.each(["1", "yes", "TRUE", "on"])("refuses to start when TRIALS_ENABLED is %j", (value) => {
+    vi.stubEnv("TRIALS_ENABLED", value);
 
-    expect(() => loadConfig()).toThrow(/DEMO_MODE must be true or false/);
+    expect(() => loadConfig()).toThrow(/TRIALS_ENABLED must be true or false/);
+  });
+
+  it.each([
+    ["TRIAL_LIVE_CAP", "0"],
+    ["TRIAL_PER_IP_HOUR", "many"],
+  ])("refuses to start when %s is %j", (name, value) => {
+    vi.stubEnv(name, value);
+
+    expect(() => loadConfig()).toThrow(new RegExp(`${name} must be a positive integer`));
   });
 });

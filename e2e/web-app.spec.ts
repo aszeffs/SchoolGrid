@@ -24,12 +24,12 @@ test("signing in shows the Schools the account reaches, survives a refresh, and 
   const { schoolAdministrator, schools } = seeded();
 
   // Not yet signed in, the app sends them to sign in.
-  await page.goto("/");
+  await page.goto("/schools");
   await expect(page).toHaveURL("/sign-in");
   await audit(page);
 
   await signIn(page, schoolAdministrator);
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/schools");
   await expect(schoolsList(page)).toHaveText(schools, { useInnerText: true });
   await audit(page);
 
@@ -39,7 +39,7 @@ test("signing in shows the Schools the account reaches, survives a refresh, and 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL("/sign-in");
   expect((await context.cookies()).map(({ name }) => name)).not.toContain(SESSION_COOKIE);
-  await page.goto("/");
+  await page.goto("/schools");
   await expect(page).toHaveURL("/sign-in");
 });
 
@@ -148,7 +148,7 @@ test("an invited Person redeems the link with a new account and lands signed in"
     await inviteePage.getByRole("button", { name: "Redeem Invitation" }).click();
 
     // Claiming a Person grants no School membership, so the account reaches no School yet.
-    await expect(inviteePage).toHaveURL("/");
+    await expect(inviteePage).toHaveURL("/schools");
     await expect(inviteePage.getByText(`Signed in as ${credentials.username}`)).toBeVisible();
   } finally {
     await invitee.close();
@@ -157,7 +157,7 @@ test("an invited Person redeems the link with a new account and lands signed in"
 
 /** Signed in as the School Administrator, adds a Person to a School and returns their Invitation link. */
 async function inviteNewPerson(page: Page, school: string, displayName: string): Promise<string> {
-  await page.goto("/");
+  await page.goto("/schools");
   await openSchool(page, school);
   await addPerson(page, displayName);
   await issueInvitationFor(page, displayName);
@@ -193,7 +193,7 @@ test("a person with an account at one School redeems an Invitation into a second
     await inviteePage.getByLabel("Username").fill(credentials.username);
     await inviteePage.getByLabel("Password").fill(credentials.password);
     await inviteePage.getByRole("button", { name: "Redeem Invitation" }).click();
-    await expect(inviteePage).toHaveURL("/");
+    await expect(inviteePage).toHaveURL("/schools");
     await inviteePage.getByRole("button", { name: "Sign out" }).click();
     await expect(inviteePage).toHaveURL("/sign-in");
 
@@ -201,7 +201,7 @@ test("a person with an account at one School redeems an Invitation into a second
     await expect(inviteePage.getByRole("heading", { name: `Join ${schools[1]!}` })).toBeVisible();
     await redeemWithExistingAccount(inviteePage, credentials);
 
-    await expect(inviteePage).toHaveURL("/");
+    await expect(inviteePage).toHaveURL("/schools");
     await expect(inviteePage.getByText(`Signed in as ${credentials.username}`)).toBeVisible();
   } finally {
     await invitee.close();
@@ -212,7 +212,7 @@ test("a person with an account at one School redeems an Invitation into a second
     [schools[0]!, `Morgan ${suffix}`],
     [schools[1]!, `Morgan at ${schools[1]!} ${suffix}`],
   ] as const) {
-    await page.goto("/");
+    await page.goto("/schools");
     await openSchool(page, school);
     const listed = personsRecord(page).filter({ hasText: displayName });
     await expect(listed).toHaveCount(1);

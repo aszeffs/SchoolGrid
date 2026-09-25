@@ -2,17 +2,18 @@ import type { Page } from "@playwright/test";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
- * The two sheets a visitor sees before signing in: the demo's front door.
+ * The sheets a visitor sees before signing in: the site's front door.
  *
- * What each page says about the domain belongs to its own spec — the demo's
- * roles to try-a-role.spec.ts, the build's provenance to
- * how-this-was-built.spec.ts. What is asserted here is what both owe a
- * visitor who arrives on them cold: that they explain themselves, that they
- * can be worked by the keyboard, that they hold 360px, and that they follow the
- * theme the browser asks for and stay legible in both.
+ * What each page says about the domain belongs to its own spec — a trial to
+ * trial-school.spec.ts, the build's provenance to how-this-was-built.spec.ts.
+ * What is asserted here is what all of them owe a visitor who arrives on
+ * them cold: that they explain themselves, that they can be worked by the
+ * keyboard, that they hold 360px, and that they follow the theme the browser
+ * asks for and stay legible in both.
  */
 
 const PUBLIC_SHEETS = [
+  { path: "/", heading: "Academic records for K-12 Schools" },
   { path: "/sign-in", heading: "Sign in to SchoolGrid" },
   { path: "/how-this-was-built", heading: "How this was built" },
 ] as const;
@@ -34,6 +35,58 @@ async function focused(page: Page): Promise<{ name: string; ring: string } | und
     };
   });
 }
+
+test("the landing page says what SchoolGrid is, how it holds records, and that it is a showcase", async ({ page }) => {
+  await page.goto("/");
+
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { level: 1 })).toHaveText("Academic records for K-12 Schools");
+  await expect(main.getByText(/School Administrator runs the School/)).toBeVisible();
+
+  const trust = page.getByRole("region", { name: "Trust & security" });
+  for (const term of ["Records isolated per School", "Audit trail", "Signed and verified builds"]) {
+    await expect(trust.getByRole("term").filter({ hasText: term })).toBeVisible();
+  }
+  await trust.getByRole("link", { name: "How this was built" }).click();
+  await expect(page).toHaveURL("/how-this-was-built");
+  await page.goBack();
+
+  await expect(
+    main.getByText(
+      "SchoolGrid is a showcase project. It doesn't host real Schools, and every record in a trial is invented.",
+    ),
+  ).toBeVisible();
+  await expect(main.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+    "href",
+    "https://github.com/aszeffs/SchoolGrid",
+  );
+  // Nothing on it frames the site as anything but the product it shows.
+  await expect(page.locator("body")).not.toContainText(/learn|practice|portfolio|DevSecOps/i);
+
+  // This deployment offers no trial, so the page offers none.
+  await expect(main.getByRole("button", { name: "Start a trial" })).toHaveCount(0);
+  await main.getByRole("link", { name: "Sign in" }).click();
+  await expect(page).toHaveURL("/sign-in");
+});
+
+test("the landing page is worked by the keyboard alone, and every stop shows the ring", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+  const reached: string[] = [];
+  for (let press = 0; press < 12 && !reached.includes("Sign in"); press += 1) {
+    await page.keyboard.press("Tab");
+    const stop = await focused(page);
+    if (stop !== undefined && stop.name !== "") {
+      expect(stop.ring, `the focus ring on ${stop.name}`).toBe("solid 3px");
+      reached.push(stop.name);
+    }
+  }
+
+  expect(reached).toEqual(expect.arrayContaining(["How this was built", "GitHub", "Sign in"]));
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL("/sign-in");
+});
 
 test("sign-in says what SchoolGrid is before it asks for credentials", async ({ page }) => {
   await page.goto("/sign-in");
