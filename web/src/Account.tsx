@@ -79,18 +79,18 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
       {holds("student") && <Enrollment enrollment={account.enrollment} />}
       {holds("guardian") && <LinkedStudents account={account} />}
 
-      {holds("faculty") && (
+      {(holds("faculty") || holds("student")) && (
         <section>
           <h2>Your classes</h2>
           <p>
-            The Class Offerings you are assigned to teach are on{" "}
+            The Class Offerings you are {holds("faculty") ? "assigned to teach" : "on the roster of"} are on{" "}
             <Link to={{ name: "classes", schoolId: school.schoolId }}>Your classes</Link>.
           </p>
         </section>
       )}
 
-      {/* Faculty have their classes now; Attendance and Term results are still to come for the other two roles. */}
-      {(holds("student") || holds("guardian")) && (
+      {/* Faculty and Students have their classes now; Attendance and Term results are still to come for Guardians. */}
+      {holds("guardian") && (
         <section className="not-built">
           <h2>Not built yet</h2>
           <p>

@@ -1,6 +1,7 @@
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
+import { schoolDateAt } from "../calendar/index.ts";
 import type { Database } from "../db/pool.ts";
-import { withTransaction, type Queryable } from "../db/transaction.ts";
+import { transactionTime, withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { fieldsOf, reasonFrom } from "../http/request-body.ts";
 import type { SchoolScope } from "../http/school-scope.ts";
@@ -22,6 +23,8 @@ import {
   type Actor,
 } from "./index.ts";
 import { holdsRoleNowOrLater } from "./memberships.ts";
+import { endRosterWithEnrollment } from "./roster-membership-routes.ts";
+import { countRosterMembershipsRunningPast } from "./roster-memberships.ts";
 
 /** An Enrollment as served. The School is the one addressed. */
 function present({ id, studentPersonId, startedAt, endedAt, endReason }: Enrollment) {
@@ -104,8 +107,9 @@ async function recordChange(
  * asked before anything else about the request is looked at, and every change
  * is recorded in the transaction that makes it.
  *
- * Ending an Enrollment is departure, and departure only. It ends every Guardian
- * link to the Student, and nothing else: the Student's memberships are not
+ * Ending an Enrollment is departure, and departure only. It ends the Student's
+ * open Roster memberships on the School date it ended, and every Guardian link
+ * to the Student, and nothing else: the Student's memberships are not
  * touched, since their narrowed access is derived from there being no open
  * Enrollment, and every record stays with the School. No route here, or
  * anywhere, sends a departing Student's records elsewhere; "transfer" is a
@@ -168,7 +172,27 @@ export function registerEnrollmentRoutes(scope: SchoolScope, database: Database)
           reason,
         });
       }
+      await endRosterWithEnrollment(transaction, actor, ended, reason);
       return { enrollment: present(ended) };
     });
+  });
+
+  /*
+   * What ending an Enrollment now would end with it, counted so a confirmation
+   * can name it before anything changes: the Student's Roster memberships still
+   * running after today's School date. One already ended ends nothing more.
+   */
+  scope.get("/enrollments/:enrollmentId/consequences", async (actor, { params }) => {
+    const enrollmentId = params["enrollmentId"]!;
+    const enrollment = authorizeManageEnrollment(actor, enrollmentId, await findEnrollment(database, enrollmentId));
+    if (enrollment.endedAt !== null) {
+      return { consequences: { rosterMemberships: 0 } };
+    }
+    const endsOn = (await schoolDateAt(database, {
+      schoolId: enrollment.schoolId,
+      at: await transactionTime(database),
+    }))!;
+    const student = { id: enrollment.studentPersonId, schoolId: enrollment.schoolId };
+    return { consequences: { rosterMemberships: await countRosterMembershipsRunningPast(database, student, endsOn) } };
   });
 }

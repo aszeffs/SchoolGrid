@@ -1,21 +1,27 @@
-import { findClassOffering, lockClassOffering, type DescribedClassOffering } from "../academic-structure/courses.ts";
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
 import { schoolDateAt, type SchoolDate } from "../calendar/index.ts";
 import type { Database } from "../db/pool.ts";
 import { transactionTime, withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
-import { fieldsOf, reasonFrom, reasonOnly, schoolDateFrom } from "../http/request-body.ts";
+import { fieldsOf, reasonFrom, reasonOnly } from "../http/request-body.ts";
 import type { SchoolScope } from "../http/school-scope.ts";
 import { findPerson, type Person } from "../identity/index.ts";
 import {
   authorizeAssignTeaching,
-  authorizeManageClassOffering,
   authorizeManageTeachingAssignment,
   authorizeManageTeachingAssignments,
   serveTeachingAssignments,
   type Actor,
 } from "./index.ts";
 import { holdActiveMembership, type Membership } from "./memberships.ts";
+import {
+  checkInOrder,
+  checkNotExtended,
+  firstDateFrom,
+  lastDateFrom,
+  lockPermittedOffering,
+  type Bounds,
+} from "./participation.ts";
 import {
   assignTeaching,
   deleteTeachingAssignment,
@@ -59,12 +65,6 @@ async function recordChange(
 // Validation below runs only once the Access decision has permitted the
 // caller: see InvalidRequest.
 
-/** A last date: absent when not stated, null for an open assignment, or a School date. */
-function lastDateFrom(fields: Record<string, unknown>): SchoolDate | null | undefined {
-  const value = fields["lastDate"];
-  return value === undefined || value === null ? value : schoolDateFrom(value, "lastDate");
-}
-
 function parseAssignment(body: unknown) {
   const fields = fieldsOf(body, ["personId", "firstDate", "lastDate", "reason"]);
   const personId = fields["personId"];
@@ -73,7 +73,7 @@ function parseAssignment(body: unknown) {
   }
   return {
     personId,
-    firstDate: fields["firstDate"] === undefined ? undefined : schoolDateFrom(fields["firstDate"], "firstDate"),
+    firstDate: firstDateFrom(fields),
     lastDate: lastDateFrom(fields),
     reason: reasonFrom(fields["reason"]),
   };
@@ -84,8 +84,7 @@ function parseBounds(body: unknown, assignment: TeachingAssignment) {
   const fields = fieldsOf(body, ["firstDate", "lastDate", "reason"]);
   const lastDate = lastDateFrom(fields);
   return {
-    firstDate:
-      fields["firstDate"] === undefined ? assignment.firstDate : schoolDateFrom(fields["firstDate"], "firstDate"),
+    firstDate: firstDateFrom(fields) ?? assignment.firstDate,
     lastDate: lastDate === undefined ? assignment.lastDate : lastDate,
     reason: reasonFrom(fields["reason"]),
   };
@@ -108,63 +107,18 @@ async function teachesUntil(transaction: Queryable, person: Person): Promise<Sch
 }
 
 /**
- * Refuses bounds reaching beyond the assignment's own, for one whose Person no
- * longer holds a Faculty membership: it can still be corrected or shortened,
- * as a record of what they taught, but not made to teach more.
- */
-function checkNotExtended(
-  bounds: { firstDate: SchoolDate; lastDate: SchoolDate | null },
-  assignment: TeachingAssignment,
-  termLastDate: SchoolDate,
-): void {
-  if (
-    bounds.firstDate < assignment.firstDate ||
-    (bounds.lastDate ?? termLastDate) > (assignment.lastDate ?? termLastDate)
-  ) {
-    throw new InvalidRequest("the assignment may not be extended, as the Person no longer holds a Faculty membership");
-  }
-}
-
-/**
  * Refuses bounds out of order, and bounds running past the School date the
  * Person's Faculty membership ends on: ending that membership would end the
  * assignment on that date anyway, so it is not written to run beyond it.
  */
-function checkBounds(
-  { firstDate, lastDate }: { firstDate: SchoolDate; lastDate: SchoolDate | null },
-  termLastDate: SchoolDate,
-  until: SchoolDate | null,
-): void {
-  if (lastDate !== null && lastDate < firstDate) {
-    throw new InvalidRequest("lastDate must not be before firstDate");
-  }
-  if (until !== null && (lastDate ?? termLastDate) > until) {
+function checkBounds(bounds: Bounds, termLastDate: SchoolDate, until: SchoolDate | null): void {
+  checkInOrder(bounds);
+  if (until !== null && (bounds.lastDate ?? termLastDate) > until) {
     throw new InvalidRequest(`the assignment may not run past ${until}, when the Person's Faculty membership ends`);
   }
 }
 
-/*
- * Each record the actor may act on is found, decided, and only then locked:
- * see lockMembership. One deleted between the two is decided again as the
- * absent record it now is, so the caller is refused as for any other.
- */
-
-async function lockPermittedOffering(
-  transaction: Queryable,
-  actor: Actor,
-  classOfferingId: string,
-): Promise<DescribedClassOffering> {
-  const permitted = authorizeManageClassOffering(
-    actor,
-    classOfferingId,
-    await findClassOffering(transaction, classOfferingId),
-  );
-  return (
-    (await lockClassOffering(transaction, permitted)) ??
-    authorizeManageClassOffering<DescribedClassOffering>(actor, classOfferingId, null)
-  );
-}
-
+// Found, decided, and only then locked, as lockPermittedOffering is.
 async function lockPermittedAssignment(transaction: Queryable, actor: Actor, teachingAssignmentId: string) {
   const permitted = authorizeManageTeachingAssignment(
     actor,
@@ -252,7 +206,7 @@ export function registerTeachingAssignmentRoutes(scope: SchoolScope, database: D
       const { reason, ...bounds } = parseBounds(body, assignment);
       const until = await teachesUntil(transaction, (await findPerson(transaction, assignment.personId))!);
       if (until === undefined) {
-        checkNotExtended(bounds, assignment, termLastDate);
+        checkNotExtended(bounds, assignment, termLastDate, "the Person no longer holds a Faculty membership");
       }
       checkBounds(bounds, termLastDate, until ?? null);
       const changed = await setTeachingAssignmentBounds(transaction, assignment, bounds);

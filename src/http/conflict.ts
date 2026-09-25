@@ -31,13 +31,17 @@ export type ConflictDetail =
   | { conflict: "teaching_assignment_overlap" }
   /** A Teaching assignment would begin before its offering's Term or end after it. */
   | { conflict: "teaching_assignment_outside_term" }
+  /** One Person's Roster memberships of one Class Offering would overlap. */
+  | { conflict: "roster_membership_overlap" }
+  /** A Roster membership would begin before its offering's Term or end after it. */
+  | { conflict: "roster_membership_outside_term" }
   /**
    * Something depends on what would change or go, and would be stranded. Only
    * its kind is named, never a record the caller could not otherwise read.
    */
   | {
       conflict: "dependent";
-      dependent: "term" | "instructional_day_exception" | "class_offering" | "teaching_assignment";
+      dependent: "term" | "instructional_day_exception" | "class_offering" | "teaching_assignment" | "roster_membership";
     }
   /** The School's timezone is fixed once its first Academic Year exists (ADR-0011). */
   | { conflict: "timezone_fixed" };

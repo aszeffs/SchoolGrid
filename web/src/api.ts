@@ -286,9 +286,38 @@ export interface TeachingAssignment {
   lastDate: string | null;
 }
 
-/** A Class Offering read by itself, or among a Faculty member's own: with who teaches it. */
+/**
+ * A Student's participation in a Class Offering, bounded by School dates. A
+ * last date of null is one still open, running to the end of its Term.
+ */
+export interface RosterMembership {
+  id: string;
+  person: { id: string; displayName: string };
+  firstDate: string;
+  lastDate: string | null;
+}
+
+/**
+ * A Class Offering read by itself, or among a Faculty member's own: with who
+ * teaches it, and its roster for a reader who may see it. A Student reading
+ * one of their own classes is not given the roster.
+ */
 export interface TaughtClassOffering extends ClassOffering {
   teachingAssignments: TeachingAssignment[];
+  rosterMemberships?: RosterMembership[];
+}
+
+/** One of a Student's own classes: who teaches it, and when the Student was on its roster. */
+export interface RosteredClassOffering extends ClassOffering {
+  teachingAssignments: TeachingAssignment[];
+  rosterMemberships: { id: string; firstDate: string; lastDate: string | null }[];
+}
+
+/** One Term a Student has classes in, and whether it is the one running today. */
+export interface RosteredTerm {
+  term: ClassOffering["term"];
+  current: boolean;
+  classOfferings: RosteredClassOffering[];
 }
 
 /** A Term as a change states it: one of the year's own by its identifier, or a new one without. */
@@ -394,7 +423,16 @@ export const api = {
     request<{ enrollments: Enrollment[] }>("GET", inSchool(schoolId, "/enrollments")),
   enroll: (schoolId: string, studentPersonId: string) =>
     request<{ enrollment: Enrollment }>("POST", inSchool(schoolId, "/enrollments"), { studentPersonId }),
-  /** An Enrollment does not end without a reason. Every Guardian link to the Student ends with it. */
+  /** What ending an Enrollment now would end with it. */
+  enrollmentConsequences: (schoolId: string, enrollmentId: string) =>
+    request<{ consequences: { rosterMemberships: number } }>(
+      "GET",
+      inSchool(schoolId, `/enrollments/${encodeURIComponent(enrollmentId)}/consequences`),
+    ),
+  /**
+   * An Enrollment does not end without a reason. The Student's open Roster
+   * memberships and every Guardian link to them end with it.
+   */
   endEnrollment: (schoolId: string, enrollmentId: string, reason: string) =>
     request<{ enrollment: Enrollment }>(
       "DELETE",
@@ -505,6 +543,36 @@ export const api = {
     request<{ current: TaughtClassOffering[]; past: TaughtClassOffering[] }>(
       "GET",
       inSchool(schoolId, "/account/class-offerings"),
+    ),
+  /** A Student's own: every class they are or were rostered in, by Term, the current one first. */
+  ownRosterMemberships: (schoolId: string) =>
+    request<{ terms: RosteredTerm[] }>("GET", inSchool(schoolId, "/account/roster-memberships")),
+  /** Several Students at once, all or nothing. Bounds left unstated run with the Term's. */
+  rosterStudents: (
+    schoolId: string,
+    classOfferingId: string,
+    rostering: { personIds: string[]; firstDate?: string; lastDate?: string },
+  ) =>
+    request<{ rosterMemberships: RosterMembership[] }>(
+      "POST",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/roster-memberships`),
+      rostering,
+    ),
+  changeRosterMembership: (
+    schoolId: string,
+    rosterMembershipId: string,
+    bounds: { firstDate: string; lastDate: string | null },
+  ) =>
+    request<{ rosterMembership: RosterMembership }>(
+      "PATCH",
+      inSchool(schoolId, `/roster-memberships/${encodeURIComponent(rosterMembershipId)}`),
+      bounds,
+    ),
+  /** Ends it on today's School date, or removes it if it has not begun. */
+  endRosterMembership: (schoolId: string, rosterMembershipId: string) =>
+    request<{ rosterMembership: RosterMembership }>(
+      "DELETE",
+      inSchool(schoolId, `/roster-memberships/${encodeURIComponent(rosterMembershipId)}`),
     ),
   /** Bounds left unstated run with the Term's, or to the end of the Person's Faculty membership. */
   assignTeaching: (

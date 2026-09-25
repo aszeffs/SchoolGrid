@@ -28,11 +28,18 @@ import {
   teachingAssignmentsOn,
   type TeachingAssignment,
 } from "./teaching-assignments.ts";
+import {
+  classOfferingIdsRosteredIn,
+  rosterMembershipsOf,
+  rosterMembershipsOn,
+  type RosterMembership,
+} from "./roster-memberships.ts";
 
 /**
  * The Access module is the sole authority on whether an actor may do something
- * to a target. It owns School memberships, Guardian links, Enrollments, and
- * Teaching assignments, and nothing outside it reads one: an Actor's roles, links, and Enrollment are kept
+ * to a target. It owns School memberships, Guardian links, Enrollments,
+ * Teaching assignments and Roster memberships, and nothing outside it reads
+ * one: an Actor's roles, links, and Enrollment are kept
  * here rather than on the Actor, so a handler holding an Actor can ask this
  * module for a decision but cannot make the decision itself.
  */
@@ -40,6 +47,7 @@ export { grantMembership, ROLES, type Membership, type Role } from "./membership
 export { recordEnrollment, type Enrollment } from "./enrollments.ts";
 export { linkGuardian, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 export type { TeachingAssignment } from "./teaching-assignments.ts";
+export type { RosterMembership } from "./roster-memberships.ts";
 
 /**
  * Why a request was refused. It is written to the Audit record, where a School
@@ -118,6 +126,13 @@ interface Standing {
    * (CONTEXT.md: Teaching assignment).
    */
   taughtClassOfferingIds: ReadonlySet<string>;
+  /**
+   * The Class Offerings the Actor, as a Student, was ever rostered in. Like
+   * those taught, these outlast the membership's end, and the Enrollment's: a
+   * departed Student keeps reading the classes they took part in (CONTEXT.md:
+   * Enrollment).
+   */
+  rosteredClassOfferingIds: ReadonlySet<string>;
 }
 
 // Keyed by the Actor object this module handed out. An Actor built anywhere
@@ -166,8 +181,15 @@ export async function resolveActor(
   const linkedStudents = roles.has("guardian") ? await linkedStudentIds(database, person) : new Set<string>();
   const enrolled = roles.has("student") && (await hasOpenEnrollment(database, person));
   const taught = await classOfferingIdsTaughtBy(database, person);
+  const rostered = roles.has("student") ? await classOfferingIdsRosteredIn(database, person) : new Set<string>();
   const actor: Actor = Object.freeze({ person, schoolId: person.schoolId });
-  standingOf.set(actor, { roles, linkedStudentIds: linkedStudents, enrolled, taughtClassOfferingIds: taught });
+  standingOf.set(actor, {
+    roles,
+    linkedStudentIds: linkedStudents,
+    enrolled,
+    taughtClassOfferingIds: taught,
+    rosteredClassOfferingIds: rostered,
+  });
   return actor;
 }
 
@@ -411,6 +433,84 @@ export async function ownClassOfferings(
     (isCurrent ? current : past).add(id);
   }
   return { current, past };
+}
+
+/** A Roster membership as served: whose it is, by display name alone, and its bounds. */
+export interface ServedRosterMembership {
+  id: string;
+  person: { id: string; displayName: string };
+  firstDate: string;
+  lastDate: string | null;
+}
+
+/**
+ * These Roster memberships as served, in the order a roster lists them: by
+ * whose they are, then by when each begins. Only a caller already permitted to
+ * read them asks.
+ */
+export async function serveRosterMemberships(
+  database: Queryable,
+  memberships: readonly RosterMembership[],
+): Promise<ServedRosterMembership[]> {
+  // Read through the Identity module, as ownAccount reads linked Students.
+  const persons = await findPersons(
+    database,
+    memberships.map((membership) => membership.personId),
+  );
+  const served = memberships.map(({ id, personId, firstDate, lastDate }) => ({
+    id,
+    person: { id: personId, displayName: persons.get(personId)?.displayName ?? "" },
+    firstDate,
+    lastDate,
+  }));
+  return served.sort(
+    (a, b) =>
+      a.person.displayName.localeCompare(b.person.displayName) ||
+      a.firstDate.localeCompare(b.firstDate) ||
+      a.id.localeCompare(b.id),
+  );
+}
+
+/**
+ * Each of these Class Offerings' rosters as served, by offering. Only for
+ * offerings whose roster the caller has already been permitted to read: see
+ * mayReadRosterOf.
+ */
+export async function rostersServedOn(
+  database: Queryable,
+  classOfferingIds: readonly string[],
+): Promise<Map<string, ServedRosterMembership[]>> {
+  const memberships = await rosterMembershipsOn(database, classOfferingIds);
+  const offeringOf = new Map(memberships.map((membership) => [membership.id, membership.classOfferingId]));
+  const byOffering = new Map(classOfferingIds.map((id) => [id, [] as ServedRosterMembership[]]));
+  for (const served of await serveRosterMemberships(database, memberships)) {
+    byOffering.get(offeringOf.get(served.id)!)?.push(served);
+  }
+  return byOffering;
+}
+
+/** One of the actor's own Roster memberships, as they are served it: its bounds, and nothing of anyone else's. */
+export interface OwnRosterMembership {
+  id: string;
+  firstDate: string;
+  lastDate: string | null;
+}
+
+/**
+ * The actor's own Roster memberships, ended ones included, by the Class
+ * Offering each is in, with the School date today is. Only for an actor
+ * already permitted to list them.
+ */
+export async function ownRosterMemberships(
+  database: Queryable,
+  actor: Actor,
+): Promise<{ today: string; byOffering: Map<string, OwnRosterMembership[]> }> {
+  const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
+  const byOffering = new Map<string, OwnRosterMembership[]>();
+  for (const { id, classOfferingId, firstDate, lastDate } of await rosterMembershipsOf(database, actor.person)) {
+    byOffering.set(classOfferingId, [...(byOffering.get(classOfferingId) ?? []), { id, firstDate, lastDate }]);
+  }
+  return { today, byOffering };
 }
 
 function holds(actor: Actor, role: Role): boolean {
@@ -739,10 +839,13 @@ export function authorizeManageClassOffering<O extends { schoolId: string }>(
  * Returns the Class Offering the actor may read, with its Teaching
  * assignments, and refuses otherwise. A School Administrator reads every one
  * in their School. Anyone ever assigned to teach one reads it, ended
- * assignments included, even once their Faculty membership has ended, and no
- * other (CONTEXT.md: Teaching assignment).
+ * assignments included, even once their Faculty membership has ended
+ * (CONTEXT.md: Teaching assignment). A Student reads each they were ever
+ * rostered in, even once their Enrollment has ended (CONTEXT.md: Enrollment).
+ * No one else does.
  * Of the Persons it names they are told display names alone, so this grants
- * nothing about those Persons beyond it.
+ * nothing about those Persons beyond it. Whether its roster is among them is
+ * mayReadRosterOf's to say.
  */
 export function authorizeReadClassOffering<O extends { id: string; schoolId: string }>(
   actor: Actor,
@@ -751,9 +854,74 @@ export function authorizeReadClassOffering<O extends { id: string; schoolId: str
 ): O {
   const reason =
     outOfReach(actor, target) ??
-    (holds(actor, "school_administrator") || hasTaught(actor, target!) ? null : "forbidden");
+    (holds(actor, "school_administrator") || hasTaught(actor, target!) || wasRostered(actor, target!)
+      ? null
+      : "forbidden");
   if (reason !== null) {
     throw new Refused(reason, { type: "class_offering", id: classOfferingId });
+  }
+  return target!;
+}
+
+/**
+ * Whether the actor, already permitted to read this Class Offering, may read
+ * its roster too: a School Administrator, and anyone ever assigned to teach
+ * it. A Student reads their own classes but never their classmates, so the
+ * roster is left out of what they are served altogether.
+ */
+export function mayReadRosterOf(actor: Actor, offering: { id: string; schoolId: string }): boolean {
+  return (
+    offering.schoolId === actor.schoolId && (holds(actor, "school_administrator") || hasTaught(actor, offering))
+  );
+}
+
+/**
+ * Returns the School whose Class Offerings the actor may list as the ones they
+ * are and were rostered in, and refuses otherwise. Only a Student has any, and
+ * keeps them once their Enrollment has ended.
+ */
+export function authorizeReadOwnRosterMemberships(actor: Actor): string {
+  if (!holds(actor, "student")) {
+    throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+  }
+  return actor.schoolId;
+}
+
+function wasRostered(actor: Actor, offering: { id: string }): boolean {
+  return standingOf.get(actor)?.rosteredClassOfferingIds.has(offering.id) ?? false;
+}
+
+/**
+ * Returns the Person the actor may roster, and refuses otherwise. Whether that
+ * Person holds an open Enrollment is a matter of the request, checked once
+ * this has permitted it.
+ */
+export function authorizeRoster(actor: Actor, personId: string, target: Person | null): Person {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "person", id: personId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the School whose Roster memberships the actor may make, and refuses
+ * otherwise. They are managed as memberships are: by a School Administrator,
+ * in the School they are acting in, asked before the body is read.
+ */
+export function authorizeManageRosterMemberships(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/** Returns the Roster membership the actor may change or end, and refuses otherwise. */
+export function authorizeManageRosterMembership<M extends RosterMembership>(
+  actor: Actor,
+  rosterMembershipId: string,
+  target: M | null,
+): M {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "roster_membership", id: rosterMembershipId });
   }
   return target!;
 }

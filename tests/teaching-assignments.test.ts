@@ -817,6 +817,7 @@ describe("Teaching assignments", () => {
       expect((read.body as { classOffering: ClassOffering }).classOffering).toEqual({
         ...world.offering,
         teachingAssignments: [flynns, mine],
+        rosterMemberships: [],
       });
       expect(classes.status).toBe(200);
       const { current, past } = classes.body as {

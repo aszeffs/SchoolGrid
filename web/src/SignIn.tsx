@@ -20,8 +20,7 @@ const ROLE_SEES: Record<DemoAccount["role"], string> = {
   school_administrator:
     "Every Person in the School, with their Invitations, School memberships, Enrollments, Guardian links and Audit records, and the School's settings.",
   faculty: "Their own account, the School's People, and the Class Offerings they teach or have taught.",
-  student:
-    "Their own account: the School memberships they hold, and their Enrollment. Their published academic records are not built yet.",
+  student: "Their own account, their Enrollment, and the Class Offerings they are rostered in, with who teaches each.",
   guardian:
     "Their own account: each Student they are linked to, and what that link lets them read. Those records are not built yet.",
 };

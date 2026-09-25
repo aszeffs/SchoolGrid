@@ -387,9 +387,12 @@ async function replaceTerms(
     if (before.name === term.name && before.firstDate === term.firstDate && before.lastDate === term.lastDate) {
       continue;
     }
-    // A Teaching assignment left outside the Term's new bounds would be stranded.
+    // A Teaching assignment or Roster membership left outside the Term's new bounds would be stranded.
     const { rows } = await withConstraintsNamed(
-      { teaching_assignment_inside_term: { conflict: "dependent", dependent: "teaching_assignment" } },
+      {
+        teaching_assignment_inside_term: { conflict: "dependent", dependent: "teaching_assignment" },
+        roster_membership_inside_term: { conflict: "dependent", dependent: "roster_membership" },
+      },
       () =>
         transaction.query<Term>(
           `UPDATE app.term SET name = $3, first_date = $4, last_date = $5

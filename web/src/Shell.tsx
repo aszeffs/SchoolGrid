@@ -20,6 +20,7 @@ import { SchoolSettings } from "./SchoolSettings.tsx";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
+import { StudentClasses } from "./StudentClasses.tsx";
 import { YourClasses } from "./YourClasses.tsx";
 
 type State =
@@ -195,7 +196,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
     case "account":
       return <Account school={school} />;
     case "classes":
-      return <YourClasses school={school} />;
+      // The classes a Faculty member teaches, or, for a Student, the ones they are in.
+      return school.roles.includes("faculty") ? <YourClasses school={school} /> : <StudentClasses school={school} />;
     case "persons":
       return <Persons school={school} />;
     case "invitations":

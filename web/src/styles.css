@@ -1181,6 +1181,18 @@ dialog.slip[open] {
   display: grid;
 }
 
+/*
+ * A slip taller than the screen scrolls, but its actions stay pinned to its
+ * foot: a long list of Students to roster never pushes Cancel out of reach.
+ */
+dialog.slip > .actions {
+  position: sticky;
+  bottom: 0;
+  margin: 0 calc(var(--step) * -3) calc(var(--step) * -3);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 3) calc(var(--step) * 3);
+  background: var(--field);
+}
+
 dialog.slip::backdrop {
   background: color-mix(in srgb, #0b0f17 55%, transparent);
 }
