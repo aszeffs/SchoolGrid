@@ -1,0 +1,41 @@
+name: Trial sweep
+
+on:
+  # Daily. Expired Trial Schools are deleted whenever a trial starts; this is
+  # the backstop for a quiet spell in which none does (ADR-0012). GitHub runs
+  # schedules in UTC, from the default branch alone, and with no guarantee of
+  # punctuality, which a sweep does not need.
+  schedule:
+    - cron: "30 18 * * *"
+  # So the sweep can be run by hand, and proved to work when it is first added.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Delete expired Trial Schools
+    runs-on: ubuntu-latest
+    # The only holder of the owner's connection string, shared with the deploy
+    # job in container.yml. A job in a pull request run cannot name it.
+    environment: production
+    # The same group as the deploy job, so a sweep never runs against a schema
+    # a deploy is migrating.
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Call the database's sweep
+        # The same function a trial start calls, which deletes only Trial
+        # Schools past their expiry and refuses every other School
+        # (migrations/0018). `psql` is the runner image's.
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        shell: bash
+        run: |
+          deleted="$(psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 --no-psqlrc --tuples-only --no-align \
+            --command "SELECT app.delete_expired_trial_schools()")"
+          echo "deleted ${deleted} expired Trial Schools"
