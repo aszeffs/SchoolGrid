@@ -62,7 +62,7 @@ Then seed the demo School from the repository. The seed is never in the image, a
 psql "$OWNER_URL" -X -v ON_ERROR_STOP=1 --file demo/seed.sql
 ```
 
-The seed creates a School Administrator, Faculty, Student and Guardian, whose sign-ins the demo publishes. It creates no Platform Administrator, and none is ever published: a Platform Administrator is made by hand, as the owner ([docs/database-roles.md](database-roles.md#making-a-platform-administrator)), and the demo has no need of one.
+The seed creates a School Administrator, Faculty, Student and Guardian, whose sign-ins the demo publishes, and an Academic Year around the day it runs: Terms, holidays, Courses, and Class Offerings taught by the Faculty member and attended by the Student among invented classmates. It creates no Platform Administrator, and none is ever published: a Platform Administrator is made by hand, as the owner ([docs/database-roles.md](database-roles.md#making-a-platform-administrator)), and the demo has no need of one.
 
 ## 4. The Vercel project
 
@@ -152,7 +152,7 @@ Vercel copies the image into its own registry and serves it under a new manifest
 
 The demo publishes a sign-in for every School role, so any visitor can change anything in it. The [Demo reset](../.github/workflows/demo-reset.yml) workflow puts it back nightly, at 02:00 Asia/Manila, by calling [`scripts/reset-demo.sh`](../scripts/reset-demo.sh). Run it by hand from the Actions tab (**Demo reset → Run workflow**) to clean up sooner.
 
-It reads the digest from the live `/api/build-info` rather than being told one, so it migrates with the image already serving the database. It then verifies that digest's provenance exactly as the deploy does, drops the `app` schema and the migration record as the owner, migrates with the same image, applies `demo/seed.sql`, and finally checks the database holds only seeded data and that every account the demo publishes signs in. Nothing is dropped unless the read and the verification both succeeded.
+It reads the digest from the live `/api/build-info` rather than being told one, so it migrates with the image already serving the database. It then verifies that digest's provenance exactly as the deploy does, drops the `app` schema and the migration record as the owner, migrates with the same image, applies `demo/seed.sql`, and finally checks the database holds only seeded data, with a Term running today, and that every account the demo publishes signs in. Nothing is dropped unless the read and the verification both succeeded.
 
 Dropping the schema deletes the demo's Audit records. That is deliberate and true of the demo alone: the trigger that refuses `TRUNCATE` on `app.audit_record` does not stop a `DROP SCHEMA`, and only the owner can drop it. The Audit records there are invented, made by visitors trying a role.
 
