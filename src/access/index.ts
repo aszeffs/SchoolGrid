@@ -6,6 +6,7 @@ import {
   platformAdministratorFor,
   schoolsReachedBy,
   trialExpiryOf,
+  trialRoleOf,
   type ListedPerson,
   type Person,
   type PlatformAdministrator,
@@ -262,6 +263,11 @@ export interface ReachedSchool {
    * say how long it has left and know when it has ended (ADR-0012).
    */
   trialExpiresAt?: string;
+  /**
+   * The role this account acts as, only when it is one of a Trial School's
+   * role accounts: its visitor may change to any other (ADR-0012).
+   */
+  viewingAs?: Role;
 }
 
 /**
@@ -288,6 +294,7 @@ export async function actorInEachSchool(
     }
     const held = await activeRoles(database, person);
     const trialExpiresAt = await trialExpiryOf(database, school.id);
+    const viewingAs = trialExpiresAt === null ? null : await trialRoleOf(database, account.id);
     reached.push({
       schoolId: school.id,
       name: school.name,
@@ -297,6 +304,7 @@ export async function actorInEachSchool(
       // the database happened to return first.
       roles: ROLES.filter((role) => held.has(role)),
       ...(trialExpiresAt === null ? {} : { trialExpiresAt: trialExpiresAt.toISOString() }),
+      ...(viewingAs === null ? {} : { viewingAs }),
     });
   }
   return reached;

@@ -152,6 +152,54 @@ body {
   color: var(--ink);
 }
 
+.sheet:has(> .trial-banner) {
+  grid-template-rows: auto auto auto 1fr;
+}
+
+/*
+ * A Trial School's strip over the head: a slim seal-washed band saying what
+ * this School is and how long it has left, with the way to a fresh one at its
+ * right. Kept to one line where it fits, and to the same frame as the head.
+ */
+.trial-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--step) * 0.75) calc(var(--step) * 2);
+  padding: calc(var(--step) * 0.75) max(var(--gutter), (100% - var(--frame)) / 2);
+  background: var(--wash-seal);
+  border-bottom: 1px solid color-mix(in srgb, var(--seal) 30%, transparent);
+  font-size: var(--size-label);
+}
+
+.trial-banner p {
+  margin: 0;
+  max-width: none;
+}
+
+.trial-banner strong {
+  color: var(--seal);
+  font-weight: 700;
+}
+
+.trial-banner time {
+  font-family: var(--type-figures);
+  font-variant-numeric: tabular-nums;
+}
+
+.trial-banner__failure {
+  flex-basis: 100%;
+  order: 1;
+  color: var(--alarm);
+  font-weight: 600;
+}
+
+.trial-banner .button-quiet {
+  min-height: 2rem;
+  background: var(--field);
+}
+
 /*
  * The report's head: which record system this is and, inside a School, which
  * School, who is signed in and what they hold there. It runs the full width,
@@ -438,6 +486,26 @@ body {
   margin-top: calc(var(--step) * 0.5);
   padding-top: calc(var(--step) * 0.5);
   border-top: 1px solid var(--rule-faint);
+}
+
+/* The roles a Trial School can be viewed as: each a row of the list, as a School is, though a button. */
+.switcher--roles li:last-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.switcher--roles li button {
+  width: 100%;
+  min-height: 2.5rem;
+  justify-content: flex-start;
+  padding: var(--step) calc(var(--step) * 2);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--seal);
+  font-weight: 600;
+  text-align: left;
 }
 
 /*
@@ -822,8 +890,10 @@ button {
     background: var(--wash);
   }
 
-  .switcher li a:hover {
+  .switcher li a:hover,
+  .switcher--roles li button:hover:not(:disabled) {
     background: var(--wash-seal);
+    border-color: transparent;
   }
 }
 
