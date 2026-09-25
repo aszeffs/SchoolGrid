@@ -24,7 +24,8 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  *
  * Everything is arranged in the first seeded School, in a year far enough
  * ahead that no other spec's can overlap it. Every membership there is still
- * to begin, so ending one removes it.
+ * to begin, so ending one removes it. The departed Student alone needs a
+ * membership that has begun, so theirs is in a year around today.
  */
 
 interface Own {
@@ -36,14 +37,28 @@ interface Own {
   term: { firstDate: string; lastDate: string; heading: string };
 }
 
+/** A year far enough ahead that no other spec's can overlap it. */
+function yearAhead(): { firstDate: string; lastDate: string } {
+  const starts = 2100 + Math.floor(Math.random() * 7000);
+  return { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
+}
+
+/**
+ * A year running from a month ago to a month ahead, so a membership of it has
+ * begun and outlasts a departure today. No other spec arranges a year near
+ * today, and each run seeds Schools of its own, so only one test may use it.
+ */
+function yearAroundToday(): { firstDate: string; lastDate: string } {
+  const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  return { firstDate: day(-30), lastDate: day(30) };
+}
+
 /** A School Administrator in the first School, with a Class Offering of the test's own in a year of its own. */
-async function withOwnOffering(page: Page): Promise<Own> {
+async function withOwnOffering(page: Page, term = yearAhead()): Promise<Own> {
   const { schoolAdministrator, schools } = seeded();
   await signIn(page, schoolAdministrator);
   await openSchool(page, schools[0]!);
   const schoolId = await schoolIdOf(page, schools[0]!);
-  const starts = 2100 + Math.floor(Math.random() * 7000);
-  const term = { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
   const yearName = `Year ${randomUUID().slice(0, 8)}`;
   const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
     name: yearName,
@@ -185,7 +200,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
   audit,
 }) => {
   const { schoolAdministrator } = seeded();
-  const own = await withOwnOffering(page);
+  const own = await withOwnOffering(page, yearAroundToday());
   const student = `Quinn ${randomUUID().slice(0, 8)}`;
   const personId = await arrangeStudent(page, own.schoolId, student);
   const teacher = `Taylor ${randomUUID().slice(0, 8)}`;
@@ -208,10 +223,10 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
     await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
     const row = recordRows(page, `Your classes in ${own.term.heading}`).filter({ hasText: own.offering });
     await expect(row).toContainText(teacher);
-    await expect(row).toContainText("The whole Term");
     return row;
   };
   const row = await readClasses();
+  await expect(row).toContainText("The whole Term");
   await audit(page);
 
   // Its page names who teaches it, and never who else is in it.
@@ -234,7 +249,10 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
   await page.getByRole("button", { name: "Sign out" }).click();
   await signIn(page, credentials);
   await expect(page.getByRole("navigation")).toBeVisible();
-  await (await readClasses()).getByRole("link", { name: own.offering }).click();
+  // Kept, but only to the day they left.
+  const kept = await readClasses();
+  await expect(kept).not.toContainText("The whole Term");
+  await kept.getByRole("link", { name: own.offering }).click();
   await expect(page.getByRole("heading", { level: 1, name: own.offering })).toBeVisible();
 });
 
@@ -266,7 +284,8 @@ test.describe("on a phone", () => {
       });
 
       await page.goto(`/schools/${own.schoolId}/class-offerings/${own.classOfferingId}`);
-      await expect(roster(page)).toHaveCount(2);
+      // On a phone the head row is not shown, so the one membership is the one row.
+      await expect(roster(page)).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
       await page.getByRole("button", { name: "Roster Students" }).click();
@@ -285,7 +304,7 @@ test.describe("on a phone", () => {
 
       await giveAccount(page, own.schoolId, personId);
       await page.goto(`/schools/${own.schoolId}/classes`);
-      await expect(recordRows(page, `Your classes in ${own.term.heading}`)).toHaveCount(2);
+      await expect(recordRows(page, `Your classes in ${own.term.heading}`)).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
     });
