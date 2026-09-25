@@ -68,7 +68,7 @@ test("inside a School the header names the Person and the School, and the switch
 
   // Reaching two Schools, the account is asked which.
   await signIn(page, schoolAdministrator);
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/schools");
   await expect(schoolsList(page)).toHaveText(schools, { useInnerText: true });
   await openSchool(page, schools[0]!);
 

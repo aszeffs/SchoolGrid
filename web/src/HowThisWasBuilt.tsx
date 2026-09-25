@@ -88,7 +88,7 @@ export function HowThisWasBuilt() {
       legend={legend}
       foot={
         <p>
-          <Link to={{ name: "schools" }}>
+          <Link to={{ name: "home" }}>
             Go to SchoolGrid
           </Link>
         </p>
