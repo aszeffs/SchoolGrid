@@ -235,10 +235,9 @@ describe("the demo seed", () => {
       expect(classOfferings.filter((offering) => offering.term.id === term.id).length).toBeGreaterThanOrEqual(3);
     }
 
-    // The Faculty member teaches something now, and has taught or will teach in the other Terms.
+    // The Faculty member teaches something now.
     const taught = (await clients.faculty.inSchool(schoolId).get("/account/class-offerings")).body as {
       current: { id: string }[];
-      past: unknown[];
     };
     expect(taught.current.length).toBeGreaterThan(0);
 

@@ -88,8 +88,8 @@ WHERE school_id = '5c4001a0-0000-4000-8000-000000000001' AND user_account_id IS 
   AND id <> '5c4001a0-0000-4000-8000-000000000205';
 
 -- The Academic Year, built around the day the seed runs, so that the nightly
--- reset always leaves a Term running whatever the date. Its School date is
--- today in UTC, the School's timezone. `demo.today` names another day to build
+-- reset always leaves a Term running whatever the date. It is built around
+-- today as the School sees it, in the School's timezone. `demo.today` names another day to build
 -- around instead, which tests/demo.test.ts sets to seed on the days a calendar
 -- is most likely to get wrong.
 --
@@ -98,7 +98,10 @@ WHERE school_id = '5c4001a0-0000-4000-8000-000000000001' AND user_account_id IS 
 -- transaction, and every date below is counted from it.
 DO $$
 DECLARE
-  today date := coalesce(nullif(current_setting('demo.today', true), '')::date, (now() AT TIME ZONE 'UTC')::date);
+  today date := coalesce(
+    nullif(current_setting('demo.today', true), '')::date,
+    (SELECT (now() AT TIME ZONE timezone)::date FROM app.school WHERE id = '5c4001a0-0000-4000-8000-000000000001')
+  );
 BEGIN
   PERFORM set_config('demo.year_start', make_date(
     extract(year FROM today)::int - CASE WHEN extract(month FROM today) < 8 THEN 1 ELSE 0 END, 8, 1

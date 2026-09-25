@@ -9,7 +9,7 @@ import { expect, test } from "./test.ts";
  */
 const DEMO_ORIGIN = process.env["SCHOOLGRID_DEMO_ORIGIN"];
 
-const ROLES = ["School Administrator", "Faculty", "Student", "Guardian"];
+const ROLES = ["School Administrator", "Faculty", "Student", "Guardian"] as const;
 
 /** What the panel promises a visitor about the data behind every role. */
 const ABOUT_THE_DATA = [/invented/i, /anyone can change/i, /resets every night/i];
@@ -29,7 +29,7 @@ const NOT_BUILT = /Attendance|Term result|published academic records/;
  * Faculty member and the Student land on their account, and their classes are
  * one link away.
  */
-const POPULATED: Record<string, (page: Page) => Promise<void>> = {
+const POPULATED: Record<(typeof ROLES)[number], (page: Page) => Promise<void>> = {
   "School Administrator": async (page) => {
     await expect(recordRows(page, "Persons").filter({ hasText: "Riley Fernsby" })).toHaveCount(1);
   },
@@ -114,7 +114,7 @@ test.describe("with demo mode on", () => {
       const opensOn = role === "School Administrator" ? "persons" : "account";
       await expect(page).toHaveURL(new RegExp(`/schools/[^/]+/${opensOn}$`));
       await expect(page.getByRole("banner").getByText("Riverbend Demo School", { exact: true })).toBeVisible();
-      await POPULATED[role]!(page);
+      await POPULATED[role](page);
     });
   }
 });
