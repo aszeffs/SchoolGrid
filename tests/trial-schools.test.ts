@@ -28,6 +28,7 @@ interface ReachedSchool {
   displayName: string;
   roles: string[];
   trialExpiresAt?: string;
+  viewingAs?: string;
 }
 
 async function sessionOf(client: TestClient) {
@@ -67,6 +68,7 @@ describe("Trial Schools", () => {
           displayName: "Morgan Reyes",
           roles: ["school_administrator"],
           trialExpiresAt: expiresAt,
+          viewingAs: "school_administrator",
         },
       ]);
 
@@ -116,7 +118,7 @@ describe("Trial Schools", () => {
         current = await switchRole(current, role);
 
         const { schools } = await sessionOf(current);
-        expect(schools).toEqual([expect.objectContaining({ schoolId, displayName: expected[role], roles: [role] })]);
+        expect(schools).toEqual([expect.objectContaining({ schoolId, displayName: expected[role], roles: [role], viewingAs: role })]);
         // The Session it was changed from is over.
         expect((await previous.get("/api/session")).body).toEqual(REFUSED);
 
@@ -139,6 +141,17 @@ describe("Trial Schools", () => {
           expect(account.linkedStudents.map((link) => link.student.displayName)).toEqual(["Jamie Lindqvist"]);
         }
       }
+    });
+
+    it("starts over in a fresh Trial School, ending the Session the browser held in the last", async () => {
+      const { client, schoolId } = await server().startTrial();
+      const started = await client.post("/api/trials", {});
+      expect(started.status).toBe(201);
+
+      expect((await client.get("/api/session")).body).toEqual(REFUSED);
+      const { schools } = await sessionOf(client.withCookie(cookieSentBackFor(started)));
+      expect(schools).toEqual([expect.objectContaining({ viewingAs: "school_administrator" })]);
+      expect(schools[0]!.schoolId).not.toBe(schoolId);
     });
 
     it("refuses a role that is not a School role, and a caller in no Trial School", async () => {
@@ -224,7 +237,8 @@ describe("Trial Schools", () => {
       expect((await sessionOf(priyas)).schools).toEqual([
         expect.objectContaining({ schoolId, displayName: "Priya Okonkwo", roles: ["faculty"] }),
       ]);
-      // An account the trial did not make for a role cannot change to one.
+      // An account the trial did not make for a role acts as no role of the trial's, and cannot change to one.
+      expect((await sessionOf(priyas)).schools[0]).not.toHaveProperty("viewingAs");
       expect((await priyas.post("/api/trials/role", { role: "school_administrator" })).body).toEqual(REFUSED);
 
       await server().expireTrialSchool(schoolId);

@@ -13,6 +13,7 @@ const PATHS = {
   signIn: "/sign-in",
   invitation: "/invitation",
   howThisWasBuilt: "/how-this-was-built",
+  trialEnded: "/trial-ended",
   account: "/schools/:schoolId/account",
   classes: "/schools/:schoolId/classes",
   persons: "/schools/:schoolId/persons",

@@ -107,6 +107,13 @@ export interface ReachedSchool {
   personId: string;
   displayName: string;
   roles: Role[];
+  /** When the School expires, only when it is a Trial School (ADR-0012). */
+  trialExpiresAt?: string;
+  /**
+   * The role this account acts as, only when it is one of a Trial School's
+   * role accounts, whose visitor may change to any other.
+   */
+  viewingAs?: Role;
 }
 
 /** Whoever holds the session: the account, and each School it reaches. */
@@ -371,6 +378,33 @@ async function redeemInvitation(credentials: {
   return { status: "refused" };
 }
 
+/** A Trial School just started: the School to open, and when it will be deleted. */
+export interface StartedTrial {
+  schoolId: string;
+  expiresAt: string;
+}
+
+/**
+ * Starting a Trial School has one outcome beyond the generic refusal: busy,
+ * when this deployment holds as many trials as it may or this browser has
+ * started as many as it may this hour. It is no refusal of anything, so it is
+ * said plainly, and a visitor told to try again later is not left thinking
+ * the site is broken.
+ */
+async function startTrial(
+  timezone: string,
+): Promise<{ status: "started"; trial: StartedTrial } | { status: "busy" } | { status: "refused" }> {
+  const sent = await send("POST", "/trials", { timezone });
+  const body = sent?.body as { status?: unknown; trial?: StartedTrial } | undefined;
+  if (sent?.status === 201 && body?.trial !== undefined) {
+    return { status: "started", trial: body.trial };
+  }
+  if (body?.status === "busy") {
+    return { status: "busy" };
+  }
+  return { status: "refused" };
+}
+
 export const api = {
   buildInfo: () => request<BuildInfo>("GET", "/build-info"),
   demo: () => request<{ accounts: DemoAccount[] }>("GET", "/demo"),
@@ -378,6 +412,10 @@ export const api = {
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
+  /** Starts a Trial School in this timezone, ending whatever Session the browser held. */
+  startTrial,
+  /** Ends this Trial School Session and starts one for the role's account in the same School. */
+  switchRole: (role: Role) => request<{ expiresAt: string }>("POST", "/trials/role", { role }),
   account: (schoolId: string) => request<{ account: OwnAccount }>("GET", inSchool(schoolId, "/account")),
   persons: (schoolId: string) => request<{ persons: ListedPerson[] }>("GET", inSchool(schoolId, "/persons")),
   createPerson: (schoolId: string, person: { displayName: string }) =>

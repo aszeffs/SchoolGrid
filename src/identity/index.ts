@@ -1,3 +1,4 @@
+import type { Role } from "../access/roles.ts";
 import type { Queryable } from "../db/transaction.ts";
 
 /**
@@ -69,6 +70,19 @@ export async function trialExpiryOf(database: Queryable, schoolId: string): Prom
     [schoolId],
   );
   return rows[0]?.trialExpiresAt ?? null;
+}
+
+/**
+ * The School role this account acts as in the Trial School it was made for,
+ * or null for every other account: a Trial School's visitor holds one account
+ * per role, and an account an Invitation created in one is not among them.
+ */
+export async function trialRoleOf(database: Queryable, userAccountId: string): Promise<Role | null> {
+  const { rows } = await database.query<{ trialRole: Role | null }>(
+    `SELECT trial_role AS "trialRole" FROM app.user_account WHERE id = $1`,
+    [userAccountId],
+  );
+  return rows[0]?.trialRole ?? null;
 }
 
 /**
