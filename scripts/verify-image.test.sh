@@ -72,7 +72,17 @@ build_correct_image() {
   # A production dependency is allowed its own file called `sh`. If this trips
   # the shell check, the check is too broad and will block honest builds.
   touch "$root/app/node_modules/pg/bin/sh"
+  # The service hashes passwords, so its build names the hash's format. If this
+  # trips the credentials check, the check is reading code as a credential.
+  cat > "$root/app/dist/passwords.js" <<'JS'
+/** Encodes as `scrypt$N$r$p$salt$key`, so a later change of cost still verifies old hashes. */
+return ["scrypt", COST.N, COST.r, COST.p, salt.toString("base64"), key.toString("base64")].join("$");
+JS
 }
+
+# A password hash as the service stores one, and as a seed publishing sign-ins
+# would have to hold one.
+STORED_HASH='scrypt$32768$8$3$pNkqEqsy24NeQYwhqRDJ0w==$BL26vwqBZFmCK8sRQaNDuGO4pEgg0hMeKLsk7jupNnA='
 
 fixture() {
   local name="$1"
@@ -187,12 +197,21 @@ mkdir -p "$websource/app/web/src"
 touch "$websource/app/web/src/main.tsx" "$websource/app/web/package.json"
 expect "web sources beside the build are caught" "$websource" "nonroot" 1 "outside the web build: /app/web/package.json"
 
-# The demo seed publishes its passwords, so an image holding it could be run
-# anywhere with accounts anyone can sign in to. A `COPY . .` would bring it in.
+# A password hash shipped in the image is a sign-in anyone running it can use,
+# whatever file it arrives in: a seed a `COPY . .` brought in, a migration, or
+# data bundled into the build.
 seeded="$(fixture seeded)"
 mkdir -p "$seeded/app/demo"
-touch "$seeded/app/demo/seed.sql"
-expect "the demo seed in the runtime image is caught" "$seeded" "nonroot" 1 "contains a demo seed"
+printf "INSERT INTO app.user_account (username, password_hash) VALUES ('demo', '%s');\n" "$STORED_HASH" > "$seeded/app/demo/seed.sql"
+expect "a seed holding a password hash is caught" "$seeded" "nonroot" 1 "published credential in /app/demo/seed.sql"
+
+migrated="$(fixture migrated)"
+printf "UPDATE app.user_account SET password_hash = '%s';\n" "$STORED_HASH" > "$migrated/app/migrations/0099_seed.sql"
+expect "a migration holding a password hash is caught" "$migrated" "nonroot" 1 "published credential in /app/migrations/0099_seed.sql"
+
+bundled="$(fixture bundled)"
+printf 'export const ACCOUNTS = [{ username: "demo", passwordHash: "%s" }];\n' "$STORED_HASH" > "$bundled/app/dist/accounts.js"
+expect "a password hash bundled into the build is caught" "$bundled" "nonroot" 1 "published credential in /app/dist/accounts.js"
 
 expect "an empty User is caught" "$correct" "" 1 "runs as root"
 expect "User=root:root is caught" "$correct" "root:root" 1 "runs as root"

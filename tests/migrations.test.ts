@@ -272,4 +272,92 @@ describe("migrations", () => {
       expect(rows).toEqual([]);
     });
   });
+
+  describe("removing the shared demo's School", () => {
+    const MIGRATION = "0019_remove_demo_school.sql";
+    // The identifier the demo's seed gave its School, as production holds it.
+    const DEMO_SCHOOL_ID = "5c4001a0-0000-4000-8000-000000000001";
+    const PASSWORD = "a staple";
+
+    async function undoMigration() {
+      await server().ownerDatabase.query(`DELETE FROM public.schema_migrations WHERE name = $1`, [MIGRATION]);
+    }
+
+    async function schoolsNamed() {
+      const { rows } = await server().ownerDatabase.query<{ name: string }>(`SELECT name FROM app.school ORDER BY name`);
+      return rows.map((row) => row.name);
+    }
+
+    it("deletes the demo School whole, its published accounts and their Sessions with it, and nothing else", async () => {
+      await undoMigration();
+      // A real School beside it, whose records must survive.
+      const principal = await server().createAccount({ username: "principal", password: PASSWORD });
+      const northside = await server().provisionSchool({ name: "Northside", administrator: principal });
+      // The demo as its seed left it, and as visitors used it: accounts with a
+      // Person in each role, an Enrollment, an Audit record.
+      await server().ownerDatabase.query(`INSERT INTO app.school (id, name, timezone) VALUES ($1, 'Riverbend Demo School', 'UTC')`, [
+        DEMO_SCHOOL_ID,
+      ]);
+      const administrator = await server().createAccount({ username: "demo.administrator", password: PASSWORD });
+      const student = await server().createAccount({ username: "demo.student", password: PASSWORD });
+      const demoAdministrator = await server().createPerson({
+        schoolId: DEMO_SCHOOL_ID,
+        displayName: "Morgan Reyes",
+        account: administrator,
+        role: "school_administrator",
+      });
+      await server().enroll(
+        await server().createPerson({ schoolId: DEMO_SCHOOL_ID, displayName: "Jamie Lindqvist", account: student, role: "student" }),
+      );
+      await server().appendAuditRecord({
+        schoolId: DEMO_SCHOOL_ID,
+        actorPersonId: demoAdministrator.id,
+        action: "person.created",
+        target: { type: "person", id: demoAdministrator.id },
+        reason: null,
+        before: null,
+        after: null,
+      });
+      // Someone who used the demo and belongs to a real School as well.
+      const both = await server().createAccount({ username: "both", password: PASSWORD });
+      await server().createPerson({ schoolId: DEMO_SCHOOL_ID, displayName: "Both", account: both, role: "faculty" });
+      await server().createPerson({ schoolId: northside.school.id, displayName: "Both", account: both, role: "faculty" });
+      const signedIn = await server().signIn({ username: "demo.administrator", password: PASSWORD });
+      const northsideRecords = await server().ownerDatabase.query(`SELECT id FROM app.audit_record WHERE school_id = $1`, [
+        northside.school.id,
+      ]);
+
+      const result = await migrate(server().ownerDatabase);
+
+      expect(result.applied).toEqual([MIGRATION]);
+      expect(await schoolsNamed()).toEqual(["Northside"]);
+      // Read before signing in below, which Northside records too.
+      const { rows: records } = await server().ownerDatabase.query(`SELECT id FROM app.audit_record ORDER BY position`);
+      expect(records).toEqual(northsideRecords.rows);
+      // Its Session is gone: it is answered as a caller with none is.
+      const anonymous = await server().client.get("/api/session");
+      expect((await signedIn.get("/api/session")).status).toBe(anonymous.status);
+      // Its published sign-ins are answered as a username that never existed is.
+      const unknown = await server().client.post("/api/session", { username: "nobody", password: PASSWORD, session: "bearer" });
+      for (const username of ["demo.administrator", "demo.student"]) {
+        const response = await server().client.post("/api/session", { username, password: PASSWORD, session: "bearer" });
+        expect(response.status, username).toBe(unknown.status);
+      }
+      for (const username of ["principal", "both"]) {
+        const response = await server().client.post("/api/session", { username, password: PASSWORD, session: "bearer" });
+        expect(response.status, username).toBe(201);
+      }
+    });
+
+    it("applies, and deletes nothing, where the demo never ran", async () => {
+      await undoMigration();
+      const principal = await server().createAccount({ username: "principal", password: PASSWORD });
+      await server().provisionSchool({ name: "Northside", administrator: principal });
+
+      const result = await migrate(server().ownerDatabase);
+
+      expect(result.applied).toEqual([MIGRATION]);
+      expect(await schoolsNamed()).toEqual(["Northside"]);
+    });
+  });
 });

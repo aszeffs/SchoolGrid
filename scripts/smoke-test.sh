@@ -28,10 +28,10 @@
 # login. The command failing fails the script. This is how the browser suite
 # drives the image that ships, and why it needs no boot script of its own.
 #
-# Before that command, the database gets the public demo's seed, demo/seed.sql,
-# and the image is started once more as the demo runs it: without the owner's
-# credentials and with DEMO_MODE on. SCHOOLGRID_DEMO_ORIGIN tells the command
-# where. The first container keeps DEMO_MODE off, as every other deployment does.
+# Before that command, the image is started once more as the public showcase
+# runs it: without the owner's credentials and with TRIALS_ENABLED on.
+# SCHOOLGRID_TRIALS_ORIGIN tells the command where. The first container keeps
+# trials off, as every other deployment does.
 #
 # On the way out, pass or fail, it prints the most /api requests each of those
 # two containers was sent in any one minute, against the rate limit it ran with.
@@ -64,14 +64,15 @@ CONTAINER_POSTGRES_HOST="${CONTAINER_POSTGRES_HOST:-host.docker.internal}"
 
 HOST_PORT="${HOST_PORT:-3000}"
 # For the containers started without the owner's credentials, two of which
-# serve alongside the first: one checked above, and the demo.
+# serve alongside the first: one checked above, and the one offering trials.
 OWNERLESS_HOST_PORT="${OWNERLESS_HOST_PORT:-3001}"
 SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-90}"
 SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
 # The rate limit every container here runs with: see `start_image` for why it
 # is wider than production's, and `report_headroom` for how close it came.
 RATE_LIMIT_MAX="${SMOKE_RATE_LIMIT_MAX:-1000}"
-# How many Trial Schools the demo container lets one client start an hour.
+# How many Trial Schools the container offering them lets one client start an
+# hour.
 # Production allows 2 (DEFAULT_TRIAL_SETTINGS in src/config.ts); the browser
 # suite starts every trial from this one IP, for the same reason as above.
 TRIAL_PER_IP_HOUR="${SMOKE_TRIAL_PER_IP_HOUR:-1000}"
@@ -82,10 +83,7 @@ TRIAL_PER_IP_HOUR="${SMOKE_TRIAL_PER_IP_HOUR:-1000}"
 # where the browser suite reaches the first container, and `start_image` builds
 # that container's PUBLIC_ORIGIN the same way from its port.
 ORIGIN="http://localhost:${HOST_PORT}"
-DEMO_ORIGIN="http://localhost:${OWNERLESS_HOST_PORT}"
-
-# The public demo's seed. It is in the repository and never in the image.
-DEMO_SEED="${DEMO_SEED:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/demo/seed.sql}"
+TRIALS_ORIGIN="http://localhost:${OWNERLESS_HOST_PORT}"
 
 workdir="$(mktemp -d)"
 # Every container this script has created and not yet removed.
@@ -170,8 +168,8 @@ cleanup() {
     echo
     report_headroom "$container" "the container at ${ORIGIN}" || echo "(the rate limit headroom at ${ORIGIN} could not be measured)" >&2
   fi
-  if [ -n "${demo:-}" ]; then
-    report_headroom "$demo" "the demo at ${DEMO_ORIGIN}" || echo "(the rate limit headroom at ${DEMO_ORIGIN} could not be measured)" >&2
+  if [ -n "${trials:-}" ]; then
+    report_headroom "$trials" "the container offering trials at ${TRIALS_ORIGIN}" || echo "(the rate limit headroom at ${TRIALS_ORIGIN} could not be measured)" >&2
   fi
   local id
   for id in ${containers[@]+"${containers[@]}"}; do
@@ -239,8 +237,8 @@ APPLIED_MIGRATIONS="SELECT count(*) FROM public.schema_migrations"
 # Creates and starts the image, storing the container's id in the variable named
 # by $1 and publishing it on host port $2. Given `with-owner` as $3, it is also
 # handed the schema owner's connection, and migrates; otherwise it holds only
-# the application's role, as production does. Given `demo`, it holds only that
-# role and runs with DEMO_MODE and TRIALS_ENABLED on, as the public showcase does.
+# the application's role, as production does. Given `trials`, it holds only that
+# role and runs with TRIALS_ENABLED on, as the public showcase does.
 #
 # Created and started as two steps rather than one `docker run`. When the runtime
 # cannot exec the CMD at all, `run` fails without ever handing back the id of the
@@ -270,8 +268,8 @@ start_image() {
   )
   if [ "$mode" = "with-owner" ]; then
     args+=(--env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}")
-  elif [ "$mode" = "demo" ]; then
-    args+=(--env "DEMO_MODE=true" --env "TRIALS_ENABLED=true" --env "TRIAL_PER_IP_HOUR=${TRIAL_PER_IP_HOUR}")
+  elif [ "$mode" = "trials" ]; then
+    args+=(--env "TRIALS_ENABLED=true" --env "TRIAL_PER_IP_HOUR=${TRIAL_PER_IP_HOUR}")
   fi
 
   local id
@@ -527,25 +525,12 @@ echo "the smoke test passed: ${IMAGE} starts, migrates and reports the database 
 if [ "$#" -gt 0 ]; then
   echo
 
-  # As the maintainer seeds the demo: as the schema owner, stopping at the
-  # first error, into the database the image has migrated.
-  if ! PGPASSWORD="$POSTGRES_PASSWORD" psql \
-    --no-psqlrc --quiet --set ON_ERROR_STOP=1 \
-    --host "$POSTGRES_HOST" --port "$POSTGRES_PORT" \
-    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    --file "$DEMO_SEED" >/dev/null 2>"$workdir/psql.err"; then
-    fail "could not seed the demo from ${DEMO_SEED}"
-    cat "$workdir/psql.err" >&2
-    exit 1
-  fi
-  pass "seeded the demo from ${DEMO_SEED}"
-
-  start_image demo "$OWNERLESS_HOST_PORT" demo
-  await_healthy "$demo" "$OWNERLESS_HOST_PORT" "the container started with DEMO_MODE on"
-  pass "with DEMO_MODE on, ${IMAGE} serves the demo at ${DEMO_ORIGIN}"
+  start_image trials "$OWNERLESS_HOST_PORT" trials
+  await_healthy "$trials" "$OWNERLESS_HOST_PORT" "the container started with TRIALS_ENABLED on"
+  pass "with TRIALS_ENABLED on, ${IMAGE} offers trials at ${TRIALS_ORIGIN}"
 
   if ! SCHOOLGRID_ORIGIN="$ORIGIN" \
-    SCHOOLGRID_DEMO_ORIGIN="$DEMO_ORIGIN" \
+    SCHOOLGRID_TRIALS_ORIGIN="$TRIALS_ORIGIN" \
     SCHOOLGRID_DATABASE_URL="postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" \
     "$@"; then
     fail "the command run against the image failed: $*"

@@ -341,13 +341,6 @@ export interface BuildInfo {
   digest?: string;
 }
 
-/** A sign-in the public demo publishes. Every other deployment publishes none. */
-export interface DemoAccount {
-  role: Role;
-  username: string;
-  password: string;
-}
-
 /** A path within one School. */
 const inSchool = (schoolId: string, path: string) => `/schools/${encodeURIComponent(schoolId)}${path}`;
 
@@ -407,7 +400,6 @@ async function startTrial(
 
 export const api = {
   buildInfo: () => request<BuildInfo>("GET", "/build-info"),
-  demo: () => request<{ accounts: DemoAccount[] }>("GET", "/demo"),
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),

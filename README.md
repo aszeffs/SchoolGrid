@@ -6,7 +6,7 @@ Built as a practice ground for DevSecOps. The domain is deliberately security-he
 
 ## Security pipeline
 
-Live at **<https://schoolgrid-phi.vercel.app>**, running the current `main`. The sign-in page offers a one-click sign-in as a School Administrator, as Faculty, as a Student and as a Guardian, and the ["How this was built" page](https://schoolgrid-phi.vercel.app/how-this-was-built) shows the commit and image digest the site is serving, with the command to verify them yourself.
+Live at **<https://schoolgrid-phi.vercel.app>**, running the current `main`. Its landing page offers **Start a trial**: a private Trial School of invented data, seen as its School Administrator, Faculty, Student or Guardian with no password, and deleted two hours later. The ["How this was built" page](https://schoolgrid-phi.vercel.app/how-this-was-built) shows the commit and image digest the site is serving, with the command to verify them yourself.
 
 Nothing reaches that URL by hand. A commit takes the path below, and from the image build onwards each step has to pass before the next one runs.
 
@@ -32,7 +32,7 @@ Each box above is a row below, under the same name, with what it stops and a lin
 | Step | What it prevents | Where it runs |
 | --- | --- | --- |
 | **Checks** | Code that does not compile, does not pass its tests, trips a CodeQL query (GitHub's own scanner for insecure code), brings in a dependency that is vulnerable or carries a licence this project cannot honour (that one on pull requests, while the dependency is still only proposed), or carries a credential anywhere in its history. Each is its own workflow, running beside the image build rather than ahead of it. | [`ci.yml`](.github/workflows/ci.yml) (_Typecheck, build and test_), [`codeql.yml`](.github/workflows/codeql.yml), [`dependency-review.yml`](.github/workflows/dependency-review.yml), [`secret-scan.yml`](.github/workflows/secret-scan.yml) |
-| **Image build** | A runtime image carrying anything an intruder could use once inside it — a shell, a package manager, a dev dependency, a root user, the web app's sources, or the demo's published sign-ins — checked against the image that came out, not the recipe that went in. | [`container.yml`](.github/workflows/container.yml) (_Container build_) |
+| **Image build** | A runtime image carrying anything an intruder could use once inside it — a shell, a package manager, a dev dependency, a root user, the web app's sources, or a published credential — checked against the image that came out, not the recipe that went in. | [`container.yml`](.github/workflows/container.yml) (_Container build_) |
 | **Scan and smoke test** | An image with a known vulnerability, or one that cannot start and serve a real browser: it is run against a real PostgreSQL and driven by the browser suite before anything may publish it. | [`container.yml`](.github/workflows/container.yml) (_Trivy image scan_, _Container smoke test_), [`scripts/smoke-test.sh`](scripts/smoke-test.sh) |
 | **Publish and sign** | An image reaching the registry unreviewed, or something else later passing itself off as one of ours: only a merge to `main` publishes, only that one job holds a token that can push, and each image is signed by the workflow's own identity rather than by a key someone could steal. | [`container.yml`](.github/workflows/container.yml) (_Publish to GHCR_, _Attest provenance and SBOM_), [`scripts/publish-image.sh`](scripts/publish-image.sh) |
 | **Verify** | A published image that is private, unrunnable, or not the one this repository built: a fresh runner holding no credentials pulls it, boots it, and checks its signatures exactly as an outsider would. | [`container.yml`](.github/workflows/container.yml) (_Pull and boot the published image anonymously_, _Verify the attestations as a consumer would_), [`scripts/verify-image.sh`](scripts/verify-image.sh) |
@@ -42,12 +42,13 @@ Each box above is a row below, under the same name, with what it stops and a lin
 
 That is the whole path, in summary. The detail behind it is further down: [Security controls](#security-controls) for what each control catches, and [Published images](#published-images) for pulling an image and verifying it yourself.
 
-### What the demo is not
+### What a trial is not
 
 - It runs on Vercel's free **Hobby plan**, for non-commercial personal use. It scales to zero when nobody is using it, so the first request after a quiet spell waits for the function and the database to wake.
-- The data is **invented**. No real Student, Guardian or School record is on it, and nothing you type into it should be real either.
-- The demo is **reset every night**, dropped and reseeded from [`demo/seed.sql`](demo/seed.sql) ([`demo-reset.yml`](.github/workflows/demo-reset.yml)). Changes you make are temporary, and changes you find were made by someone else. This nightly drop is the one exception to Audit records being append-only; everywhere else, they are.
-- The **rate limit is counted per instance**, in memory. Vercel may run several at once, which multiplies the limit by however many are up.
+- The data is **invented**. The site hosts no real School, and nothing you type into a trial should be real either.
+- A trial is **yours alone, for two hours**, then deleted whole: its Persons, its records, its Audit records, and any account an Invitation created in it ([ADR-0012](docs/adr/0012-trial-schools-replace-the-shared-demo.md)). Expired trials are deleted when the next one starts, and daily by [`trial-sweep.yml`](.github/workflows/trial-sweep.yml). That deletion is the one exception to Audit records being append-only, and only a database function that refuses any other School can make it.
+- **No sign-in is published.** A trial's role accounts have no password; the trial hands the browser a Session for each.
+- At most 30 trials are live at once, and one client may start 2 an hour. The **rate limits are counted per instance**, in memory. Vercel may run several at once, which multiplies them by however many are up.
 
 ## Status
 
@@ -82,7 +83,7 @@ To run the service itself you need PostgreSQL 18 or newer (see [docs/database-ro
 | `CONTEXT.md` | The domain glossary. The authority on vocabulary — use its terms, avoid the ones it lists under `_Avoid_`. |
 | `docs/adr/` | Architecture decision records. Read the ones covering an area before changing it. |
 | `docs/agents/` | Conventions for agents working in this repo. |
-| `docs/deployment.md` | The one-time setup of the public demo on Vercel and Neon. |
+| `docs/deployment.md` | The one-time setup of the public site on Vercel and Neon. |
 | `.scratch/<feature>/` | Specs and implementation tickets, one directory per feature. |
 | `migrations/` | Plain SQL, applied in filename order. Never edit an applied migration; add a new one. Production is migrated before the new code serves, so every migration must stay compatible with the code one deploy behind it: expand first (add the column, table or permission), and contract (drop what the old code still reads) only in a later deploy. |
 
@@ -122,11 +123,11 @@ The check reports its verdict in the workflow job summary and never fails. It gu
 | --- | --- |
 | In-process rate limit on every route, per client address | A flood of requests turning into database round trips and exhausting the connection pool. Unknown routes count too, so probing for paths is not free. The web app's page and static assets do not count: they are served from memory, and one page load fetches several of them. Over the limit a client gets `429 {"status":"rate_limited"}` with `Retry-After`. Set with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS` (default 100 per minute). Counts are held per instance, so running several instances multiplies the limit. Behind a reverse proxy every client shares the proxy's address; set `CLIENT_ADDRESS_HEADER` to the header the proxy puts the client's address in (on Vercel, `x-vercel-forwarded-for`) and the limit keys on that instead, falling back to the socket address for a request without it. Set it only behind a proxy that overwrites that header: anywhere else, any caller can send it and choose their own rate-limit key. |
 | Browser sessions in a `__Host-` cookie that is `Secure`, `HttpOnly` and `SameSite=Strict` ([ADR-0004](docs/adr/0004-browser-sessions-in-httponly-cookies.md)) | Script injected into a page stealing the session: the token is never in a response body a browser asked for. A change (`POST`, `PATCH`, `DELETE`) made with the cookie must carry an `Origin` equal to `PUBLIC_ORIGIN`, so another site cannot make one as the signed-in user. A sign-in is only given the cookie under the same rule, so another site cannot sign the browser in as someone else. A request presenting both a cookie and a Bearer token is refused. Every such refusal is the one refusal, and inside a School its true reason is audited. |
-| Gitleaks, full history, on push and weekly | Credentials committed at any point, not just at the tip. The public demo's passwords are the one allowed exception, listed by exact value in `.gitleaks.toml`, never by file, so a real secret beside them is still caught. |
+| Gitleaks, full history, on push and weekly | Credentials committed at any point, not just at the tip, with no exception. |
 | GitHub secret scanning with push protection | Blocks a credential at `git push`, before it reaches the remote. |
 | Dependency review on pull requests | Vulnerable or copyleft-licensed dependencies entering through a PR. |
 | `allowScripts` in `package.json` | Install-time code execution. Scripts run only for exact allowlisted versions, so a new one needs a visible change here. |
-| Distroless runtime image, built on every pull request | A shell, a package manager, a dev dependency or a root user reaching the runtime image. The web app ships as its static build output alone, never its sources or build toolchain. The public demo's seed, which creates accounts with published passwords, never ships in it. The properties are asserted against the built artifact, not against the Dockerfile. |
+| Distroless runtime image, built on every pull request | A shell, a package manager, a dev dependency or a root user reaching the runtime image. The web app ships as its static build output alone, never its sources or build toolchain. No published credential ships in it: the application's files are searched for a stored password hash, whatever file one would arrive in. The properties are asserted against the built artifact, not against the Dockerfile. |
 | Browser tests against the image built for each pull request | A page that breaks under the Content Security Policy, a session that page script can read, or a change another site can make as the signed-in user. Every page the suite opens must report no CSP violation. |
 | Trivy scan of the lockfile, dev dependencies included | A vulnerable package bundled into the web app. The bundle ships inside the image, but the packages it was built from do not appear there as packages, so the image scan cannot see them. |
 | Publication to GHCR from `main` only, after the scan, smoke test and browser tests | An unreviewed, vulnerable or unstartable image reaching the registry. Pull requests build and check the image but never push it, and only the publishing job holds a token that can. |

@@ -82,7 +82,10 @@ case "$1" in
     echo "$count" > "$STATE/created"
     id="double-container-${count}"
     for arg in "$@"; do
-      case "$arg" in MIGRATION_DATABASE_URL=*) touch "$STATE/${id}.owner" ;; esac
+      case "$arg" in
+        MIGRATION_DATABASE_URL=*) touch "$STATE/${id}.owner" ;;
+        TRIALS_ENABLED=true) touch "$STATE/trials" ;;
+      esac
     done
     echo "$id"
     ;;
@@ -160,31 +163,14 @@ cat > "$workdir/bin/psql" <<'DOUBLE'
 #!/usr/bin/env bash
 set -euo pipefail
 command=""
-file=""
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   if [ "${args[$i]}" = "--command" ]; then command="${args[$((i + 1))]}"; fi
-  if [ "${args[$i]}" = "--file" ]; then file="${args[$((i + 1))]}"; fi
 done
 
 if [ "$SCENARIO" = "database-down" ] || { [ "$SCENARIO" = "database-lost" ] && [ -e "$STATE/started" ]; }; then
   echo "psql: error: connection refused" >&2
   exit 2
-fi
-
-# Running the demo's seed. It must be the repository's, and it fails when a
-# case says the database refuses it.
-if [ -n "$file" ]; then
-  if [ "$(basename "$file")" != "seed.sql" ] || [ ! -f "$file" ]; then
-    echo "double: seeded from something else: ${file}" >&2
-    exit 64
-  fi
-  if [ "$SCENARIO" = "seed-fails" ]; then
-    echo 'psql:demo/seed.sql:27: ERROR:  duplicate key value violates unique constraint "school_pkey"' >&2
-    exit 3
-  fi
-  touch "$STATE/seeded"
-  exit 0
 fi
 
 migrated=false
@@ -441,18 +427,12 @@ expect "a command given after the image runs against the passing image" healthy 
   "then saw http://localhost:3000 and postgres://schoolgrid_runtime:schoolgrid_runtime@127.0.0.1:5432/schoolgrid"
 expect_removed "a command given after the image runs against the passing image"
 
-# The browser suite tries each role on the demo, so the demo is seeded and
+# The browser suite starts Trial Schools, so a container offering them is
 # served before the command runs, and the command is told where.
-then_command=(bash -c 'test -e "$STATE/seeded" && echo "then saw the demo at ${SCHOOLGRID_DEMO_ORIGIN}"')
-expect "a command given after the image runs against a seeded demo" healthy 0 \
-  "then saw the demo at http://localhost:3001"
-expect "the demo is served with DEMO_MODE on" healthy 0 "with DEMO_MODE on"
-
-# A seed the database refuses leaves no demo to try, and must say why.
-then_command=(true)
-expect "a seed that fails fails the smoke test" seed-fails 1 "could not seed the demo" \
-  "the command run against the image passed"
-expect "a seed that fails surfaces the database's error" seed-fails 1 "duplicate key value"
+then_command=(bash -c 'test -e "$STATE/trials" && echo "then saw trials at ${SCHOOLGRID_TRIALS_ORIGIN}"')
+expect "a command given after the image runs against a container offering trials" healthy 0 \
+  "then saw trials at http://localhost:3001"
+expect "trials are served with TRIALS_ENABLED on" healthy 0 "with TRIALS_ENABLED on"
 
 # The browser suite failing must fail the job, not print and pass.
 then_command=(false)
@@ -473,8 +453,8 @@ expect "the rate limit headroom is printed on a passing run" healthy 0 \
 expect "the rate limit headroom is printed on a failing run" silent-migration 1 \
   "was sent at most 3 /api requests in any 60s window, of RATE_LIMIT_MAX 1000"
 then_command=(true)
-expect "the demo's rate limit headroom is printed too" healthy 0 \
-  "the demo at http://localhost:3001 was sent at most 3 /api requests"
+expect "the trials container's rate limit headroom is printed too" healthy 0 \
+  "the container offering trials at http://localhost:3001 was sent at most 3 /api requests"
 then_command=()
 
 export SMOKE_RATE_LIMIT_MAX=10

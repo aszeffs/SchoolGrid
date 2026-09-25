@@ -41,13 +41,6 @@ jobs:
         # production for an image that never verified.
         run: scripts/deploy.test.sh
 
-      - name: Test the demo reset script
-        # Here too, and for the sharpest version of the same reason: the reset
-        # is the one script in this repository that destroys production data,
-        # and a reset that dropped before it verified would first show it on a
-        # night nobody was watching.
-        run: scripts/reset-demo.test.sh
-
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build the image
@@ -647,8 +640,8 @@ jobs:
     environment:
       name: production
       url: ${{ env.PRODUCTION_URL }}
-    # Named for the nightly demo reset (#92) to share, so a reset will never
-    # drop the schema while a deploy is migrating it, or the other way round. A deploy that has
+    # Shared with the daily trial sweep (trial-sweep.yml), so a sweep never
+    # deletes while a deploy is migrating, or the other way round. A deploy that has
     # started always finishes; a newer run waiting behind it replaces an older
     # one still waiting, whose image the newer one contains.
     concurrency:
