@@ -12,7 +12,7 @@ Primary: **School staff** — Faculty recording attendance and results for their
 
 Also served: **Students** reading their own published records, and **Guardians** reading one linked Student's records under a per-Student Access profile (attendance read and results read, granted independently).
 
-Second audience, never at the cost of the first: **technical evaluators** — engineers and recruiters opening the public demo cold at <https://schoolgrid-phi.vercel.app> to judge the DevSecOps work behind it. Every screen is a working staff tool first and a portfolio exhibit second; each must read well to someone who arrives with no context, signs in through a one-click demo role, and leaves in two minutes.
+Second audience, never at the cost of the first: **technical evaluators** — engineers and recruiters opening the public site cold at <https://schoolgrid-phi.vercel.app> to judge the DevSecOps work behind it. Every screen is a working staff tool first and a portfolio exhibit second; each must read well to someone who arrives with no context, starts a trial with one click, and leaves in two minutes.
 
 ## Product Purpose
 

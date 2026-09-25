@@ -83,6 +83,8 @@ Production environment variables, one `vercel env add <NAME> production` each:
 | `TRIAL_PER_IP_HOUR` | Optional; `2` unless set. The most trials one client address may start an hour, counted per instance. |
 | `LOG_LEVEL` | `info` |
 
+A project set up before Trial Schools still holds `DEMO_MODE`, which nothing reads any more: remove it with `vercel env rm DEMO_MODE production`.
+
 `MIGRATION_DATABASE_URL` is deliberately absent: the service verifies the database is migrated and refuses to start if not. `IMAGE_DIGEST` is not set here; the deploy supplies it per deployment with `--env`.
 
 In the project's **Settings**:

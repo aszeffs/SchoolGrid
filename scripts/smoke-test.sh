@@ -71,8 +71,8 @@ SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
 # The rate limit every container here runs with: see `start_image` for why it
 # is wider than production's, and `report_headroom` for how close it came.
 RATE_LIMIT_MAX="${SMOKE_RATE_LIMIT_MAX:-1000}"
-# How many Trial Schools the container offering them lets one client start an
-# hour.
+# How many Trial Schools the container offering them lets one client start
+# an hour.
 # Production allows 2 (DEFAULT_TRIAL_SETTINGS in src/config.ts); the browser
 # suite starts every trial from this one IP, for the same reason as above.
 TRIAL_PER_IP_HOUR="${SMOKE_TRIAL_PER_IP_HOUR:-1000}"
@@ -168,8 +168,8 @@ cleanup() {
     echo
     report_headroom "$container" "the container at ${ORIGIN}" || echo "(the rate limit headroom at ${ORIGIN} could not be measured)" >&2
   fi
-  if [ -n "${trials:-}" ]; then
-    report_headroom "$trials" "the container offering trials at ${TRIALS_ORIGIN}" || echo "(the rate limit headroom at ${TRIALS_ORIGIN} could not be measured)" >&2
+  if [ -n "${trials_container:-}" ]; then
+    report_headroom "$trials_container" "the container offering trials at ${TRIALS_ORIGIN}" || echo "(the rate limit headroom at ${TRIALS_ORIGIN} could not be measured)" >&2
   fi
   local id
   for id in ${containers[@]+"${containers[@]}"}; do
@@ -525,8 +525,8 @@ echo "the smoke test passed: ${IMAGE} starts, migrates and reports the database 
 if [ "$#" -gt 0 ]; then
   echo
 
-  start_image trials "$OWNERLESS_HOST_PORT" trials
-  await_healthy "$trials" "$OWNERLESS_HOST_PORT" "the container started with TRIALS_ENABLED on"
+  start_image trials_container "$OWNERLESS_HOST_PORT" trials
+  await_healthy "$trials_container" "$OWNERLESS_HOST_PORT" "the container started with TRIALS_ENABLED on"
   pass "with TRIALS_ENABLED on, ${IMAGE} offers trials at ${TRIALS_ORIGIN}"
 
   if ! SCHOOLGRID_ORIGIN="$ORIGIN" \
