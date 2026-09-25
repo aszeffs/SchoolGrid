@@ -1,6 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrange, arrangePerson, changesSent, openSection, recordRows, schoolIdOf, signIn } from "./app.ts";
+import {
+  arrange,
+  arrangePerson,
+  changesSent,
+  openSchool,
+  openSection,
+  recordRows,
+  schoolIdOf,
+  schoolsList,
+  signIn,
+} from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
@@ -30,7 +40,7 @@ interface Own {
 async function withOwnOffering(page: Page): Promise<Own> {
   const { schoolAdministrator, schools } = seeded();
   await signIn(page, schoolAdministrator);
-  await expect(page.getByRole("navigation")).toBeVisible();
+  await openSchool(page, schools[0]!);
   const schoolId = await schoolIdOf(page, schools[0]!);
   const starts = 2100 + Math.floor(Math.random() * 7000);
   const term = { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
@@ -215,7 +225,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
   // Departed, they keep the classes they took part in.
   await page.getByRole("button", { name: "Sign out" }).click();
   await signIn(page, schoolAdministrator);
-  await expect(page.getByRole("navigation")).toBeVisible();
+  await expect(schoolsList(page)).not.toHaveCount(0);
   const ended = await page.request.delete(`/api/schools/${own.schoolId}/enrollments/${enrollmentId}`, {
     headers: { origin: new URL(page.url()).origin },
     data: { reason: "Moved away" },

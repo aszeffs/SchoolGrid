@@ -79,7 +79,9 @@ test("a School Administrator assigns Faculty to a Class Offering, changes the da
   const assign = page.getByRole("form", { name: "Assign Faculty to this Class Offering" });
   await assign.getByLabel("Faculty member").selectOption({ label: teacher });
   await assign.getByRole("button", { name: "Assign" }).click();
-  await expect(page.getByRole("status")).toHaveText(`${teacher} is assigned to teach ${own.offering}.`);
+  await expect(page.getByRole("status").filter({ hasText: "is assigned" })).toHaveText(
+    `${teacher} is assigned to teach ${own.offering}.`,
+  );
   await assign.getByLabel("Faculty member").selectOption({ label: coTeacher });
   await assign.getByLabel("From (optional)").fill(own.term.lastDate.replace("06-30", "02-01"));
   await assign.getByRole("button", { name: "Assign" }).click();
@@ -100,7 +102,9 @@ test("a School Administrator assigns Faculty to a Class Offering, changes the da
   await dialog.getByLabel("Until (optional)").fill(own.term.lastDate.replace("06-30", "01-31"));
   await audit(page);
   await dialog.getByRole("button", { name: "Save the dates" }).click();
-  await expect(page.getByRole("status")).toHaveText(`The dates of ${teacher}’s Teaching assignment are changed.`);
+  await expect(page.getByRole("status").filter({ hasText: "are changed" })).toHaveText(
+    `The dates of ${teacher}’s Teaching assignment are changed.`,
+  );
   await expect(assignments(page).filter({ hasText: teacher })).not.toContainText("End of Term");
 
   // Not yet begun, so ending it removes it.
