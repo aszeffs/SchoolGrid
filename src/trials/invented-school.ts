@@ -14,7 +14,7 @@ import type { SchoolDate } from "../calendar/index.ts";
 export interface InventedSchool {
   /** The Person each School role's account resolves to, by role. */
   rolePersons: Readonly<Record<Role, string>>;
-  /** Persons no one acts as, so that a class has a roster and the Student has classmates. */
+  /** Persons no one acts as, so that a Class Offering has a roster and the Student has classmates. */
   otherFaculty: readonly string[];
   otherStudents: readonly string[];
   academicYear: { name: string; firstDate: SchoolDate; lastDate: SchoolDate };

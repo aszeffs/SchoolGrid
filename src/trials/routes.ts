@@ -20,16 +20,21 @@ const BUSY = { status: "busy" } as const;
 
 const HOUR_MS = 60 * 60 * 1000;
 
+/**
+ * One field of a body, or undefined for a body that is no object. Read leniently:
+ * a start never fails on its body, and a malformed change of role is refused
+ * like any other.
+ */
+function fieldOf(body: unknown, field: string): unknown {
+  return typeof body === "object" && body !== null ? (body as Record<string, unknown>)[field] : undefined;
+}
+
 /** The timezone a trial was asked for, when the database knows it, or UTC: starting one never fails on it. */
 async function timezoneOrUtc(database: Queryable, body: unknown): Promise<string> {
-  const timezone = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["timezone"] : undefined;
+  const timezone = fieldOf(body, "timezone");
   return typeof timezone === "string" && timezone.length <= 64 && (await isKnownTimezone(database, timezone))
     ? timezone
     : "UTC";
-}
-
-function roleFrom(body: unknown): unknown {
-  return typeof body === "object" && body !== null ? (body as Record<string, unknown>)["role"] : undefined;
 }
 
 function refused(request: FastifyRequest, reply: FastifyReply, reason: string): FastifyReply {
@@ -107,7 +112,7 @@ export function registerTrialRoutes(
     if (account === null) {
       return refused(request, reply, failure);
     }
-    const role = roleFrom(request.body);
+    const role = fieldOf(request.body, "role");
     if (!isRole(role)) {
       return refused(request, reply, "malformed-role");
     }

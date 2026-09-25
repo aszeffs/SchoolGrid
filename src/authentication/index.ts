@@ -26,6 +26,11 @@ export { fromPublicOrigin, type AuthenticationFailure } from "./presented-sessio
  * A User account is credentials and authentication state. Nothing here knows
  * about Schools, Persons, roles, or permissions, and nothing exported from
  * here may return one. Resolving an account to a Person is Identity's job.
+ *
+ * One exception, and only to what it reads (ADR-0012): an account remembers
+ * the School it was created in, and a Session is not live once that School is
+ * a Trial School past its expiry. Which School that is, and what it holds,
+ * this module still never answers.
  */
 export interface UserAccount {
   id: string;
