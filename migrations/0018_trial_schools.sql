@@ -113,15 +113,27 @@ $$;
 
 -- Deletes every Trial School past its expiry, and says how many. What a trial
 -- start runs first, and what the daily scheduled sweep runs.
+--
+-- Each School is taken in the order of its identifier, so two sweeps running
+-- at once lock them in the same order and one waits for the other rather than
+-- each holding a School the other needs.
 CREATE FUNCTION app.delete_expired_trial_schools() RETURNS integer
-  LANGUAGE sql
+  LANGUAGE plpgsql
   SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
-RETURN (
-  SELECT count(*) FILTER (WHERE app.delete_expired_trial_school(id))::integer
-  FROM app.school
-  WHERE trial_expires_at <= now()
-);
+AS $$
+DECLARE
+  expired uuid;
+  deleted integer := 0;
+BEGIN
+  FOR expired IN SELECT id FROM app.school WHERE trial_expires_at <= now() ORDER BY id LOOP
+    IF app.delete_expired_trial_school(expired) THEN
+      deleted := deleted + 1;
+    END IF;
+  END LOOP;
+  RETURN deleted;
+END
+$$;
 
 -- A function may be called by anyone unless that is taken away.
 REVOKE ALL ON FUNCTION app.delete_expired_trial_school(uuid) FROM PUBLIC;

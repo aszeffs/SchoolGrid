@@ -143,7 +143,7 @@ export async function startTrialSchool(
 
   for (const { name, code, labels, taughtByRole, rosters } of invented.courses) {
     const course = await createCourse(transaction, { schoolId: school.id, name, code });
-    const teacher = taughtByRole ? faculty : otherFaculty[0]!;
+    const assigned = taughtByRole ? faculty : otherFaculty[0]!;
     for (const term of year.terms) {
       for (const label of labels) {
         const offering = await createClassOffering(transaction, { course, term, label });
@@ -151,7 +151,7 @@ export async function startTrialSchool(
         await assignTeaching(transaction, {
           schoolId: school.id,
           classOfferingId: offering.id,
-          personId: teacher.id,
+          personId: assigned.id,
           firstDate,
           lastDate: null,
         });
@@ -172,9 +172,10 @@ export async function startTrialSchool(
 }
 
 /**
- * The role account for this School role in the live Trial School the account
- * was created in, or null: for an account created in no Trial School, or in
- * one that has expired.
+ * The role account for this School role in the live Trial School whose role
+ * account this is, or null: for any other account, an account an Invitation
+ * created in the trial included, and in a trial that has expired. Only the
+ * visitor, acting as one of the trial's roles, changes between them.
  */
 export async function roleAccountFor(
   database: Queryable,
@@ -185,7 +186,7 @@ export async function roleAccountFor(
      FROM app.user_account caller
      JOIN app.school school ON school.id = caller.created_in_school_id
      JOIN app.user_account target ON target.created_in_school_id = school.id AND target.trial_role = $2
-     WHERE caller.id = $1 AND school.trial_expires_at > now()`,
+     WHERE caller.id = $1 AND caller.trial_role IS NOT NULL AND school.trial_expires_at > now()`,
     [account.id, role],
   );
   return rows[0] ?? null;

@@ -220,10 +220,12 @@ describe("Trial Schools", () => {
         .client.withOrigin(server().publicOrigin)
         .post("/api/invitations/redeem", { secret, ...credentials });
       expect(redeemed.status).toBe(201);
-      const priyas = server().client.withCookie(cookieSentBackFor(redeemed));
+      const priyas = server().client.withOrigin(server().publicOrigin).withCookie(cookieSentBackFor(redeemed));
       expect((await sessionOf(priyas)).schools).toEqual([
         expect.objectContaining({ schoolId, displayName: "Priya Okonkwo", roles: ["faculty"] }),
       ]);
+      // An account the trial did not make for a role cannot change to one.
+      expect((await priyas.post("/api/trials/role", { role: "school_administrator" })).body).toEqual(REFUSED);
 
       await server().expireTrialSchool(schoolId);
       expect((await priyas.get("/api/session")).body).toEqual(REFUSED);
