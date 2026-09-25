@@ -85,6 +85,9 @@ Production environment variables, one `vercel env add <NAME> production` each:
 | `PORT` | `3000`. Vercel's default is 80; the image listens on 3000. |
 | `CLIENT_ADDRESS_HEADER` | `x-vercel-forwarded-for`. Inside the function every request comes from `127.0.0.1`, so without it every visitor shares one rate-limit count. Vercel overwrites the header, so a caller cannot choose their own. |
 | `DEMO_MODE` | `true` |
+| `TRIALS_ENABLED` | `true`. Lets any visitor start a Trial School (ADR-0012). Off unless set. |
+| `TRIAL_LIVE_CAP` | Optional; `30` unless set. The most Trial Schools live at once, the hard bound on what trials may hold in the free database tier. |
+| `TRIAL_PER_IP_HOUR` | Optional; `2` unless set. The most trials one client address may start an hour, counted per instance. |
 | `LOG_LEVEL` | `info` |
 
 `MIGRATION_DATABASE_URL` is deliberately absent: the service verifies the database is migrated and refuses to start if not. `IMAGE_DIGEST` is not set here; the deploy supplies it per deployment with `--env`.
@@ -157,6 +160,10 @@ It reads the digest from the live `/api/build-info` rather than being told one, 
 Dropping the schema deletes the demo's Audit records. That is deliberate and true of the demo alone: the trigger that refuses `TRUNCATE` on `app.audit_record` does not stop a `DROP SCHEMA`, and only the owner can drop it. The Audit records there are invented, made by visitors trying a role.
 
 The reset runs in the `production` environment, for the owner's connection string, and in the `production` concurrency group, so it never overlaps a deploy in either direction. Neither job cancels the other: a reset stopped halfway would leave the demo with no data at all.
+
+## Sweeping expired Trial Schools
+
+A Trial School is deleted once expired, whenever the next trial starts. The [Trial sweep](../.github/workflows/trial-sweep.yml) workflow is the backstop for a quiet spell: daily, it calls `app.delete_expired_trial_schools()` as the owner, the same function a trial start calls, which deletes only Trial Schools past their expiry. It runs in the `production` environment and concurrency group, as the reset does. Run it by hand from the Actions tab (**Trial sweep → Run workflow**).
 
 ## Checking it
 

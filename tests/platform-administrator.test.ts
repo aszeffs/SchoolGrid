@@ -313,6 +313,8 @@ describe("Platform Administrator", () => {
           "POST /api/invitations/redeem",
           "POST /api/invitations/redeem-signed-in",
           "POST /api/platform/schools",
+          "POST /api/trials",
+          "POST /api/trials/role",
         ].sort(),
       );
       const schoolScoped = server().routes.filter(isSchoolScoped);

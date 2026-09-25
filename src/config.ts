@@ -25,6 +25,24 @@ export interface RateLimit {
 
 export const DEFAULT_RATE_LIMIT: RateLimit = { max: 100, windowMs: 60_000 };
 
+/** Whether this deployment offers Trial Schools, and how many (ADR-0012). */
+export interface TrialSettings {
+  /**
+   * Off unless set. A deployment that offers trials lets anyone create a
+   * School, so a self-hosted one never does by accident.
+   */
+  enabled: boolean;
+  /** The most Trial Schools live at once: the hard bound on what trials may hold. */
+  liveCap: number;
+  /**
+   * The most trials one client address may start in an hour. Counted per
+   * instance, as the rate limit is, so it is only a first line.
+   */
+  perClientPerHour: number;
+}
+
+export const DEFAULT_TRIAL_SETTINGS: TrialSettings = { enabled: false, liveCap: 30, perClientPerHour: 2 };
+
 export interface Config extends Partial<MigrationConfig> {
   /** The application's own least-privilege role. See docs/database-roles.md. */
   databaseUrl: string;
@@ -43,6 +61,7 @@ export interface Config extends Partial<MigrationConfig> {
    * anywhere else it offers sign-ins to accounts that should not exist.
    */
   demoMode: boolean;
+  trials: TrialSettings;
 }
 
 /**
@@ -152,16 +171,16 @@ function loadBuildInfo(): BuildInfo {
   };
 }
 
-/** Whether the public demo is on. Anything but an exact `true` or `false` fails startup. */
-function demoModeEnv(): boolean {
-  const raw = optionalEnv("DEMO_MODE");
+/** A switch that is off unless set. Anything but an exact `true` or `false` fails startup. */
+function booleanEnv(name: string): boolean {
+  const raw = optionalEnv(name);
   if (raw === undefined || raw === "false") {
     return false;
   }
   if (raw === "true") {
     return true;
   }
-  throw new Error(`DEMO_MODE must be true or false, received: ${JSON.stringify(raw)}`);
+  throw new Error(`${name} must be true or false, received: ${JSON.stringify(raw)}`);
 }
 
 function isLogLevel(value: string): value is LogLevel {
@@ -210,6 +229,11 @@ export function loadConfig(): Config {
     },
     publicOrigin: parsePublicOrigin(requireEnv("PUBLIC_ORIGIN")),
     buildInfo: loadBuildInfo(),
-    demoMode: demoModeEnv(),
+    demoMode: booleanEnv("DEMO_MODE"),
+    trials: {
+      enabled: booleanEnv("TRIALS_ENABLED"),
+      liveCap: positiveIntegerEnv("TRIAL_LIVE_CAP", DEFAULT_TRIAL_SETTINGS.liveCap),
+      perClientPerHour: positiveIntegerEnv("TRIAL_PER_IP_HOUR", DEFAULT_TRIAL_SETTINGS.perClientPerHour),
+    },
   };
 }

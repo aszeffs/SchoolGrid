@@ -71,6 +71,10 @@ SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
 # The rate limit every container here runs with: see `start_image` for why it
 # is wider than production's, and `report_headroom` for how close it came.
 RATE_LIMIT_MAX="${SMOKE_RATE_LIMIT_MAX:-1000}"
+# How many Trial Schools the demo container lets one client start an hour.
+# Production allows 2 (DEFAULT_TRIAL_SETTINGS in src/config.ts); the browser
+# suite starts every trial from this one IP, for the same reason as above.
+TRIAL_PER_IP_HOUR="${SMOKE_TRIAL_PER_IP_HOUR:-1000}"
 
 # `localhost` rather than the loopback address. Browsers keep a `Secure` cookie
 # over plain http only on a host they treat as a secure context, and the image's
@@ -236,7 +240,7 @@ APPLIED_MIGRATIONS="SELECT count(*) FROM public.schema_migrations"
 # by $1 and publishing it on host port $2. Given `with-owner` as $3, it is also
 # handed the schema owner's connection, and migrates; otherwise it holds only
 # the application's role, as production does. Given `demo`, it holds only that
-# role and runs with DEMO_MODE on, as the public demo does.
+# role and runs with DEMO_MODE and TRIALS_ENABLED on, as the public showcase does.
 #
 # Created and started as two steps rather than one `docker run`. When the runtime
 # cannot exec the CMD at all, `run` fails without ever handing back the id of the
@@ -267,7 +271,7 @@ start_image() {
   if [ "$mode" = "with-owner" ]; then
     args+=(--env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}")
   elif [ "$mode" = "demo" ]; then
-    args+=(--env "DEMO_MODE=true")
+    args+=(--env "DEMO_MODE=true" --env "TRIALS_ENABLED=true" --env "TRIAL_PER_IP_HOUR=${TRIAL_PER_IP_HOUR}")
   fi
 
   local id

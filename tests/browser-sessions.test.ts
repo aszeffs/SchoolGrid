@@ -242,7 +242,10 @@ describe("Browser sessions", () => {
     // and sign-out ends the session it reads.
     // Redeeming as the signed-in account reads a session only once the secret
     // names a pending Invitation, which this body never does: both forms are
-    // asserted there instead, in tests/invitations.test.ts.
+    // asserted there instead, in tests/invitations.test.ts. Starting a trial
+    // makes a session rather than reading one, and changing role refuses every
+    // caller here, where trials are off: its session is asserted in
+    // tests/trial-schools.test.ts.
     const notAuthenticated = [
       "GET /api/health",
       "HEAD /api/health",
@@ -255,6 +258,8 @@ describe("Browser sessions", () => {
       "POST /api/invitations/inspect",
       "POST /api/invitations/redeem",
       "POST /api/invitations/redeem-signed-in",
+      "POST /api/trials",
+      "POST /api/trials/role",
     ];
     const routes = server().routes.filter(({ method, url }) => !notAuthenticated.includes(`${method} ${url}`));
     expect(routes.map(({ method, url }) => `${method} ${url}`)).toEqual(

@@ -1,5 +1,13 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
-import { DEFAULT_RATE_LIMIT, type BuildInfo, type LogLevel, type PublicOrigin, type RateLimit } from "./config.ts";
+import {
+  DEFAULT_RATE_LIMIT,
+  DEFAULT_TRIAL_SETTINGS,
+  type BuildInfo,
+  type LogLevel,
+  type PublicOrigin,
+  type RateLimit,
+  type TrialSettings,
+} from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAcademicStructureRoutes } from "./academic-structure/routes.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
@@ -18,6 +26,7 @@ import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } fro
 import { cacheControlFor, serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
+import { registerTrialRoutes } from "./trials/routes.ts";
 
 export interface ServerOptions {
   database: Database;
@@ -29,6 +38,8 @@ export interface ServerOptions {
   buildInfo?: BuildInfo;
   /** Whether to publish the demo's sign-ins. See `Config.demoMode`. Off unless given. */
   demoMode?: boolean;
+  /** Whether Trial Schools are offered, and how many. See `Config.trials`. Off unless given. */
+  trials?: TrialSettings;
   /**
    * The web app, served on every path outside `/api`. Without it, those paths
    * are refused like any other path no route matches.
@@ -53,6 +64,7 @@ export function buildServer({
   publicOrigin,
   buildInfo = {},
   demoMode = false,
+  trials = DEFAULT_TRIAL_SETTINGS,
   webApp,
   onRoute,
 }: ServerOptions): FastifyInstance {
@@ -156,6 +168,7 @@ export function buildServer({
       registerCalendarRoutes(api, database, authenticator);
       registerAcademicStructureRoutes(api, database, authenticator);
       registerPlatformRoutes(api, database, authenticator);
+      registerTrialRoutes(api, { database, authenticator, publicOrigin, settings: trials });
     },
     { prefix: API_PREFIX },
   );
