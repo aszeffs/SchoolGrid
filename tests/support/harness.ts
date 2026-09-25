@@ -15,7 +15,14 @@ import {
   type PlatformAdministrator,
 } from "../../src/identity/index.ts";
 import { provisionSchool, type ProvisionedSchool } from "../../src/platform/index.ts";
-import { parsePublicOrigin, type BuildInfo, type PublicOrigin, type RateLimit } from "../../src/config.ts";
+import {
+  DEFAULT_TRIAL_SETTINGS,
+  parsePublicOrigin,
+  type BuildInfo,
+  type PublicOrigin,
+  type RateLimit,
+  type TrialSettings,
+} from "../../src/config.ts";
 import { loadWebApp } from "../../src/http/web-app.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
 
@@ -222,6 +229,18 @@ export interface TestServer {
    * client instead.
    */
   markInvitationRedeemed(invitationId: string, account: UserAccount): Promise<void>;
+  /**
+   * Starts a Trial School through the API, as a browser on the public origin
+   * does, and returns a client sending back the Session it was given as its
+   * School Administrator. That client sends the public `Origin` too, so it can
+   * change role and make changes as that browser would.
+   */
+  startTrial(options?: { timezone?: string; from?: string }): Promise<StartedTrial>;
+  /**
+   * Arranges a Trial School as past its expiry, as if its two hours were up.
+   * As the schema owner: the application may not change when a trial expires.
+   */
+  expireTrialSchool(schoolId: string): Promise<void>;
   /** Arranges an Audit record, appended exactly as the application appends one. */
   appendAuditRecord(entry: AuditEntry): Promise<void>;
   /** The origin the server is configured to be served from. */
@@ -338,6 +357,13 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
   };
 }
 
+/** A Trial School started through the API, and the browser that started it. */
+export interface StartedTrial {
+  client: TestClient;
+  schoolId: string;
+  expiresAt: string;
+}
+
 export interface TestServerOptions {
   /** Replaces the default limit so a test can exceed it in a few requests. */
   rateLimit?: RateLimit;
@@ -345,6 +371,11 @@ export interface TestServerOptions {
   buildInfo?: BuildInfo;
   /** Whether the server publishes the demo's sign-ins. Unless given, it does not. */
   demoMode?: boolean;
+  /**
+   * Whether the server offers Trial Schools, and how many. Unless given, it
+   * offers none; given, any setting left out is the default.
+   */
+  trials?: Partial<TrialSettings>;
   /**
    * Adds routes to the built server before it starts, for a test of what the
    * server does to any route's response, whatever the route does itself.
@@ -367,7 +398,13 @@ export interface TestServerOptions {
  * framing); if those ever need asserting, they need a listening server, not a
  * second seam through the application.
  */
-export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: TestServerOptions = {}): () => TestServer {
+export function useTestServer({
+  rateLimit,
+  buildInfo,
+  demoMode,
+  trials,
+  addRoutes,
+}: TestServerOptions = {}): () => TestServer {
   let context: TestServer;
   let app: FastifyInstance;
   let pool: Database;
@@ -403,6 +440,7 @@ export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: Tes
       ...(rateLimit === undefined ? {} : { rateLimit }),
       ...(buildInfo === undefined ? {} : { buildInfo }),
       ...(demoMode === undefined ? {} : { demoMode }),
+      ...(trials === undefined ? {} : { trials: { ...DEFAULT_TRIAL_SETTINGS, ...trials } }),
       onRoute: (route) => routes.push(route),
     });
     addRoutes?.(app);
@@ -468,6 +506,24 @@ export function useTestServer({ rateLimit, buildInfo, demoMode, addRoutes }: Tes
         await pool.query(
           `UPDATE app.invitation SET redeemed_at = now(), redeemed_by_user_account_id = $2 WHERE id = $1`,
           [invitationId, account.id],
+        );
+      },
+      startTrial: async ({ timezone, from } = {}) => {
+        const browser = client.withOrigin(PUBLIC_ORIGIN);
+        const response = await (from === undefined ? browser : browser.fromAddress(from)).post(
+          "/api/trials",
+          timezone === undefined ? undefined : { timezone },
+        );
+        const trial = (response.body as { trial?: { schoolId: string; expiresAt: string } } | undefined)?.trial;
+        if (response.status !== 201 || trial === undefined) {
+          throw new Error(`startTrial expected a Trial School but received status ${response.status}`);
+        }
+        return { client: browser.withCookie(cookieSentBackFor(response)), ...trial };
+      },
+      expireTrialSchool: async (schoolId) => {
+        await ownerPool.query(
+          `UPDATE app.school SET trial_expires_at = now() - interval '1 second' WHERE id = $1`,
+          [schoolId],
         );
       },
       appendAuditRecord: (entry) => appendAuditRecord(pool, entry),

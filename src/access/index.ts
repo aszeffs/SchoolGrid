@@ -5,6 +5,7 @@ import {
   personFor,
   platformAdministratorFor,
   schoolsReachedBy,
+  trialExpiryOf,
   type ListedPerson,
   type Person,
   type PlatformAdministrator,
@@ -46,8 +47,8 @@ import {
 export { grantMembership, ROLES, type Membership, type Role } from "./memberships.ts";
 export { recordEnrollment, type Enrollment } from "./enrollments.ts";
 export { linkGuardian, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
-export type { TeachingAssignment } from "./teaching-assignments.ts";
-export type { RosterMembership } from "./roster-memberships.ts";
+export { assignTeaching, type TeachingAssignment } from "./teaching-assignments.ts";
+export { rosterStudent, type RosterMembership } from "./roster-memberships.ts";
 
 /**
  * Why a request was refused. It is written to the Audit record, where a School
@@ -256,6 +257,11 @@ export interface ReachedSchool {
   personId: string;
   displayName: string;
   roles: Role[];
+  /**
+   * When the School expires, only when it is a Trial School, so a client can
+   * say how long it has left and know when it has ended (ADR-0012).
+   */
+  trialExpiresAt?: string;
 }
 
 /**
@@ -281,6 +287,7 @@ export async function actorInEachSchool(
       continue;
     }
     const held = await activeRoles(database, person);
+    const trialExpiresAt = await trialExpiryOf(database, school.id);
     reached.push({
       schoolId: school.id,
       name: school.name,
@@ -289,6 +296,7 @@ export async function actorInEachSchool(
       // In the order ROLES declares, so the response does not vary with what
       // the database happened to return first.
       roles: ROLES.filter((role) => held.has(role)),
+      ...(trialExpiresAt === null ? {} : { trialExpiresAt: trialExpiresAt.toISOString() }),
     });
   }
   return reached;

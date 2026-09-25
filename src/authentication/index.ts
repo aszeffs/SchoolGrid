@@ -57,15 +57,22 @@ function hashToken(token: string): Buffer {
   return createHash("sha256").update(token).digest();
 }
 
+/**
+ * Creates an account that signs in with these credentials. One created inside
+ * a School, as redeeming an Invitation creates one, names it: an account
+ * created in a Trial School is deleted with it, and holds no live Session
+ * once it has expired (ADR-0012).
+ */
 export async function createUserAccount(
   database: Queryable,
   { username, password }: Credentials,
+  { createdInSchoolId = null }: { createdInSchoolId?: string | null } = {},
 ): Promise<UserAccount> {
   const { rows } = await database.query<UserAccount>(
-    `INSERT INTO app.user_account (username, password_hash)
-     VALUES ($1, $2)
+    `INSERT INTO app.user_account (username, password_hash, created_in_school_id)
+     VALUES ($1, $2, $3)
      RETURNING id, username`,
-    [username, await hashPassword(password)],
+    [username, await hashPassword(password), createdInSchoolId],
   );
   return rows[0]!;
 }
@@ -100,7 +107,7 @@ async function verifyCredentials(
   database: Database,
   { username, password }: Credentials,
 ): Promise<Verification> {
-  const { rows } = await database.query<UserAccount & { password_hash: string }>(
+  const { rows } = await database.query<UserAccount & { password_hash: string | null }>(
     `SELECT id, username, password_hash FROM app.user_account
      WHERE app.username_key(username) = app.username_key($1)`,
     [username],
@@ -110,6 +117,12 @@ async function verifyCredentials(
   if (account === undefined) {
     await spendVerificationEffort(password);
     return { verified: false, userAccountId: null };
+  }
+  // A Trial School's role account, which no password verifies. It costs what a
+  // wrong password costs, so it cannot be told apart by timing either.
+  if (account.password_hash === null) {
+    await spendVerificationEffort(password);
+    return { verified: false, userAccountId: account.id };
   }
   if (!(await verifyPassword(password, account.password_hash))) {
     return { verified: false, userAccountId: account.id };
@@ -131,7 +144,7 @@ async function startSession(
 }
 
 /** Ends the live session this token names. False if there was none to end. */
-async function deleteSession(database: Database, token: string): Promise<boolean> {
+async function deleteSession(database: Queryable, token: string): Promise<boolean> {
   const { rowCount } = await database.query(
     `DELETE FROM app.user_session WHERE token_hash = $1 AND expires_at > now()`,
     [hashToken(token)],
@@ -174,6 +187,17 @@ export interface Authenticator {
    * the caller: see SessionEnding.
    */
   endSession(request: FastifyRequest): Promise<SessionEnding>;
+  /**
+   * Within the transaction, ends the live Session the request presents and
+   * starts a browser Session for another account in its place, as a Trial
+   * School does when its visitor changes role. Null, starting nothing, when
+   * the request presents no live Session to end.
+   */
+  replaceSession(
+    transaction: Queryable,
+    request: FastifyRequest,
+    account: UserAccount,
+  ): Promise<{ cookie: string; expiresAt: string } | null>;
 }
 
 /**
@@ -205,11 +229,16 @@ export function createAuthenticator(database: Database, publicOrigin: PublicOrig
       if (presented.token === null) {
         return { account: null, failure: "unauthenticated" };
       }
+      // An account created in a Trial School holds no live Session once that
+      // School has expired, so access ends on the minute (ADR-0012). Only when
+      // it was: the School is otherwise nothing this module knows about.
       const { rows } = await database.query<UserAccount>(
         `SELECT account.id, account.username
          FROM app.user_session session
          JOIN app.user_account account ON account.id = session.user_account_id
-         WHERE session.token_hash = $1 AND session.expires_at > now()`,
+         LEFT JOIN app.school created_in ON created_in.id = account.created_in_school_id
+         WHERE session.token_hash = $1 AND session.expires_at > now()
+           AND (created_in.trial_expires_at IS NULL OR created_in.trial_expires_at > now())`,
         [hashToken(presented.token)],
       );
       const account = rows[0];
@@ -235,6 +264,17 @@ export function createAuthenticator(database: Database, publicOrigin: PublicOrig
       return (await deleteSession(database, presented.token))
         ? { ended: true, expiringCookie }
         : refused("unauthenticated");
+    },
+
+    async replaceSession(transaction, request, account) {
+      const presented = presentedSession(request, publicOrigin);
+      if (presented.failure !== undefined || presented.token === null) {
+        return null;
+      }
+      if (!(await deleteSession(transaction, presented.token))) {
+        return null;
+      }
+      return startBrowserSession(transaction, account);
     },
   };
 }

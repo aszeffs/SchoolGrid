@@ -34,16 +34,41 @@ export interface SchoolSettings {
 
 const SCHOOL_SETTINGS_COLUMNS = `timezone, timezone_fixed AS "timezoneFixed"`;
 
-/** A School is always created with a timezone: nothing names a School date without one. */
+/**
+ * A School is always created with a timezone: nothing names a School date
+ * without one. A Trial School is created with its expiry, which never changes
+ * (migrations/0018); any other School has none.
+ */
 export async function createSchool(
   database: Queryable,
-  { name, timezone }: { name: string; timezone: string },
+  { name, timezone, trialExpiresAt = null }: { name: string; timezone: string; trialExpiresAt?: Date | null },
 ): Promise<School & SchoolSettings> {
   const { rows } = await database.query<School & SchoolSettings>(
-    `INSERT INTO app.school (name, timezone) VALUES ($1, $2) RETURNING id, name, ${SCHOOL_SETTINGS_COLUMNS}`,
-    [name, timezone],
+    `INSERT INTO app.school (name, timezone, trial_expires_at)
+     VALUES ($1, $2, $3)
+     RETURNING id, name, ${SCHOOL_SETTINGS_COLUMNS}`,
+    [name, timezone, trialExpiresAt],
   );
   return rows[0]!;
+}
+
+/**
+ * A Trial School past its expiry has ended: no account reaches it any more,
+ * though it lingers until it is deleted (ADR-0012). Every School that is not a
+ * trial is live.
+ */
+const LIVE_SCHOOL = `(school.trial_expires_at IS NULL OR school.trial_expires_at > now())`;
+
+/** When this School, as a Trial School, expires; null when it is not one, or there is no such School. */
+export async function trialExpiryOf(database: Queryable, schoolId: string): Promise<Date | null> {
+  if (!couldIdentify(schoolId)) {
+    return null;
+  }
+  const { rows } = await database.query<{ trialExpiresAt: Date | null }>(
+    `SELECT trial_expires_at AS "trialExpiresAt" FROM app.school WHERE id = $1`,
+    [schoolId],
+  );
+  return rows[0]?.trialExpiresAt ?? null;
 }
 
 /**
@@ -125,7 +150,10 @@ function couldIdentify(value: string): boolean {
   return UUID.test(value);
 }
 
-/** The Person this User account resolves to in this School, or null. */
+/**
+ * The Person this User account resolves to in this School, or null. An
+ * account resolves to no one in a Trial School that has expired.
+ */
 export async function personFor(
   database: Queryable,
   { userAccountId, schoolId }: { userAccountId: string; schoolId: string },
@@ -134,7 +162,10 @@ export async function personFor(
     return null;
   }
   const { rows } = await database.query<Person>(
-    `SELECT ${PERSON_COLUMNS} FROM app.person WHERE school_id = $1 AND user_account_id = $2`,
+    `SELECT person.id, person.school_id AS "schoolId", person.display_name AS "displayName"
+     FROM app.person person
+     JOIN app.school school ON school.id = person.school_id
+     WHERE person.school_id = $1 AND person.user_account_id = $2 AND ${LIVE_SCHOOL}`,
     [schoolId, userAccountId],
   );
   return rows[0] ?? null;
@@ -259,7 +290,7 @@ export async function platformAdministratorFor(
   return rows[0] ?? null;
 }
 
-/** The Schools in which this User account resolves to a Person. */
+/** The Schools in which this User account resolves to a Person, leaving out expired Trial Schools. */
 export async function schoolsReachedBy(
   database: Queryable,
   userAccountId: string,
@@ -268,7 +299,7 @@ export async function schoolsReachedBy(
     `SELECT school.id, school.name
      FROM app.person person
      JOIN app.school school ON school.id = person.school_id
-     WHERE person.user_account_id = $1
+     WHERE person.user_account_id = $1 AND ${LIVE_SCHOOL}
      ORDER BY lower(school.name), school.name, school.id`,
     [userAccountId],
   );
