@@ -1264,6 +1264,48 @@ dialog.slip::backdrop {
   background: color-mix(in srgb, #0b0f17 55%, transparent);
 }
 
+/* ---- Landing --------------------------------------------------------- */
+
+.landing__trial {
+  display: grid;
+  gap: calc(var(--step) * 2);
+  justify-items: start;
+  margin-top: calc(var(--step) * 3);
+}
+
+.landing__trial p {
+  margin: 0;
+}
+
+.landing__trust {
+  margin-top: calc(var(--step) * 6);
+  padding-top: calc(var(--step) * 3);
+  border-top: 1px solid var(--rule);
+}
+
+.landing__trust h2 {
+  margin-top: 0;
+}
+
+.landing__trust dl {
+  margin: calc(var(--step) * 2) 0 0;
+}
+
+.landing__trust dt {
+  font-weight: 650;
+}
+
+.landing__trust dd {
+  margin: calc(var(--step) * 0.5) 0 calc(var(--step) * 3);
+}
+
+.foot .landing__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--step) * 3);
+  margin-top: calc(var(--step) * 1.5);
+}
+
 /* ---- Try a role ------------------------------------------------------ */
 
 .demo {

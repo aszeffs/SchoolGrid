@@ -9,7 +9,8 @@ import type { Role } from "../../src/access/roles.ts";
  * path the app would not recognise.
  */
 const PATHS = {
-  schools: "/",
+  home: "/",
+  schools: "/schools",
   signIn: "/sign-in",
   invitation: "/invitation",
   howThisWasBuilt: "/how-this-was-built",

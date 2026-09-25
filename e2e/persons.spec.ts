@@ -37,7 +37,7 @@ test("a School Administrator adds a Person, who is listed unclaimed in that Scho
   await expect(added.getByRole("cell")).toHaveText([displayName, "Unclaimed", "Invite"]);
 
   // The Person is in the School that was chosen, and no other.
-  await page.goto("/");
+  await page.goto("/schools");
   await openSchool(page, schools[1]!);
   await expect(page.getByRole("heading", { level: 1, name: "Persons" })).toBeVisible();
   await expect(personsRecord(page).filter({ hasText: displayName })).toHaveCount(0);

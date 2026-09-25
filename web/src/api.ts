@@ -412,6 +412,8 @@ export const api = {
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
+  /** Whether this deployment offers Trial Schools at all. */
+  trials: () => request<{ enabled: boolean }>("GET", "/trials"),
   /** Starts a Trial School in this timezone, ending whatever Session the browser held. */
   startTrial,
   /** Ends this Trial School Session and starts one for the role's account in the same School. */

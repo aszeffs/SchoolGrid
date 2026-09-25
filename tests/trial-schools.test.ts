@@ -51,6 +51,13 @@ describe("Trial Schools", () => {
   describe("with trials on", () => {
     const server = useTestServer({ trials: { enabled: true, perClientPerHour: 1000 } });
 
+    it("says trials are offered, to anyone, with no Session", async () => {
+      const response = await server().client.get("/api/trials");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ enabled: true });
+    });
+
     it("starts a private School of invented data, around the visitor's today, as its School Administrator", async () => {
       const before = Date.now();
       const { client, schoolId, expiresAt } = await server().startTrial({ timezone: "Pacific/Kiritimati" });
@@ -377,6 +384,13 @@ describe("Trial Schools", () => {
 
   describe("with trials off, as they are unless enabled", () => {
     const server = useTestServer();
+
+    it("says trials are not offered", async () => {
+      const response = await server().client.get("/api/trials");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ enabled: false });
+    });
 
     it("refuses to start one, or to change role", async () => {
       const browser = server().client.withOrigin(server().publicOrigin);

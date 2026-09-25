@@ -237,8 +237,8 @@ describe("Browser sessions", () => {
    */
   it("is accepted by every School-scoped and platform endpoint exactly as a Bearer session is", async () => {
     const world = await arrange();
-    // Nothing here authenticates a caller: health, build info and the demo's
-    // sign-ins answer anyone, sign-in makes a session rather than reading one,
+    // Nothing here authenticates a caller: health, build info, the demo's
+    // sign-ins and whether trials are offered answer anyone, sign-in makes a session rather than reading one,
     // and sign-out ends the session it reads.
     // Redeeming as the signed-in account reads a session only once the secret
     // names a pending Invitation, which this body never does: both forms are
@@ -258,6 +258,8 @@ describe("Browser sessions", () => {
       "POST /api/invitations/inspect",
       "POST /api/invitations/redeem",
       "POST /api/invitations/redeem-signed-in",
+      "GET /api/trials",
+      "HEAD /api/trials",
       "POST /api/trials",
       "POST /api/trials/role",
     ];

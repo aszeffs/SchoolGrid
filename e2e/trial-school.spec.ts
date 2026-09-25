@@ -19,17 +19,15 @@ const ROLES = [
 ] as const;
 
 /**
- * Starts a Trial School in this browser, as the landing page's button does,
- * and opens it. The visitor lands in it as its School Administrator.
+ * Starts a Trial School from the front page's button, from the keyboard, and
+ * opens it. The visitor lands in it as its School Administrator.
  */
 async function startTrial(page: Page): Promise<string> {
-  const origin = new URL(SHOWCASE_ORIGIN!).origin;
-  const started = await page.request.post("/api/trials", { headers: { origin }, data: { timezone: "UTC" } });
-  expect(started.status()).toBe(201);
-  const { trial } = (await started.json()) as { trial: { schoolId: string } };
   await page.goto("/");
-  await expect(page).toHaveURL(new RegExp(`/schools/${trial.schoolId}/persons$`));
-  return trial.schoolId;
+  await page.getByRole("button", { name: "Start a trial" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
+  return new URL(page.url()).pathname.split("/")[2]!;
 }
 
 /** Waits for the sheet to finish being read, which strikes it afresh and would close a list opened meanwhile. */
@@ -44,6 +42,21 @@ function banner(page: Page) {
 test.describe("in a Trial School", () => {
   test.skip(SHOWCASE_ORIGIN === undefined || SHOWCASE_ORIGIN === "", "only the smoke test serves trials");
   test.use({ baseURL: SHOWCASE_ORIGIN });
+
+  test("the landing page says plainly when the site is too busy to start a trial", async ({ page }) => {
+    // The live cap, reached: arranged by answering as the server does rather
+    // than by filling the showcase with thirty trials.
+    await page.route("/api/trials", (route) =>
+      route.request().method() === "POST" ? route.fulfill({ status: 503, json: { status: "busy" } }) : route.fallback(),
+    );
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Start a trial" }).click();
+
+    await expect(page.getByRole("alert")).toHaveText("SchoolGrid is busy right now. Try again in a little while.");
+    await expect(page).toHaveURL("/");
+    await expect(page.getByRole("button", { name: "Start a trial" })).toBeEnabled();
+  });
 
   test("views the School as each role from the keyboard, landing on each role's home", async ({ page }) => {
     const schoolId = await startTrial(page);
@@ -117,9 +130,14 @@ test.describe("in a Trial School", () => {
   });
 
   for (const colorScheme of ["light", "dark"] as const) {
-    test(`holds a 360px phone in the ${colorScheme} theme, with the roles open`, async ({ page, audit }) => {
+    test(`holds a 360px phone in the ${colorScheme} theme, on the front page and with the roles open`, async ({ page, audit }) => {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width: 360, height: 800 });
+      await page.goto("/");
+      await expect(page.getByRole("button", { name: "Start a trial" })).toBeVisible();
+      await expectNoSidewaysScroll(page);
+      await audit(page);
+
       await startTrial(page);
       await settled(page);
 

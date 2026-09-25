@@ -48,7 +48,8 @@ function refused(request: FastifyRequest, reply: FastifyReply, reason: string): 
  * role is known by the Session the trial issued them.
  *
  * Registered whatever the settings, so every server has the same routes. With
- * trials off, as everywhere but the public showcase, both refuse.
+ * trials off, as everywhere but the public showcase, both refuse. Whether
+ * trials are on is itself public, answered to anyone, for the front page.
  */
 export function registerTrialRoutes(
   api: FastifyInstance,
@@ -62,6 +63,11 @@ export function registerTrialRoutes(
   // Counted in the same process memory as the server-wide limit, and keyed on
   // the same client address.
   const startsThisHour = api.createRateLimit({ max: settings.perClientPerHour, timeWindow: HOUR_MS });
+
+  // Whether to offer a trial at all, for the landing page. Public, and the
+  // same answer to everyone: it says nothing about any School.
+  const offered = { enabled: settings.enabled };
+  api.get("/trials", async (_request, reply) => reply.status(200).send(offered));
 
   api.post("/trials", async (request, reply) => {
     if (!settings.enabled) {

@@ -1,4 +1,5 @@
 import { HowThisWasBuilt } from "./HowThisWasBuilt.tsx";
+import { Landing } from "./Landing.tsx";
 import { RedeemInvitation } from "./RedeemInvitation.tsx";
 import { SignedIn } from "./Shell.tsx";
 import { SignIn } from "./SignIn.tsx";
@@ -8,6 +9,8 @@ import { useRoute } from "./navigation.ts";
 export function App() {
   const route = useRoute();
   switch (route?.name) {
+    case "home":
+      return <Landing />;
     case "signIn":
       return <SignIn />;
     case "invitation":
