@@ -20,10 +20,68 @@ export interface Person {
   displayName: string;
 }
 
-export async function createSchool(database: Queryable, { name }: { name: string }): Promise<School> {
-  const { rows } = await database.query<School>(
-    `INSERT INTO app.school (name) VALUES ($1) RETURNING id, name`,
-    [name],
+/**
+ * What a School Administrator configures about their School. Its timezone is
+ * an IANA identifier the database knows (migrations/0012); what it means for a
+ * School date is the School calendar's to work out. It is fixed for good once
+ * the School's first Academic Year exists, which the database records
+ * (migrations/0013).
+ */
+export interface SchoolSettings {
+  timezone: string;
+  timezoneFixed: boolean;
+}
+
+const SCHOOL_SETTINGS_COLUMNS = `timezone, timezone_fixed AS "timezoneFixed"`;
+
+/** A School is always created with a timezone: nothing names a School date without one. */
+export async function createSchool(
+  database: Queryable,
+  { name, timezone }: { name: string; timezone: string },
+): Promise<School & SchoolSettings> {
+  const { rows } = await database.query<School & SchoolSettings>(
+    `INSERT INTO app.school (name, timezone) VALUES ($1, $2) RETURNING id, name, ${SCHOOL_SETTINGS_COLUMNS}`,
+    [name, timezone],
+  );
+  return rows[0]!;
+}
+
+/**
+ * Locks a School's settings until the transaction ends, so no other change to
+ * them can land between reading them and changing them, and returns them as
+ * they now stand. Null when there is no such School.
+ */
+export async function lockSchoolSettings(transaction: Queryable, schoolId: string): Promise<SchoolSettings | null> {
+  if (!couldIdentify(schoolId)) {
+    return null;
+  }
+  const { rows } = await transaction.query<SchoolSettings>(
+    `SELECT ${SCHOOL_SETTINGS_COLUMNS} FROM app.school WHERE id = $1 FOR UPDATE`,
+    [schoolId],
+  );
+  return rows[0] ?? null;
+}
+
+/** A School's settings as they stand, or null when there is no such School. */
+export async function schoolSettingsOf(database: Queryable, schoolId: string): Promise<SchoolSettings | null> {
+  if (!couldIdentify(schoolId)) {
+    return null;
+  }
+  const { rows } = await database.query<SchoolSettings>(
+    `SELECT ${SCHOOL_SETTINGS_COLUMNS} FROM app.school WHERE id = $1`,
+    [schoolId],
+  );
+  return rows[0] ?? null;
+}
+
+/** Sets a School's timezone, which the database refuses unless it knows it. */
+export async function setSchoolTimezone(
+  transaction: Queryable,
+  { schoolId, timezone }: { schoolId: string; timezone: string },
+): Promise<SchoolSettings> {
+  const { rows } = await transaction.query<SchoolSettings>(
+    `UPDATE app.school SET timezone = $2 WHERE id = $1 RETURNING ${SCHOOL_SETTINGS_COLUMNS}`,
+    [schoolId, timezone],
   );
   return rows[0]!;
 }

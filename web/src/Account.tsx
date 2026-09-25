@@ -1,4 +1,5 @@
 import { api, type OwnAccount, type ReachedSchool, type Role } from "./api.ts";
+import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES } from "./roles.ts";
@@ -78,13 +79,26 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
       {holds("student") && <Enrollment enrollment={account.enrollment} />}
       {holds("guardian") && <LinkedStudents account={account} />}
 
-      <section className="not-built">
-        <h2>Not built yet</h2>
-        <p>
-          Attendance and Term results are not built yet, so there is nothing of either to show you here. What this
-          School holds for you today is above, in full.
-        </p>
-      </section>
+      {(holds("faculty") || holds("student")) && (
+        <section>
+          <h2>Your classes</h2>
+          <p>
+            The Class Offerings you are {holds("faculty") ? "assigned to teach" : "on the roster of"} are on{" "}
+            <Link to={{ name: "classes", schoolId: school.schoolId }}>Your classes</Link>.
+          </p>
+        </section>
+      )}
+
+      {/* Faculty and Students have their classes now; Attendance and Term results are still to come for Guardians. */}
+      {holds("guardian") && (
+        <section className="not-built">
+          <h2>Not built yet</h2>
+          <p>
+            Attendance and Term results are not built yet, so there is nothing of either to show you here. What this
+            School holds for you today is above, in full.
+          </p>
+        </section>
+      )}
     </Sheet>
   );
 }

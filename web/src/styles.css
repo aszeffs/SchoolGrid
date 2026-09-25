@@ -337,7 +337,7 @@ body {
     background-color var(--settle);
 }
 
-.shell-nav a[aria-current="page"] {
+.shell-nav a[aria-current] {
   background: var(--page);
   border-color: var(--rule);
   color: var(--ink);
@@ -438,6 +438,26 @@ body {
   margin-top: calc(var(--step) * 0.5);
   padding-top: calc(var(--step) * 0.5);
   border-top: 1px solid var(--rule-faint);
+}
+
+/*
+ * Open, the list takes its place in the head, under the button that offers
+ * it, and pushes the sections down: held over them, it would cover the last
+ * of a School Administrator's. On a phone it takes the head's whole width
+ * instead (below).
+ */
+.switcher[open] {
+  text-align: right;
+}
+
+.switcher[open] ul {
+  position: static;
+  margin: calc(var(--step) * 0.75) 0 0 auto;
+  text-align: left;
+}
+
+.shell-head:has(.switcher[open]) > .actions {
+  align-items: flex-start;
 }
 
 .sheet__body {
@@ -735,6 +755,17 @@ fieldset legend {
   font-weight: 650;
 }
 
+/* One Term among a year's, edited in place: its fields, then the way to remove it. */
+.term-draft {
+  gap: calc(var(--step) * 1.5);
+  padding-bottom: calc(var(--step) * 1.5);
+}
+
+.term-draft > button,
+fieldset > button {
+  justify-self: start;
+}
+
 button {
   display: inline-flex;
   align-items: center;
@@ -781,7 +812,7 @@ button {
     border-color: var(--alarm);
   }
 
-  .shell-nav a:not([aria-current="page"]):hover {
+  .shell-nav a:not([aria-current]):hover {
     background: var(--wash);
     color: var(--ink);
   }
@@ -1150,6 +1181,18 @@ dialog.slip[open] {
   display: grid;
 }
 
+/*
+ * A slip taller than the screen scrolls, but its actions stay pinned to its
+ * foot: a long list of Students to roster never pushes Cancel out of reach.
+ */
+dialog.slip > .actions {
+  position: sticky;
+  bottom: 0;
+  margin: 0 calc(var(--step) * -3) calc(var(--step) * -3);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 3) calc(var(--step) * 3);
+  background: var(--field);
+}
+
 dialog.slip::backdrop {
   background: color-mix(in srgb, #0b0f17 55%, transparent);
 }
@@ -1235,19 +1278,173 @@ dialog.slip::backdrop {
 }
 
 /*
- * A way through that goes nowhere is held with aria-disabled rather than
- * disabled (AuditRecords.tsx), so it is drawn as a disabled button is, and
- * answers neither hover nor press.
+ * A way through that goes nowhere, or a change held while another is in
+ * flight, is held with aria-disabled rather than disabled (AuditRecords.tsx,
+ * InstructionalDays.tsx), so the focus stays on it. It is drawn as a disabled
+ * button is, and answers neither hover nor press.
  */
 .pager button[aria-disabled="true"],
 .pager button[aria-disabled="true"]:hover,
-.pager button[aria-disabled="true"]:active {
+.pager button[aria-disabled="true"]:active,
+.instructional-days button[aria-disabled="true"],
+.instructional-days button[aria-disabled="true"]:hover,
+.instructional-days button[aria-disabled="true"]:active {
   background: transparent;
   border-style: dashed;
   border-color: var(--rule);
   color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
   cursor: not-allowed;
   transform: none;
+}
+
+/* ---- Instructional days ---------------------------------------------- */
+
+/*
+ * A year's Instructional days, under its Terms: the weekday pattern, then the
+ * year a month at a time. A day's state is a mark, never a colour alone: a
+ * filled dot is a day in session, a struck ring a day taken out, and a frame
+ * says the day is an exception to the pattern, whichever way it goes. Each
+ * day's button also says all of that in words.
+ */
+.instructional-days {
+  margin-top: calc(var(--step) * 3);
+  border-top: 1px solid var(--rule-faint);
+}
+
+.pattern {
+  margin-top: var(--step);
+}
+
+.pattern__days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 calc(var(--step) * 2.5);
+}
+
+.calendar {
+  max-width: 26rem;
+}
+
+.calendar__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--step) calc(var(--step) * 2);
+  margin-bottom: var(--step);
+}
+
+.calendar__head h4 {
+  margin: 0;
+  font-size: var(--size-lead);
+  font-weight: 700;
+}
+
+.calendar__count {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+}
+
+.calendar__grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 2px;
+}
+
+.calendar__grid th {
+  padding-bottom: calc(var(--step) * 0.5);
+  color: var(--ink-soft);
+  font-size: var(--size-small);
+  font-weight: 600;
+  text-align: center;
+}
+
+.calendar__grid abbr {
+  text-decoration: none;
+}
+
+.calendar__grid td {
+  padding: 0;
+}
+
+.day {
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink);
+  font-family: var(--type-figures);
+  font-size: var(--size-label);
+  font-weight: 500;
+}
+
+.day__mark {
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1.5px solid transparent;
+  border-radius: 50%;
+}
+
+.day--instructional .day__mark,
+.day--make-up .day__mark {
+  background: var(--seal);
+  border-color: var(--seal);
+}
+
+.day--not-instructional {
+  color: var(--ink-soft);
+}
+
+.day--holiday {
+  color: var(--ink-soft);
+}
+
+.day--holiday .day__mark {
+  border-color: var(--ink-soft);
+  background: linear-gradient(
+    135deg,
+    transparent calc(50% - 0.75px),
+    var(--ink-soft) calc(50% - 0.75px) calc(50% + 0.75px),
+    transparent calc(50% + 0.75px)
+  );
+}
+
+.day--holiday,
+.day--make-up {
+  border-color: var(--rule);
+  border-style: dashed;
+}
+
+/* The day chosen: the one the change below it is about. */
+td[aria-selected="true"] > .day {
+  background: var(--wash-seal);
+  border: 2px solid var(--seal);
+  font-weight: 700;
+}
+
+.calendar__chosen {
+  display: grid;
+  gap: var(--step);
+  justify-items: start;
+  margin-top: calc(var(--step) * 1.5);
+}
+
+.calendar__chosen p {
+  margin: 0;
+}
+
+@media (hover: hover) {
+  .day:hover:not(:disabled) {
+    background: var(--wash-seal);
+    border-color: color-mix(in srgb, var(--seal) 55%, transparent);
+    color: var(--ink);
+  }
 }
 
 /* ---- Foot ------------------------------------------------------------ */
@@ -1305,11 +1502,14 @@ dialog.slip::backdrop {
     align-items: stretch;
   }
 
+  .switcher[open] {
+    text-align: left;
+  }
+
   .switcher[open] ul {
-    position: static;
     width: auto;
     max-width: none;
-    margin-top: var(--step);
+    margin: var(--step) 0 0;
   }
 
   /*
@@ -1341,7 +1541,7 @@ dialog.slip::backdrop {
     text-align: center;
   }
 
-  .shell-nav a[aria-current="page"] {
+  .shell-nav a[aria-current] {
     background: var(--page);
   }
 

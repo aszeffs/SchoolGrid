@@ -38,8 +38,9 @@ OWNER_URL="postgresql://owner:owner-secret@db.example/neondb"
 HTTP_TIMEOUT=7
 
 # What a freshly seeded demo answers the "only seeded data" query with: one
-# School, and nothing that only a visitor or an operator could have made.
-CLEAN_COUNTS="1 0 0 0 0"
+# School, nothing that only a visitor or an operator could have made, and one
+# Term running today.
+CLEAN_COUNTS="1 0 0 0 0 1"
 
 # --- the doubles ------------------------------------------------------------
 
@@ -152,9 +153,10 @@ case "${SCENARIO}:${kind}" in
   remains-dirty:remains) printf '%s\n' "11 1" ;;
   remains-unreadable:remains) echo 'ERROR:  permission denied for schema information_schema' >&2; exit 1 ;;
   *:remains) printf '%s\n' "0 0" ;;
-  check-fails:check) printf '%s\n' "2 17 3 1 0" ;;
+  check-fails:check) printf '%s\n' "2 17 3 1 0 1" ;;
   check-unreadable:check) echo 'ERROR:  relation "app.school" does not exist' >&2; exit 1 ;;
-  *:check) printf '%s\n' "1 0 0 0 0" ;;
+  no-current-term:check) printf '%s\n' "1 0 0 0 0 0" ;;
+  *:check) printf '%s\n' "1 0 0 0 0 1" ;;
   *) : ;;
 esac
 DOUBLE
@@ -392,7 +394,13 @@ expect_output "duplicate key value"
 run_case "leftover data fails the reset" check-fails
 expect_code 1
 expect_output "$CLEAN_COUNTS"
-expect_output "2 17 3 1 0"
+expect_output "2 17 3 1 0 1"
+
+# AC: the reset rebuilds the demo's Academic Year, with a Term running today,
+# so the Faculty and Student roles land on classes rather than an empty page.
+run_case "a seed leaving no Term running today fails the reset" no-current-term
+expect_code 1
+expect_output "1 0 0 0 0 0"
 
 run_case "a database the check cannot read fails the reset" check-unreadable
 expect_code 1

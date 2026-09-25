@@ -18,10 +18,10 @@ import { Key, Sheet } from "./Sheet.tsx";
  */
 const ROLE_SEES: Record<DemoAccount["role"], string> = {
   school_administrator:
-    "Every Person in the School, with their Invitations, School memberships, Enrollments, Guardian links and Audit records.",
-  faculty: "Their own account and the School's People. The Class Offerings they teach are not built yet.",
-  student:
-    "Their own account: the School memberships they hold, and their Enrollment. Their published academic records are not built yet.",
+    "Every Person in the School, with their Invitations, School memberships, Enrollments, Guardian links and Audit records, and the School's settings.",
+  faculty:
+    "Their own account, and their classes: those they teach this Term and in the rest of the year, each with its roster of Students.",
+  student: "Their own account, their Enrollment, and their classes in every Term of the year, with who teaches each.",
   guardian:
     "Their own account: each Student they are linked to, and what that link lets them read. Those records are not built yet.",
 };

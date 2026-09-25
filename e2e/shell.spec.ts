@@ -12,7 +12,11 @@ const SECTIONS = [
   { label: "Roles", path: "memberships", heading: "School memberships" },
   { label: "Enrollments", path: "enrollments", heading: "Enrollments" },
   { label: "Guardians", path: "guardian-links", heading: "Guardian links" },
+  { label: "Academic Years", path: "academic-years", heading: "Academic Years" },
+  { label: "Courses", path: "courses", heading: "Courses" },
+  { label: "Class Offerings", path: "class-offerings", heading: "Class Offerings" },
   { label: "Audit", path: "audit-records", heading: "Audit" },
+  { label: "Settings", path: "settings", heading: "School settings" },
 ];
 
 function navLinks(page: Page) {
@@ -103,7 +107,7 @@ test("an account reaching one School goes straight into it, and sees only what i
   const header = page.getByRole("banner");
   await expect(header.getByText(schools[0]!, { exact: true })).toBeVisible();
   await expect(header.getByText(`Signed in as ${faculty.displayName}`)).toBeVisible();
-  await expect(navLinks(page)).toHaveText(["Your account", "People"]);
+  await expect(navLinks(page)).toHaveText(["Your account", "Your classes", "People"]);
   // With nowhere else to go, no switcher is offered.
   await expect(header.getByText("Switch School")).toHaveCount(0);
 
@@ -111,7 +115,7 @@ test("an account reaching one School goes straight into it, and sees only what i
   const seen = await navigationsSeen(page);
   expect(seen.length).toBeGreaterThan(0);
   for (const links of seen) {
-    expect(links).toEqual(["Your account", "People"]);
+    expect(links).toEqual(["Your account", "Your classes", "People"]);
   }
 
   // Asked for by its URL, a page their roles do not reach still asks for its
@@ -234,7 +238,7 @@ test("the shell is reached from the keyboard, with focus shown", async ({ page }
   }
   expect(reached).toEqual(expected);
 
-  // And followed from it.
+  // And followed from it, to the last page it reached.
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { level: 1, name: "Audit" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: SECTIONS.at(-1)!.heading })).toBeVisible();
 });

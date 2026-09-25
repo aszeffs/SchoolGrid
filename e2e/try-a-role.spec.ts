@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+import { openSection, recordRows } from "./app.ts";
 import { expect, test } from "./test.ts";
 
 /**
@@ -7,18 +9,47 @@ import { expect, test } from "./test.ts";
  */
 const DEMO_ORIGIN = process.env["SCHOOLGRID_DEMO_ORIGIN"];
 
-const ROLES = ["School Administrator", "Faculty", "Student", "Guardian"];
+const ROLES = ["School Administrator", "Faculty", "Student", "Guardian"] as const;
 
 /** What the panel promises a visitor about the data behind every role. */
 const ABOUT_THE_DATA = [/invented/i, /anyone can change/i, /resets every night/i];
 
 /**
  * The parts of the glossary whose screens are not built. A role's line may
- * name one only to say so: three of the four roles reach nothing but People
- * (SECTIONS in web/src/routes.ts), and a line selling the academic screens
- * would mis-sell them.
+ * name one only to say so: Students and Guardians reach nothing but their own
+ * account and People (SECTIONS in web/src/routes.ts), and a line selling the
+ * academic screens would mis-sell them.
  */
-const NOT_BUILT = /Class Offering|Attendance|Term result|published academic records/;
+const NOT_BUILT = /Attendance|Term result|published academic records/;
+
+/**
+ * What each role finds once signed in, so that no role a visitor tries leads to
+ * an empty page: demo/seed.sql's People, and its Academic Year, whose Term
+ * running today holds the Faculty member's and the Student's classes. The
+ * Faculty member and the Student land on their account, and their classes are
+ * one link away.
+ */
+const POPULATED: Record<(typeof ROLES)[number], (page: Page) => Promise<void>> = {
+  "School Administrator": async (page) => {
+    await expect(recordRows(page, "Persons").filter({ hasText: "Riley Fernsby" })).toHaveCount(1);
+  },
+  Faculty: async (page) => {
+    await openSection(page, "Your classes");
+    await expect(recordRows(page, "Your current classes").filter({ hasText: "Mathematics" }).first()).toBeVisible();
+  },
+  Student: async (page) => {
+    await openSection(page, "Your classes");
+    // The Term running today is listed first, and marked so.
+    await expect(page.getByRole("main").getByRole("heading", { level: 2, name: /Term, / }).first()).toContainText(
+      "Current",
+    );
+    const firstTerm = page.getByRole("table", { name: /^Your classes in / }).first();
+    await expect(firstTerm.getByRole("row").filter({ hasText: "Mathematics" })).toHaveCount(1);
+  },
+  Guardian: async (page) => {
+    await expect(page.getByRole("main").getByText("Jamie Lindqvist").first()).toBeVisible();
+  },
+};
 
 test("without demo mode the sign-in page offers no roles to try", async ({ page }) => {
   // Asserted once the page has been told there are none, or an absent panel
@@ -83,6 +114,7 @@ test.describe("with demo mode on", () => {
       const opensOn = role === "School Administrator" ? "persons" : "account";
       await expect(page).toHaveURL(new RegExp(`/schools/[^/]+/${opensOn}$`));
       await expect(page.getByRole("banner").getByText("Riverbend Demo School", { exact: true })).toBeVisible();
+      await POPULATED[role](page);
     });
   }
 });

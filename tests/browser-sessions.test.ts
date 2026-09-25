@@ -128,15 +128,20 @@ describe("Browser sessions", () => {
 
   /**
    * Alice administers Northside, where a Student is enrolled and linked to a
-   * Guardian, and an unclaimed Person is invited; Pat is a Platform
-   * Administrator. Each is signed in twice, once with each form of session.
+   * Guardian, an unclaimed Person is invited, and an Academic Year is planned
+   * with a Course offered in it, which Alice also teaches as Faculty and holds a
+   * Student membership beside, so the routes only Faculty or Students reach
+   * answer her too; Pat is a Platform Administrator. Each is
+   * signed in twice, once with each form of session.
    */
   async function arrange() {
     await server().createPlatformAdministrator({ account: await server().createAccount(PAT) });
-    const { school } = await server().provisionSchool({
+    const { school, schoolAdministrator } = await server().provisionSchool({
       name: "Northside",
       administrator: await server().createAccount(ALICE),
     });
+    await server().grantMembership({ person: schoolAdministrator, role: "faculty" });
+    await server().grantMembership({ person: schoolAdministrator, role: "student" });
     const aliceBearer = (await server().signIn(ALICE)).inSchool(school.id);
     const student = await server().createPerson({ schoolId: school.id, displayName: "Sam", role: "student" });
     const guardian = await server().createPerson({ schoolId: school.id, displayName: "Gina", role: "guardian" });
@@ -150,7 +155,43 @@ describe("Browser sessions", () => {
     const invited = await aliceBearer.post("/invitations", {
       personId: (await server().createPerson({ schoolId: school.id, displayName: "Riley" })).id,
     });
-    expect([enrolled.status, linked.status, memberships.status, invited.status]).toEqual([201, 201, 200, 201]);
+    const academicYear = await aliceBearer.post("/academic-years", {
+      name: "2026–27",
+      firstDate: "2026-09-01",
+      lastDate: "2027-06-30",
+    });
+    const academicYearId = (academicYear.body as { academicYear: { id: string } }).academicYear.id;
+    const holiday = await aliceBearer.post(`/academic-years/${academicYearId}/exceptions`, {
+      date: "2026-11-26",
+      instructional: false,
+    });
+    const divided = await aliceBearer.patch(`/academic-years/${academicYearId}`, {
+      terms: [{ name: "Whole year", firstDate: "2026-09-01", lastDate: "2027-06-30" }],
+    });
+    const termId = (divided.body as { academicYear: { terms: { id: string }[] } }).academicYear.terms[0]!.id;
+    const course = await aliceBearer.post("/courses", { name: "Algebra I" });
+    const courseId = (course.body as { course: { id: string } }).course.id;
+    const offering = await aliceBearer.post("/class-offerings", { courseId, termId });
+    const classOfferingId = (offering.body as { classOffering: { id: string } }).classOffering.id;
+    const assigned = await aliceBearer.post(`/class-offerings/${classOfferingId}/teaching-assignments`, {
+      personId: schoolAdministrator.id,
+    });
+    const rostered = await aliceBearer.post(`/class-offerings/${classOfferingId}/roster-memberships`, {
+      personIds: [student.id],
+    });
+    expect([
+      enrolled.status,
+      linked.status,
+      memberships.status,
+      invited.status,
+      academicYear.status,
+      holiday.status,
+      divided.status,
+      course.status,
+      offering.status,
+      assigned.status,
+      rostered.status,
+    ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201, 201, 201]);
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -159,6 +200,12 @@ describe("Browser sessions", () => {
       guardianLinkId: (linked.body as { guardianLink: { id: string } }).guardianLink.id,
       membershipId: (memberships.body as { memberships: { id: string }[] }).memberships[0]!.id,
       invitationId: (invited.body as { invitation: { id: string } }).invitation.id,
+      academicYearId,
+      exceptionId: (holiday.body as { academicYear: { exceptions: { id: string }[] } }).academicYear.exceptions[0]!.id,
+      courseId,
+      classOfferingId,
+      teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
+      rosterMembershipId: (rostered.body as { rosterMemberships: { id: string }[] }).rosterMemberships[0]!.id,
     };
     return {
       school,

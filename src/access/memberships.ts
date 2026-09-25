@@ -139,6 +139,31 @@ export async function holdsRoleDuring(
   return rows[0]!.held;
 }
 
+/**
+ * The membership through which the Person holds this role at this moment, or
+ * null when they hold it through none. It is held until the transaction ends,
+ * so it cannot be narrowed or revoked between this and what the caller writes
+ * on the strength of it: a change to it waits, and then finds what was written.
+ *
+ * Of several in force at once, it is the one ending first: ending any of them
+ * ends what the role holds (see endTeachingWithMembership), so the earliest
+ * end is the one that binds. Every one of them is held.
+ */
+export async function holdActiveMembership(
+  transaction: Queryable,
+  person: Person,
+  role: Role,
+): Promise<Membership | null> {
+  const { rows } = await transaction.query<Membership>(
+    `SELECT ${MEMBERSHIP_COLUMNS} FROM app.school_membership membership
+     WHERE school_id = $1 AND person_id = $2 AND role = $3 AND ${isActive("membership")}
+     ORDER BY ends_at ASC NULLS LAST, id
+     FOR SHARE`,
+    [person.schoolId, person.id, role],
+  );
+  return rows[0] ?? null;
+}
+
 /** Whether the Person holds this role now, or through a membership not yet begun. */
 export async function holdsRoleNowOrLater(
   database: Queryable,

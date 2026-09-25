@@ -5,7 +5,7 @@ SchoolGrid is a K-12 academic records system for a School. Its first release dem
 ## People and access
 
 **School**:
-The ownership and authorization boundary for all academic records. Every Person, academic structure, and record belongs to exactly one School, and no record is shared between Schools. A School has an explicit timezone, Instructional days, an Attendance window, and a Result value scale.
+The ownership and authorization boundary for all academic records. Every Person, academic structure, and record belongs to exactly one School, and no record is shared between Schools. A School has an explicit timezone, Instructional days, an Attendance window, and a Result value scale. Its timezone is fixed once its first Academic Year exists.
 _Avoid_: Tenant, organization, campus
 
 **Person**:
@@ -59,11 +59,11 @@ _Avoid_: Error, permission error
 ## Academic structure
 
 **Academic Year**:
-A named School period partitioned into ordered, non-overlapping Terms.
+A named School period partitioned into ordered, non-overlapping Terms. Academic Years never overlap, but may leave School dates between them, such as a summer break, that fall in no Academic Year.
 _Avoid_: School year
 
 **Term**:
-An ordered, bounded period within an Academic Year in which Class Offerings operate. Terms neither overlap nor leave gaps, so every School date falls in exactly one Term. A Term is the period against which results are recorded.
+An ordered, bounded period within an Academic Year in which Class Offerings operate. Terms neither overlap nor leave gaps, so every School date within an Academic Year falls in exactly one Term. A Term is the period against which results are recorded.
 _Avoid_: Semester, marking period
 
 **Course**:
@@ -79,15 +79,15 @@ An ordered set of Class Offerings of one Course across consecutive Terms in an A
 _Avoid_: Year-long class, multi-term course
 
 **Enrollment**:
-A Student's bounded participation in a School. Enrollment history is retained when a Student departs. Ending an Enrollment ends the Student's open Roster memberships and every linked Guardian's access, narrows the Student's own access to their published records, and leaves every record in place. A departing Student's records stay with the School and travel nowhere.
+A Student's bounded participation in a School. Enrollment history is retained when a Student departs. Ending an Enrollment ends each of the Student's Roster memberships that runs past it, removing one not yet begun, and ends every linked Guardian's access, narrows the Student's own access to their published records and the Roster memberships those records belong to, and leaves every record in place. A departing Student's records stay with the School and travel nowhere.
 _Avoid_: Registration, transfer
 
 **Roster membership**:
-A Student's bounded participation in a Class Offering. A Student may have multiple memberships across offerings in one Term.
+A Student's participation in a Class Offering, bounded by School dates. A Student may have multiple memberships across offerings in one Term.
 _Avoid_: Enrollment
 
 **Teaching assignment**:
-A Faculty member's bounded assignment to a Class Offering. Multiple Faculty members may be assigned concurrently. A Faculty member who was ever assigned may read that Class Offering's whole history; recording, publishing, and correcting require a currently active assignment.
+A Faculty member's assignment to a Class Offering, bounded by School dates. It requires an active Faculty School membership, and ending that membership ends each of the Faculty member's Teaching assignments that runs past it, removing one not yet begun. Multiple Faculty members may be assigned concurrently. A Faculty member who was ever assigned may read that Class Offering's whole history; recording, publishing, and correcting require a currently active assignment.
 _Avoid_: Class owner
 
 **Conflict of interest**:
@@ -101,7 +101,7 @@ A calendar date as observed in the School's timezone. Academic records that desc
 _Avoid_: Timestamp, date, school calendar date
 
 **Instructional day**:
-A School date on which a School is in session, configured per Academic Year. Attendance may exist only on an Instructional day within its Term. A School date may later stop being an Instructional day; Attendance already recorded on it remains, no longer counting toward attendance totals.
+A School date on which a School is in session, configured per Academic Year as a weekday pattern with dated exceptions. Attendance may exist only on an Instructional day within its Term. A School date may later stop being an Instructional day; Attendance already recorded on it remains, no longer counting toward attendance totals.
 _Avoid_: School day, session day
 
 **Attendance**:

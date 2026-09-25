@@ -14,8 +14,8 @@
 #   3. As the schema owner, drop the `app` schema and the migration record.
 #   4. Migrate with that same image, as scripts/deploy.sh does.
 #   5. Apply demo/seed.sql, as the owner.
-#   6. Check the database holds only seeded data, then sign in as every account
-#      the demo publishes.
+#   6. Check the database holds only seeded data, with a Term running today,
+#      then sign in as every account the demo publishes.
 #
 # Each step runs only if the one before it succeeded, and steps 1 and 2 come
 # before anything is dropped: a digest that does not verify, and a production
@@ -229,18 +229,24 @@ psql_owner --file "$SEED_FILE" \
 # Only seeded data: the one invented School, and none of the rows that only a
 # visitor or an operator makes. The seed writes no Audit record and starts no
 # Session, so anything here is something the drop was supposed to have taken.
+#
+# And one Term running today, in the School's timezone, so the Faculty and
+# Student roles have classes to land on. The seed builds its Academic Year
+# around the day it runs, and this is that day.
 echo "Checking the demo holds only seeded data"
-EXPECTED_COUNTS="1 0 0 0 0"
+EXPECTED_COUNTS="1 0 0 0 0 1"
 counts="$(psql_owner --tuples-only --no-align --command "
 SELECT (SELECT count(*) FROM app.school) || ' ' ||
        (SELECT count(*) FROM app.audit_record) || ' ' ||
        (SELECT count(*) FROM app.user_session) || ' ' ||
        (SELECT count(*) FROM app.platform_administrator) || ' ' ||
-       (SELECT count(*) FROM app.invitation)
+       (SELECT count(*) FROM app.invitation) || ' ' ||
+       (SELECT count(*) FROM app.term t JOIN app.school s ON s.id = t.school_id
+         WHERE (now() AT TIME ZONE s.timezone)::date BETWEEN t.first_date AND t.last_date)
 ")" || fail "the demo could not be counted after seeding"
 counts="$(printf '%s' "$counts" | tr -d '\r' | tr -s ' \n' ' ' | sed 's/^ *//; s/ *$//')"
 if [ "$counts" != "$EXPECTED_COUNTS" ]; then
-  fail "the demo holds more than seeded data: schools, audit records, sessions, platform administrators, invitations were '${counts}', not '${EXPECTED_COUNTS}'"
+  fail "the demo is not what was seeded: schools, audit records, sessions, platform administrators, invitations, Terms running today were '${counts}', not '${EXPECTED_COUNTS}'"
 fi
 
 # Every account the demo publishes signs in, against the running service. This

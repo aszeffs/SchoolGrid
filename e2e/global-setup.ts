@@ -6,6 +6,9 @@ import { createPerson } from "../src/identity/index.ts";
 import { provisionSchool } from "../src/platform/index.ts";
 import { SEEDED, type Seeded } from "./seeded.ts";
 
+/** The timezone each seeded School keeps, in the order the Schools are named. */
+const SCHOOL_TIMEZONES = ["America/New_York", "Europe/London"];
+
 /**
  * Arranges what the browser suite signs in as, directly in the database the
  * server under test uses, as the HTTP suite's harness arranges its fixtures.
@@ -29,9 +32,10 @@ export default async function globalSetup(): Promise<void> {
     const account = await createUserAccount(database, credentials);
     const schools = [`Northside ${suffix}`, `Southside ${suffix}`];
     const schoolIds: string[] = [];
-    for (const name of schools) {
+    for (const [index, name] of schools.entries()) {
       const provisioned = await provisionSchool(database, {
         name,
+        timezone: SCHOOL_TIMEZONES[index]!,
         schoolAdministrator: { account, displayName: "Alice" },
         platformAdministrator: null,
       });

@@ -9,6 +9,7 @@ import {
   type Person,
   type PlatformAdministrator,
   type School,
+  type SchoolSettings,
 } from "../identity/index.ts";
 
 /**
@@ -17,7 +18,7 @@ import {
  * so: see resolveActor in the Access module.
  */
 export interface ProvisionedSchool {
-  school: School;
+  school: School & SchoolSettings;
   schoolAdministrator: Person;
 }
 
@@ -39,10 +40,13 @@ export function provisionSchool(
   database: Database,
   {
     name,
+    timezone,
     schoolAdministrator: { account, displayName },
     platformAdministrator,
   }: {
     name: string;
+    /** An IANA identifier the database knows, which it refuses otherwise. */
+    timezone: string;
     schoolAdministrator: { account: UserAccount; displayName: string };
     platformAdministrator: PlatformAdministrator | null;
   },
@@ -51,7 +55,7 @@ export function provisionSchool(
     if (!(await mayHoldSchoolMembership(client, account))) {
       return null;
     }
-    const school = await createSchool(client, { name });
+    const school = await createSchool(client, { name, timezone });
     const person = await createPerson(client, {
       schoolId: school.id,
       userAccountId: account.id,
@@ -66,7 +70,7 @@ export function provisionSchool(
       target: { type: "school", id: school.id },
       reason: null,
       before: null,
-      after: { name: school.name, schoolAdministratorPersonId: person.id },
+      after: { name: school.name, timezone: school.timezone, schoolAdministratorPersonId: person.id },
     });
     return { school, schoolAdministrator: person };
   });

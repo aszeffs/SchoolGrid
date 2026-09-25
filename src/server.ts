@@ -1,12 +1,15 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { DEFAULT_RATE_LIMIT, type BuildInfo, type LogLevel, type PublicOrigin, type RateLimit } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
+import { registerAcademicStructureRoutes } from "./academic-structure/routes.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { createAuthenticator, registerAuthenticationRoutes } from "./authentication/index.ts";
+import { registerCalendarRoutes } from "./calendar/routes.ts";
 import type { Database } from "./db/pool.ts";
 import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
+import { Conflict } from "./http/conflict.ts";
 import { registerBuildInfoRoute } from "./http/build-info.ts";
 import { registerDemoRoute } from "./http/demo.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
@@ -103,6 +106,13 @@ export function buildServer({
       return sendRateLimited(reply);
     }
 
+    // A conflict is a well-formed change the School's records cannot take, and
+    // says which of their rules it would have broken.
+    if (error instanceof Conflict) {
+      request.log.info({ conflict: error.detail }, "rejected conflicting change");
+      return reply.status(409).send({ status: "conflict", ...error.detail });
+    }
+
     // A malformed request is the caller's fault and is not a refusal, so it
     // keeps its own status rather than being collapsed into a server error.
     const status = error.statusCode ?? 500;
@@ -143,6 +153,8 @@ export function buildServer({
       registerIdentityRoutes(api, database, authenticator, publicOrigin);
       registerAccessRoutes(api, database, authenticator);
       registerAuditRoutes(api, database, authenticator);
+      registerCalendarRoutes(api, database, authenticator);
+      registerAcademicStructureRoutes(api, database, authenticator);
       registerPlatformRoutes(api, database, authenticator);
     },
     { prefix: API_PREFIX },

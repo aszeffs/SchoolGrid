@@ -86,7 +86,12 @@ export function useScreen<T>(schoolId: string, list: (schoolId: string) => Promi
     // is not shown as though it had not been: the screen goes to the one
     // not-available state, and anything the response carried that cannot be
     // asked for twice is held outside the screen's own state.
-    const listed: ApiResult<T> = sent.ok ? await list(schoolId) : { ok: false };
+    //
+    // A conflict changed nothing and says why, in words the form shows, so it
+    // is listed again like a success rather than becoming the refusal: the
+    // records it conflicted with may be newer than the ones on the screen.
+    const answered = sent.ok || sent.conflict !== undefined;
+    const listed: ApiResult<T> = answered ? await list(schoolId) : { ok: false };
     if (open.current) {
       setBusy(false);
     }

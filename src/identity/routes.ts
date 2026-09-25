@@ -17,6 +17,7 @@ import { boundedText, fieldsOf } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
 import { registerInvitationRedemptionRoutes } from "./invitation-redemption-routes.ts";
 import { registerInvitationRoutes } from "./invitation-routes.ts";
+import { registerSchoolSettingsRoutes } from "./school-settings-routes.ts";
 import { createPerson, findPerson, personsInSchool, type ListedPerson, type Person } from "./index.ts";
 
 /** A Person as served. The School is the one the caller addressed. */
@@ -114,5 +115,6 @@ export function registerIdentityRoutes(
     });
 
     registerInvitationRoutes(scope, database, publicOrigin);
+    registerSchoolSettingsRoutes(scope, database);
   });
 }

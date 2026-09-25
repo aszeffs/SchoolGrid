@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
+import { AcademicYears } from "./AcademicYears.tsx";
 import { Account } from "./Account.tsx";
+import { ClassOffering } from "./ClassOffering.tsx";
+import { ClassOfferings } from "./ClassOfferings.tsx";
+import { Courses } from "./Courses.tsx";
 import { api, type ReachedSchool, type Session } from "./api.ts";
 import { AuditRecords } from "./AuditRecords.tsx";
 import { Enrollments } from "./Enrollments.tsx";
@@ -12,9 +16,12 @@ import { NotAvailable } from "./NotAvailable.tsx";
 import { ROLE_NAMES } from "./roles.ts";
 import { Persons } from "./Persons.tsx";
 import { href, landing, sectionOf, sectionsFor, type Route, type SchoolRoute } from "./routes.ts";
+import { SchoolSettings } from "./SchoolSettings.tsx";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
+import { StudentClasses } from "./StudentClasses.tsx";
+import { YourClasses } from "./YourClasses.tsx";
 
 type State =
   | { kind: "loading" }
@@ -147,11 +154,16 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
         <ul>
           {sectionsFor(school.roles).map((section) => (
             <li key={section.name}>
-              <Link to={{ name: section.name, schoolId: school.schoolId }} current={section.name === route.name}>
+              <Link
+                to={{ name: section.name, schoolId: school.schoolId }}
+                current={
+                  section.name === route.name ? "page" : section.name === sectionOf(route).name ? "section" : undefined
+                }
+              >
                 {section.label}
               </Link>
-              {/* The seal on the page being read: one, so a move slides it to the next. */}
-              {section.name === route.name && <span className="shell-nav__seal" aria-hidden="true" />}
+              {/* The seal on the page being read, or on the list it was opened from: one, so a move slides it to the next. */}
+              {section.name === sectionOf(route).name && <span className="shell-nav__seal" aria-hidden="true" />}
             </li>
           ))}
         </ul>
@@ -183,6 +195,9 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
   switch (route.name) {
     case "account":
       return <Account school={school} />;
+    case "classes":
+      // The classes a Faculty member teaches, or, for a Student, the ones they are in.
+      return school.roles.includes("faculty") ? <YourClasses school={school} /> : <StudentClasses school={school} />;
     case "persons":
       return <Persons school={school} />;
     case "invitations":
@@ -195,6 +210,16 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <GuardianLinks school={school} />;
     case "auditRecords":
       return <AuditRecords school={school} />;
+    case "academicYears":
+      return <AcademicYears school={school} />;
+    case "courses":
+      return <Courses school={school} />;
+    case "classOfferings":
+      return <ClassOfferings school={school} />;
+    case "classOffering":
+      return <ClassOffering school={school} classOfferingId={route.classOfferingId} />;
+    case "settings":
+      return <SchoolSettings school={school} />;
   }
 }
 

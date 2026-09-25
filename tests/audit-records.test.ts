@@ -28,24 +28,13 @@ describe("Audit records", () => {
       after: { role: "faculty" },
     });
 
-    const caller = (await server().signIn(ALICE)).inSchool(northside.school.id);
+    const caller = (await server().sessionFor(alice)).inSchool(northside.school.id);
     const response = await caller.get("/audit-records");
 
     expect(response.status).toBe(200);
     // Newest first. Westbrook's provisioning is not here.
     expect(response.body).toEqual({
       auditRecords: [
-        {
-          id: expect.any(String),
-          occurredAt: expect.stringMatching(ISO_TIMESTAMP),
-          actorPersonId: northside.schoolAdministrator.id,
-          actorPlatformAdministratorId: null,
-          action: "authentication.succeeded",
-          target: { type: "person", id: northside.schoolAdministrator.id },
-          reason: null,
-          before: null,
-          after: null,
-        },
         {
           id: expect.any(String),
           occurredAt: expect.stringMatching(ISO_TIMESTAMP),
@@ -68,6 +57,7 @@ describe("Audit records", () => {
           before: null,
           after: {
             name: "Northside",
+            timezone: "UTC",
             schoolAdministratorPersonId: northside.schoolAdministrator.id,
           },
         },
@@ -84,14 +74,14 @@ describe("Audit records", () => {
     }
 
     /**
-     * Alice administers Northside, whose trail holds her sign-in, its
-     * provisioning, and `count` more records appended one at a time, oldest
-     * first, as `step.1` onwards.
+     * Alice administers Northside, whose trail holds its provisioning and
+     * `count` more records appended one at a time, oldest first, as `step.1`
+     * onwards.
      */
     async function arrange(count: number) {
       const alice = await server().createAccount(ALICE);
       const { school, schoolAdministrator } = await server().provisionSchool({ name: "Northside", administrator: alice });
-      const caller = (await server().signIn(ALICE)).inSchool(school.id);
+      const caller = (await server().sessionFor(alice)).inSchool(school.id);
       const append = async (action: string) =>
         server().appendAuditRecord({
           schoolId: school.id,
@@ -126,18 +116,12 @@ describe("Audit records", () => {
     const actions = (pages: Page[]) => pages.flatMap((page) => page.auditRecords.map((record) => record.action));
 
     it("pages newest first, each record once, and says when there is no next page", async () => {
-      const { caller } = await arrange(3);
+      const { caller } = await arrange(4);
 
       const pages = await readAll(caller, 2);
 
       expect(pages.map((page) => page.auditRecords.length)).toEqual([2, 2, 1]);
-      expect(actions(pages)).toEqual([
-        "step.3",
-        "step.2",
-        "step.1",
-        "authentication.succeeded",
-        "school.provisioned",
-      ]);
+      expect(actions(pages)).toEqual(["step.4", "step.3", "step.2", "step.1", "school.provisioned"]);
       expect(pages.at(-1)!.nextCursor).toBeNull();
     });
 
@@ -158,7 +142,6 @@ describe("Audit records", () => {
         "step.3",
         "step.2",
         "step.1",
-        "authentication.succeeded",
         "school.provisioned",
       ]);
       expect(actions([await read(caller, "?limit=2")])).toEqual(["written.meanwhile.2", "written.meanwhile.1"]);
@@ -204,7 +187,7 @@ describe("Audit records", () => {
       const { caller } = await arrange(0);
       const bob = await server().createAccount(BOB);
       const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
-      const [foreign] = (await read((await server().signIn(BOB)).inSchool(westbrook.school.id), "")).auditRecords;
+      const [foreign] = (await read((await server().sessionFor(bob)).inSchool(westbrook.school.id), "")).auditRecords;
 
       const fromElsewhere = await caller.get(`/audit-records?cursor=${foreign!.id}`);
       const namingNothing = await caller.get(`/audit-records?cursor=${ABSENT_ID}`);
@@ -237,8 +220,8 @@ describe("Audit records", () => {
       await server().createPerson({ schoolId: eastfield.school.id, displayName: "Alice", account: alice, role: "faculty" });
       await server().createPerson({ schoolId: northside.school.id, displayName: "Sam", account: sam, role: "student" });
       return {
-        alice: await server().signIn(ALICE),
-        sam: await server().signIn(SAM),
+        alice: await server().sessionFor(alice),
+        sam: await server().sessionFor(sam),
         northsideId: northside.school.id,
         westbrookId: westbrook.school.id,
         eastfieldId: eastfield.school.id,
@@ -320,12 +303,10 @@ describe("Audit records", () => {
       const alice = await server().createAccount(ALICE);
       const { school } = await server().provisionSchool({ name: "Northside", administrator: alice });
 
-      const caller = (await server().signIn(ALICE)).inSchool(school.id);
+      const caller = (await server().sessionFor(alice)).inSchool(school.id);
       const response = await caller.get("/audit-records");
 
-      expect(response.body).toMatchObject({
-        auditRecords: [{ action: "authentication.succeeded" }, { action: "school.provisioned" }],
-      });
+      expect(response.body).toMatchObject({ auditRecords: [{ action: "school.provisioned" }] });
       expect(response.raw).not.toContain("alice");
       expect(response.raw).not.toContain(ALICE.password);
     });

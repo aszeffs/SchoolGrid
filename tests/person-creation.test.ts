@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { UserAccount } from "../src/authentication/index.ts";
 import { observable, useTestServer, type TestClient } from "./support/harness.ts";
 
 const ALICE = { username: "alice", password: "correct horse battery staple" };
@@ -33,6 +34,7 @@ describe("creating Persons", () => {
     bob: TestClient;
     /** Pat: a Platform Administrator, whose account also resolves to a Northside School Administrator. */
     pat: TestClient;
+    accounts: Record<"alice" | "bob", UserAccount>;
   }
 
   async function arrange(): Promise<World> {
@@ -41,25 +43,13 @@ describe("creating Persons", () => {
     const northside = await server().provisionSchool({ name: "Northside", administrator: alice });
     const westbrook = await server().provisionSchool({ name: "Westbrook", administrator: bob });
     const schoolId = northside.school.id;
-    const sam = await server().createPerson({
-      schoolId,
-      displayName: "Sam",
-      account: await server().createAccount(SAM),
-      role: "student",
-    });
+    const samAccount = await server().createAccount(SAM);
+    const ginaAccount = await server().createAccount(GINA);
+    const franAccount = await server().createAccount(FRAN);
+    const sam = await server().createPerson({ schoolId, displayName: "Sam", account: samAccount, role: "student" });
     await server().enroll(sam);
-    await server().createPerson({
-      schoolId,
-      displayName: "Gina",
-      account: await server().createAccount(GINA),
-      role: "guardian",
-    });
-    await server().createPerson({
-      schoolId,
-      displayName: "Fran",
-      account: await server().createAccount(FRAN),
-      role: "faculty",
-    });
+    await server().createPerson({ schoolId, displayName: "Gina", account: ginaAccount, role: "guardian" });
+    await server().createPerson({ schoolId, displayName: "Fran", account: franAccount, role: "faculty" });
     const patAccount = await server().createAccount(PAT);
     await server().createPlatformAdministrator({ account: patAccount });
     await server().createPerson({
@@ -68,19 +58,19 @@ describe("creating Persons", () => {
       account: patAccount,
       role: "school_administrator",
     });
-    const inNorthside = async (credentials: typeof ALICE) =>
-      (await server().signIn(credentials)).inSchool(schoolId);
+    const inNorthside = async (account: UserAccount) => (await server().sessionFor(account)).inSchool(schoolId);
     return {
       northsideId: schoolId,
       westbrookId: westbrook.school.id,
       aliceId: northside.schoolAdministrator.id,
-      alice: await inNorthside(ALICE),
-      sam: await inNorthside(SAM),
-      gina: await inNorthside(GINA),
-      fran: await inNorthside(FRAN),
+      alice: await inNorthside(alice),
+      sam: await inNorthside(samAccount),
+      gina: await inNorthside(ginaAccount),
+      fran: await inNorthside(franAccount),
       samId: sam.id,
-      bob: await inNorthside(BOB),
-      pat: await inNorthside(PAT),
+      bob: await inNorthside(bob),
+      pat: await inNorthside(patAccount),
+      accounts: { alice, bob },
     };
   }
 
@@ -108,7 +98,7 @@ describe("creating Persons", () => {
     const world = await arrange();
     const created = await world.alice.post("/persons", { displayName: "Riley Student" });
     const { person } = created.body as { person: ListedPerson };
-    const bob = (await server().signIn(BOB)).inSchool(world.westbrookId);
+    const bob = (await server().sessionFor(world.accounts.bob)).inSchool(world.westbrookId);
 
     const listed = (await bob.get("/persons")).body as { persons: ListedPerson[] };
     const read = await bob.get(`/persons/${person.id}`);
@@ -238,7 +228,7 @@ describe("creating Persons", () => {
 
     it("refuses a School Administrator creating a Person in a School that does not exist", async () => {
       const world = await arrange();
-      const alice = await server().signIn(ALICE);
+      const alice = await server().sessionFor(world.accounts.alice);
 
       const refused = await alice.inSchool(ABSENT_ID).post("/persons", { displayName: "Riley Student" });
       const absent = await world.sam.get(`/persons/${ABSENT_ID}`);

@@ -47,6 +47,35 @@ last="${*: -1}"
 owner() { [ -e "$STATE/$1.owner" ]; }
 exited() { [ -e "$STATE/$1.exited" ]; }
 
+# Fastify's line for each request a running container was sent, at the given
+# seconds past an arbitrary start, to the given path.
+requests() {
+  local path="$1"
+  shift
+  local second
+  for second in "$@"; do
+    echo "{\"level\":30,\"time\":$(( 1700000000000 + second * 1000 )),\"req\":{\"method\":\"GET\",\"url\":\"${path}\"},\"msg\":\"incoming request\"}"
+  done
+}
+
+# What the browser suite sends, as each case says, against a limit of 10.
+traffic() {
+  case "$SCENARIO" in
+    # Nine /api requests within a minute: above 80% of 10.
+    near-rate-limit) requests /api/session 0 5 10 15 20 25 30 35 40 ;;
+    # Eight: exactly 80%, which is not above it.
+    at-eighty-percent) requests /api/session 0 5 10 15 20 25 30 35 ;;
+    # Twelve /api requests, but no minute holds more than six, and requests
+    # outside /api are not the API's to count.
+    spread-out)
+      requests /api/session 0 10 20 30 40 50 60 70 80 90 100 110
+      requests / 1 2 3 4 5 6 7 8 9
+      requests /assets/app.js 1 2 3 4 5 6 7 8 9
+      ;;
+    *) requests /api/health 0 1 2 ;;
+  esac
+}
+
 case "$1" in
   create)
     count=$(( $(cat "$STATE/created" 2>/dev/null || echo 0) + 1 ))
@@ -84,6 +113,7 @@ case "$1" in
     esac
     ;;
   logs)
+    if ! exited "$last"; then traffic; fi
     if ! owner "$last"; then
       if exited "$last"; then
         if [ "$SCENARIO" = "ownerless-silent-refusal" ]; then
@@ -435,6 +465,26 @@ then_command=(bash -c 'echo "then ran"')
 expect "no command is run against an image that never becomes healthy" never-ready 1 \
   "did not become healthy within" "then ran"
 then_command=()
+
+# How close the browser suite came to the rate limit is printed on every run,
+# pass or fail, so headroom running out shows before a run fails for it.
+expect "the rate limit headroom is printed on a passing run" healthy 0 \
+  "was sent at most 3 /api requests in any 60s window, of RATE_LIMIT_MAX 1000"
+expect "the rate limit headroom is printed on a failing run" silent-migration 1 \
+  "was sent at most 3 /api requests in any 60s window, of RATE_LIMIT_MAX 1000"
+then_command=(true)
+expect "the demo's rate limit headroom is printed too" healthy 0 \
+  "the demo at http://localhost:3001 was sent at most 3 /api requests"
+then_command=()
+
+export SMOKE_RATE_LIMIT_MAX=10
+expect "the peak is the busiest minute, of /api requests only" spread-out 0 \
+  "was sent at most 6 /api requests in any 60s window, of RATE_LIMIT_MAX 10" "warning"
+expect "a peak above 80% of the limit warns, naming SMOKE_RATE_LIMIT_MAX, without failing the run" near-rate-limit 0 \
+  "warning: .*Raise SMOKE_RATE_LIMIT_MAX"
+expect "a peak of exactly 80% of the limit does not warn" at-eighty-percent 0 \
+  "was sent at most 8 /api requests" "warning"
+unset SMOKE_RATE_LIMIT_MAX
 
 # --- verdict ----------------------------------------------------------------
 

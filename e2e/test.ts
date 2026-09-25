@@ -20,8 +20,9 @@ export { expect };
  * holding to the bar — a dialog open, a record at 360px, a page in a context
  * of its own — audits it there and then. Between them the suite covers every
  * sheet the app has: Sign in, Schools, Your account, Persons, Invitations,
- * School memberships, Enrollments, Guardian links, Audit, Redeem Invitation, How
- * this was built and Not available.
+ * School memberships, Enrollments, Guardian links, Academic Years, Courses,
+ * Class Offerings, Class Offering, Your classes, Audit, School settings,
+ * Redeem Invitation, How this was built and Not available.
  *
  * And every test requires that nothing it sent was throttled. The whole suite
  * reaches the server from one client address, and the rate limit is per
@@ -128,6 +129,15 @@ async function auditFor(page: Page): Promise<void> {
     // the violation it is looking for.
     await page.evaluate(AXE);
   }
+  // A control fading between states, such as a button coming back from
+  // disabled once a change lands, is measured as it will stand rather than
+  // midway: a colour halfway through a transition is neither one the sheet
+  // shows at rest. A looping animation never finishes, so it is not awaited.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((animation) => animation.playState !== "running" || animation.effect?.getTiming().iterations === Infinity),
+  );
   const results = await page.evaluate(
     (options: RunOptions) =>
       (window as unknown as { axe: { run(options: RunOptions): Promise<AxeResults> } }).axe.run(options),

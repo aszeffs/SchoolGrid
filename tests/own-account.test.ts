@@ -39,6 +39,7 @@ describe("Your account", () => {
     samPerson: Person;
     /** Gina: a Guardian at Northside, linked to Sam. */
     ginaPerson: Person;
+    accounts: Record<"frankie" | "sam" | "gina", UserAccount>;
   }
 
   async function arrange(): Promise<World> {
@@ -47,7 +48,7 @@ describe("Your account", () => {
     const sam = await server().createAccount(SAM);
     const gina = await server().createAccount(GINA);
     const northside = await server().provisionSchool({ name: "Northside", administrator: alice });
-    const aliceAdmin = (await server().signIn(ALICE)).inSchool(northside.school.id);
+    const aliceAdmin = (await server().sessionFor(alice)).inSchool(northside.school.id);
     const inSchool = (displayName: string, account: UserAccount, role: "faculty" | "student" | "guardian") =>
       server().createPerson({ schoolId: northside.school.id, displayName, account, role });
     return {
@@ -56,6 +57,7 @@ describe("Your account", () => {
       frankiePerson: await inSchool("Frankie", frankie, "faculty"),
       samPerson: await inSchool("Sam", sam, "student"),
       ginaPerson: await inSchool("Gina", gina, "guardian"),
+      accounts: { frankie, sam, gina },
     };
   }
 
@@ -66,11 +68,8 @@ describe("Your account", () => {
     return (response.body as { account: OwnAccount }).account;
   }
 
-  async function signedInAt(
-    schoolId: string,
-    credentials: { username: string; password: string },
-  ): Promise<TestClient> {
-    return (await server().signIn(credentials)).inSchool(schoolId);
+  async function signedInAt(schoolId: string, account: UserAccount): Promise<TestClient> {
+    return (await server().sessionFor(account)).inSchool(schoolId);
   }
 
   async function link(
@@ -90,14 +89,14 @@ describe("Your account", () => {
 
   it("tells a Faculty member they hold neither an Enrollment nor a link", async () => {
     const world = await arrange();
-    const frankie = await signedInAt(world.northsideId, FRANKIE);
+    const frankie = await signedInAt(world.northsideId, world.accounts.frankie);
 
     expect(await accountOf(frankie)).toEqual({ enrollment: null, linkedStudents: [] });
   });
 
   it("restates nothing the session already names", async () => {
     const world = await arrange();
-    const frankie = await signedInAt(world.northsideId, FRANKIE);
+    const frankie = await signedInAt(world.northsideId, world.accounts.frankie);
 
     // Who the actor is and which roles they hold are the session's to name, so
     // they cannot disagree with this response.
@@ -112,7 +111,7 @@ describe("Your account", () => {
   it("names a Student's Enrollment", async () => {
     const world = await arrange();
     await server().enroll(world.samPerson);
-    const sam = await signedInAt(world.northsideId, SAM);
+    const sam = await signedInAt(world.northsideId, world.accounts.sam);
 
     const account = await accountOf(sam);
     expect(account.enrollment?.startedAt).toMatch(ISO_TIMESTAMP);
@@ -121,7 +120,7 @@ describe("Your account", () => {
 
   it("tells a Student holding no Enrollment that they hold none", async () => {
     const world = await arrange();
-    const sam = await signedInAt(world.northsideId, SAM);
+    const sam = await signedInAt(world.northsideId, world.accounts.sam);
 
     expect(await accountOf(sam)).toEqual({ enrollment: null, linkedStudents: [] });
   });
@@ -134,7 +133,7 @@ describe("Your account", () => {
     expect((await world.aliceAdmin.delete(`/enrollments/${enrollment!.id}`, { reason: "Transfer" })).status).toBe(200);
 
     // A departed Student keeps their own Person, so they still reach this.
-    const sam = await signedInAt(world.northsideId, SAM);
+    const sam = await signedInAt(world.northsideId, world.accounts.sam);
     expect((await accountOf(sam)).enrollment?.endedAt).toMatch(ISO_TIMESTAMP);
   });
 
@@ -145,7 +144,7 @@ describe("Your account", () => {
       attendanceRead: true,
       resultsRead: false,
     });
-    const gina = await signedInAt(world.northsideId, GINA);
+    const gina = await signedInAt(world.northsideId, world.accounts.gina);
 
     expect(await accountOf(gina)).toEqual({
       enrollment: null,
@@ -164,17 +163,17 @@ describe("Your account", () => {
     const linked = await link(world.aliceAdmin, world.ginaPerson, world.samPerson);
     expect((await world.aliceAdmin.delete(`/guardian-links/${linked.id}`)).status).toBe(200);
 
-    const gina = await signedInAt(world.northsideId, GINA);
+    const gina = await signedInAt(world.northsideId, world.accounts.gina);
     expect((await accountOf(gina)).linkedStudents).toEqual([]);
   });
 
   it("is refused outside the actor's School exactly as anything else is", async () => {
-    await arrange();
+    const world = await arrange();
     const westbrook = await server().provisionSchool({
       name: "Westbrook",
       administrator: await server().createAccount(BOB),
     });
-    const frankie = await server().signIn(FRANKIE);
+    const frankie = await server().sessionFor(world.accounts.frankie);
 
     // A School the account does not reach, and one that does not exist: the
     // same response, saying which of the two it was is exactly what would
