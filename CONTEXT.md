@@ -79,7 +79,7 @@ An ordered set of Class Offerings of one Course across consecutive Terms in an A
 _Avoid_: Year-long class, multi-term course
 
 **Enrollment**:
-A Student's bounded participation in a School. Enrollment history is retained when a Student departs. Ending an Enrollment ends the Student's open Roster memberships and every linked Guardian's access, narrows the Student's own access to their published records and the Roster memberships those records belong to, and leaves every record in place. A departing Student's records stay with the School and travel nowhere.
+A Student's bounded participation in a School. Enrollment history is retained when a Student departs. Ending an Enrollment ends each of the Student's Roster memberships that runs past it, removing one not yet begun, and ends every linked Guardian's access, narrows the Student's own access to their published records and the Roster memberships those records belong to, and leaves every record in place. A departing Student's records stay with the School and travel nowhere.
 _Avoid_: Registration, transfer
 
 **Roster membership**:
@@ -87,7 +87,7 @@ A Student's participation in a Class Offering, bounded by School dates. A Studen
 _Avoid_: Enrollment
 
 **Teaching assignment**:
-A Faculty member's assignment to a Class Offering, bounded by School dates. It requires an active Faculty School membership, and ending that membership ends the Faculty member's open Teaching assignments. Multiple Faculty members may be assigned concurrently. A Faculty member who was ever assigned may read that Class Offering's whole history; recording, publishing, and correcting require a currently active assignment.
+A Faculty member's assignment to a Class Offering, bounded by School dates. It requires an active Faculty School membership, and ending that membership ends each of the Faculty member's Teaching assignments that runs past it, removing one not yet begun. Multiple Faculty members may be assigned concurrently. A Faculty member who was ever assigned may read that Class Offering's whole history; recording, publishing, and correcting require a currently active assignment.
 _Avoid_: Class owner
 
 **Conflict of interest**:

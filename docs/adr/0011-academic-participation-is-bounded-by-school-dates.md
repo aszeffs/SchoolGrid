@@ -4,6 +4,6 @@ Roster memberships and Teaching assignments start and end on School dates, while
 
 ## Consequences
 
-- Where the two meet, the instant is converted to a School date in the School's timezone. Ending an Enrollment ends the Student's open Roster memberships on the School date the Enrollment ended; ending a Faculty School membership does the same to that Faculty member's open Teaching assignments.
-- This is why a School's timezone is fixed once its first Academic Year exists. If it changed afterwards, the School date of every existing instant would shift under the Roster memberships and Teaching assignments already bounded against it.
+- Where the two meet, the instant is converted to a School date in the School's timezone. Ending an Enrollment ends the Student's Roster memberships on the School date the Enrollment ended; ending a Faculty School membership does the same to that Faculty member's Teaching assignments. Every one that runs past that date is cut back to it, not only those left open, and one that begins after it is deleted, so no Student stays rostered without an Enrollment and no Faculty member stays assigned without a membership.
+- This is why a School's timezone is fixed once its first Academic Year exists. If it changed afterwards, the School date of every existing instant would shift under the Roster memberships and Teaching assignments already bounded against it. The lock is permanent: it holds even if every Academic Year is later deleted (`app.school.timezone_fixed`, docs/database-roles.md).
 - A contributor who "tidies" the four kinds of bound into one type would be undoing this decision.
