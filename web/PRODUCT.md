@@ -12,7 +12,7 @@ Primary: **School staff** — Faculty recording attendance and results for their
 
 Also served: **Students** reading their own published records, and **Guardians** reading one linked Student's records under a per-Student Access profile (attendance read and results read, granted independently).
 
-Second audience, never at the cost of the first: **technical evaluators** — engineers and recruiters opening the public demo cold at <https://schoolgrid-phi.vercel.app> to judge the DevSecOps work behind it. Every screen is a working staff tool first and a portfolio exhibit second; each must read well to someone who arrives with no context, signs in through a one-click demo role, and leaves in two minutes.
+Second audience, never at the cost of the first: **technical evaluators** — engineers and recruiters opening the public site cold at <https://schoolgrid-phi.vercel.app> to judge the DevSecOps work behind it. Every screen is a working staff tool first and a portfolio exhibit second; each must read well to someone who arrives with no context, starts a trial with one click, and leaves in two minutes.
 
 ## Product Purpose
 
@@ -28,12 +28,12 @@ The security properties live in the domain, not in a layer bolted on afterwards:
 - School dates are calendar dates in the School's own timezone; Instructional days are configured per Academic Year.
 - Results are recorded against a Term and become visible to Students and Guardians only on Publication.
 - School Administrators issue Invitations, delivered to the human personally, each redeemable once and revocable before redemption.
-- The public demo carries invented data only, is open to anyone, and is dropped and reseeded nightly from `demo/seed.sql`. It runs on a Hobby plan that scales to zero, so the first request after a quiet spell is slow and the UI must survive that.
+- The public site holds Trial Schools only: each a private School of invented data that one visitor starts, and that is deleted two hours later (ADR-0012). It runs on a Hobby plan that scales to zero, so the first request after a quiet spell is slow and the UI must survive that.
 
 ## Capabilities and Constraints
 
 - Stack in place: React 19 + Vite + TypeScript SPA in `web/`, built into the service image and served on every path outside `/api` from the same origin. No router library — a typed route table in `src/routes.ts` with `src/navigation.ts`. No component library, because the Content Security Policy below rules out what they ship (ADR-0006). No CSS framework — a single `src/styles.css` holds the whole design system as custom properties.
-- Shipped surfaces today: sign-in (with demo one-click roles), invitation redeem, "How this was built", and `NotAvailable` before sign-in; inside a School shell, Schools, Your account, Persons, Invitations, School memberships, Enrollments, Guardian links, and Audit records (cursor-paged, ADR-0008).
+- Shipped surfaces today: the landing page with *Start a trial*, sign-in, invitation redeem, "How this was built", and `NotAvailable` before sign-in; inside a School shell, Schools, Your account, Persons, Invitations, School memberships, Enrollments, Guardian links, and Audit records (cursor-paged, ADR-0008).
 - Not yet built: attendance sessions, results entry and publication, correction requests, roster management, and the Student and Guardian read views.
 - **The whole UI/UX was redesigned** (2026-09-23). The ditto-sheet look is retired for a calm official record with one seal blue; the direction lives in `.impeccable/surfaces/src-shell-tsx.md` and `DESIGN.md` records the built result. Light and dark renditions follow the browser's setting (ADR-0010, superseding ADR-0009). Product truth, content, routes, and behaviour carried over.
 - **No inline code, enforced at build time.** The service's Content Security Policy allows only same-origin files: no inline `<script>`, no inline `<style>`, no `style=` attribute, no `on*=` handler, and no `data:` URL inlining. `vite.config.ts` fails the build on any of them. Styling goes in `src/styles.css` (or another emitted stylesheet); CSS-in-JS and inline style objects are not available.

@@ -19,7 +19,6 @@ import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
 import { Conflict } from "./http/conflict.ts";
 import { registerBuildInfoRoute } from "./http/build-info.ts";
-import { registerDemoRoute } from "./http/demo.ts";
 import { isRateLimited, registerRateLimit, sendRateLimited } from "./http/rate-limit.ts";
 import { refuseUnrouted } from "./http/school-scope.ts";
 import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } from "./http/security-headers.ts";
@@ -36,8 +35,6 @@ export interface ServerOptions {
   publicOrigin: PublicOrigin;
   /** What the server was built from, served to anyone. Unless given, it knows nothing. */
   buildInfo?: BuildInfo;
-  /** Whether to publish the demo's sign-ins. See `Config.demoMode`. Off unless given. */
-  demoMode?: boolean;
   /** Whether Trial Schools are offered, and how many. See `Config.trials`. Off unless given. */
   trials?: TrialSettings;
   /**
@@ -63,7 +60,6 @@ export function buildServer({
   rateLimit = DEFAULT_RATE_LIMIT,
   publicOrigin,
   buildInfo = {},
-  demoMode = false,
   trials = DEFAULT_TRIAL_SETTINGS,
   webApp,
   onRoute,
@@ -154,7 +150,6 @@ export function buildServer({
       });
 
       registerBuildInfoRoute(api, buildInfo);
-      registerDemoRoute(api, demoMode);
 
       registerAuthenticationRoutes(api, {
         database,

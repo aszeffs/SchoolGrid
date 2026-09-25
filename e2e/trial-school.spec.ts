@@ -6,7 +6,7 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * Where scripts/smoke-test.sh serves the image with TRIALS_ENABLED on, as the
  * public showcase runs it. Every other deployment offers no trial.
  */
-const SHOWCASE_ORIGIN = process.env["SCHOOLGRID_DEMO_ORIGIN"];
+const SHOWCASE_ORIGIN = process.env["SCHOOLGRID_TRIALS_ORIGIN"];
 
 const BANNER = /^Trial School · invented data · deleted in [12]h \d{1,2}m/;
 

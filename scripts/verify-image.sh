@@ -88,10 +88,40 @@ assert_absent() {
 
 assert_absent "shell" 'sh|bash|dash|ash|zsh|ksh|busybox'
 assert_absent "package manager" 'apt|apt-get|aptitude|dpkg|apk|yum|dnf|rpm|microdnf|npm|npx|pnpm|yarn'
-# The public demo's seed creates accounts whose passwords are published. It is
-# run against the demo database from the repository, and never belongs in an
-# image any deployment could run: .dockerignore keeps it out of the context.
-assert_absent "demo seed" 'seed\.sql'
+# No published credentials ship. A password hash, stored as the service stores
+# one (src/authentication/passwords.ts), is a sign-in anyone running the image
+# can use: a seed, a migration or bundled data holding one would make every
+# deployment carry the same account. Trial Schools' accounts hold none
+# (ADR-0012), so no file the image is built from has a reason to.
+#
+# The application's own files are read whole, outside node_modules for the
+# reason above. Extracted by exact entry name, directories left out, so that
+# the listing's `app/` entry cannot bring node_modules back in.
+grep -E "${TAR_ROOT_ANCHOR}app/." "$workdir/system-files.txt" | grep -v '/$' > "$workdir/app-files.txt" || true
+mkdir -p "$workdir/app"
+if [ -s "$workdir/app-files.txt" ]; then
+  tar -xf "$workdir/rootfs.tar" -C "$workdir/app" --no-recursion -T "$workdir/app-files.txt"
+fi
+# The vacuous case once more: a search of nothing finds no credential. The
+# compiled service must be among what was extracted, or the search proves nothing.
+scanned=true
+if ! find "$workdir/app" -path '*/app/dist/index.js' -type f | grep -q .; then
+  scanned=false
+  fail "the application's files could not be read, so the search for published credentials proves nothing"
+fi
+# Exit 1 is no match. Anything above it is grep failing, which is not a pass.
+search=0
+credentials="$(grep -rlE 'scrypt\$[0-9]+\$[0-9]+\$[0-9]+\$[A-Za-z0-9+/]{16,}={0,2}\$[A-Za-z0-9+/]{16,}={0,2}' "$workdir/app")" || search=$?
+if [ "$search" -gt 1 ]; then
+  fail "the search for published credentials failed (grep exited ${search})"
+elif [ -n "$credentials" ]; then
+  while IFS= read -r found; do
+    entry="${found#"$workdir/app/"}"
+    fail "the runtime image holds a published credential in /${entry#./}"
+  done <<< "$credentials"
+elif [ "$scanned" = true ]; then
+  pass "no published credentials: no password hash in the application's files"
+fi
 
 # A check that can only ever pass is not a check. The runtime image must still
 # contain the interpreter, so finding it proves the export and the patterns

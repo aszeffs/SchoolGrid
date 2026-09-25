@@ -55,12 +55,6 @@ export interface Config extends Partial<MigrationConfig> {
    */
   publicOrigin: PublicOrigin;
   buildInfo: BuildInfo;
-  /**
-   * Whether this is the public demo, which publishes a sign-in for each School
-   * role. Only the demo database, seeded with invented data, may run with it:
-   * anywhere else it offers sign-ins to accounts that should not exist.
-   */
-  demoMode: boolean;
   trials: TrialSettings;
 }
 
@@ -229,7 +223,6 @@ export function loadConfig(): Config {
     },
     publicOrigin: parsePublicOrigin(requireEnv("PUBLIC_ORIGIN")),
     buildInfo: loadBuildInfo(),
-    demoMode: booleanEnv("DEMO_MODE"),
     trials: {
       enabled: booleanEnv("TRIALS_ENABLED"),
       liveCap: positiveIntegerEnv("TRIAL_LIVE_CAP", DEFAULT_TRIAL_SETTINGS.liveCap),

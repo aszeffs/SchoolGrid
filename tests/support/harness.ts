@@ -369,8 +369,6 @@ export interface TestServerOptions {
   rateLimit?: RateLimit;
   /** What the server says it was built from. Unless given, it knows nothing. */
   buildInfo?: BuildInfo;
-  /** Whether the server publishes the demo's sign-ins. Unless given, it does not. */
-  demoMode?: boolean;
   /**
    * Whether the server offers Trial Schools, and how many. Unless given, it
    * offers none; given, any setting left out is the default.
@@ -401,7 +399,6 @@ export interface TestServerOptions {
 export function useTestServer({
   rateLimit,
   buildInfo,
-  demoMode,
   trials,
   addRoutes,
 }: TestServerOptions = {}): () => TestServer {
@@ -439,7 +436,6 @@ export function useTestServer({
       webApp: await loadWebApp(WEB_APP_FIXTURE),
       ...(rateLimit === undefined ? {} : { rateLimit }),
       ...(buildInfo === undefined ? {} : { buildInfo }),
-      ...(demoMode === undefined ? {} : { demoMode }),
       ...(trials === undefined ? {} : { trials: { ...DEFAULT_TRIAL_SETTINGS, ...trials } }),
       onRoute: (route) => routes.push(route),
     });

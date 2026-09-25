@@ -1306,48 +1306,6 @@ dialog.slip::backdrop {
   margin-top: calc(var(--step) * 1.5);
 }
 
-/* ---- Try a role ------------------------------------------------------ */
-
-.demo {
-  margin-top: calc(var(--step) * 6);
-  padding-top: calc(var(--step) * 3);
-  border-top: 1px solid var(--rule);
-}
-
-.demo h2 {
-  margin-top: 0;
-}
-
-.demo .roles {
-  display: grid;
-  margin: calc(var(--step) * 3) 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--rule);
-}
-
-.demo .roles li {
-  display: grid;
-  gap: calc(var(--step) * 1.25);
-  justify-items: start;
-  padding: calc(var(--step) * 3) 0;
-  border-bottom: 1px solid var(--rule-faint);
-}
-
-.demo .roles li button {
-  min-width: 20rem;
-  justify-content: flex-start;
-}
-
-.roles__sees,
-.roles__account {
-  margin: 0;
-}
-
-.roles__account {
-  color: var(--ink-soft);
-}
-
 .not-built {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 2);
@@ -1678,11 +1636,6 @@ td[aria-selected="true"] > .day {
     order: 2;
     padding-top: calc(var(--step) * 3);
     border-top: 1px solid var(--rule);
-  }
-
-  .demo .roles li button {
-    min-width: 0;
-    width: 100%;
   }
 
   form {

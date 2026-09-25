@@ -228,38 +228,6 @@ describe("loadConfig build info", () => {
   });
 });
 
-describe("loadConfig demo mode", () => {
-  beforeEach(() => {
-    vi.stubEnv("DATABASE_URL", "postgres://user:password@localhost:5432/schoolgrid");
-    vi.stubEnv("PUBLIC_ORIGIN", "https://schoolgrid.example");
-    vi.stubEnv("DEMO_MODE", undefined);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it.each([undefined, "", "false"])("is off when DEMO_MODE is %j", (value) => {
-    vi.stubEnv("DEMO_MODE", value);
-
-    expect(loadConfig().demoMode).toBe(false);
-  });
-
-  it("is on when DEMO_MODE is true", () => {
-    vi.stubEnv("DEMO_MODE", "true");
-
-    expect(loadConfig().demoMode).toBe(true);
-  });
-
-  // It publishes sign-ins, so a value that only looks like a yes must not turn
-  // it on, and one that only looks like a no must not be read as off either.
-  it.each(["1", "yes", "TRUE", "on", "false "])("refuses to start when DEMO_MODE is %j", (value) => {
-    vi.stubEnv("DEMO_MODE", value);
-
-    expect(() => loadConfig()).toThrow(/DEMO_MODE must be true or false/);
-  });
-});
-
 describe("loadConfig trials", () => {
   beforeEach(() => {
     vi.stubEnv("DATABASE_URL", "postgres://user:password@localhost:5432/schoolgrid");
