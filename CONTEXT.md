@@ -36,6 +36,10 @@ _Avoid_: Admin, Platform Administrator
 An actor who operates the platform itself, provisioning Schools and their first School Administrator. A Platform Administrator has no access to any School-scoped record, including Audit records.
 _Avoid_: School Administrator
 
+**Trial School**:
+A School a visitor starts for themselves from the public site, filled with invented data and private to them. It holds one User account per School role, none with a usable password; the visitor acts as a role by the trial issuing a Session for that role's account, never by signing in. It lives two hours: at expiry its Sessions stop being live, and it is later deleted whole, with every Person, record, Audit record and User account created in it (ADR-0012). A School that is not a Trial School is never deleted.
+_Avoid_: Demo, sandbox, tenant
+
 **Faculty**:
 A School-scoped actor assigned to teach one or more Class Offerings and record academic activity for their assigned rosters.
 _Avoid_: Teacher
@@ -141,5 +145,5 @@ A record of a proposed change requiring School Administrator approval: Attendanc
 _Avoid_: Edit request, change ticket
 
 **Audit record**:
-An append-only trace of an authentication event, a Safe denial, a sensitive academic mutation, or a School configuration change. It carries actor, School, target, timestamp, action, reason, and relevant before/after values without credentials or unnecessary Student data. No actor may alter or delete one, and it outlives the Enrollment it describes. Successful routine reads are not audited.
+An append-only trace of an authentication event, a Safe denial, a sensitive academic mutation, or a School configuration change. It carries actor, School, target, timestamp, action, reason, and relevant before/after values without credentials or unnecessary Student data. No actor may alter or delete one, and it outlives the Enrollment it describes. The one exception is the deletion of a whole expired Trial School, which takes its Audit records with it. Successful routine reads are not audited.
 _Avoid_: Log entry
