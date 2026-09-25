@@ -356,7 +356,7 @@ function TrialBanner({
         <time dateTime={expiresAt}>{timeLeft(expiresAt, now)}</time>
       </p>
       {failure !== null && (
-        <p role="alert" className="trial-banner__failure">
+        <p role="alert" className="error">
           {START_FAILED[failure]}
         </p>
       )}

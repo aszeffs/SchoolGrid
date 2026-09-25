@@ -169,7 +169,7 @@ body {
   gap: calc(var(--step) * 0.75) calc(var(--step) * 2);
   padding: calc(var(--step) * 0.75) max(var(--gutter), (100% - var(--frame)) / 2);
   background: var(--wash-seal);
-  border-bottom: 1px solid color-mix(in srgb, var(--seal) 30%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--seal) 25%, transparent);
   font-size: var(--size-label);
 }
 
@@ -188,15 +188,12 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.trial-banner__failure {
+.trial-banner .error {
   flex-basis: 100%;
   order: 1;
-  color: var(--alarm);
-  font-weight: 600;
 }
 
 .trial-banner .button-quiet {
-  min-height: 2rem;
   background: var(--field);
 }
 
