@@ -4,7 +4,6 @@ import {
   arrange,
   arrangePerson,
   changesSent,
-  openSchool,
   openSection,
   recordRows,
   schoolsList,

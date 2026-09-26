@@ -35,6 +35,9 @@ export interface Bounds {
   lastDate: SchoolDate | null;
 }
 
+/** A participation locked for the rest of the transaction, with the last School date of its Term. */
+export type LockedParticipation = Participation & { termLastDate: SchoolDate };
+
 /** One participation a change made, removed, or altered: `before` is null for one made, `after` for one removed. */
 export interface ChangedParticipation {
   before: Participation | null;
@@ -151,8 +154,8 @@ export function participationsIn({ kind, personColumn, boundsConflicts }: KindOf
     async lock(
       transaction: Queryable,
       participation: Participation,
-    ): Promise<(Participation & { termLastDate: SchoolDate }) | null> {
-      const { rows } = await transaction.query<Participation & { termLastDate: SchoolDate }>(
+    ): Promise<LockedParticipation | null> {
+      const { rows } = await transaction.query<LockedParticipation>(
         `SELECT ${columns}, to_char(t.last_date, 'YYYY-MM-DD') AS "termLastDate"
          FROM ${withTerm}
          WHERE p.school_id = $1 AND p.id = $2
@@ -345,7 +348,7 @@ export async function endToday(
   transaction: Queryable,
   actor: Actor,
   participations: Participations,
-  { termLastDate, ...participation }: Participation & { termLastDate: SchoolDate },
+  { termLastDate, ...participation }: LockedParticipation,
   reason: string | null,
 ): Promise<Participation> {
   const at = await transactionTime(transaction);

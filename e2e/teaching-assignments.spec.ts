@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrange, arrangePerson, changesSent, openSchool, openSection, recordRows, schoolIdOf, signIn, withOwnOffering } from "./app.ts";
+import { arrange, arrangePerson, changesSent, openSection, recordRows, schoolIdOf, signIn, withOwnOffering } from "./app.ts";
 import { seeded, type Account } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 

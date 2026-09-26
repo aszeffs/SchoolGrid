@@ -71,7 +71,7 @@ function parseRostering(body: unknown) {
  * recorded, as the change that ended the Enrollment, with its reason.
  *
  * Called by the transaction that ended the Enrollment, once it has, so the
- * two end together (CONTEXT.md: Enrollment).
+ * two end together: what ending an Enrollment does (CONTEXT.md: Enrollment).
  */
 export async function endRosterWithEnrollment(
   transaction: Queryable,

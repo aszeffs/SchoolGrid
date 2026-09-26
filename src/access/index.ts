@@ -22,10 +22,10 @@ import {
   type Membership,
   type Role,
 } from "./memberships.ts";
-import { schoolDateAt, type SchoolDate } from "../calendar/index.ts";
+import { schoolDateAt } from "../calendar/index.ts";
 import { transactionTime } from "../db/transaction.ts";
 import { findClassOffering, lockClassOffering, type DescribedClassOffering } from "../academic-structure/courses.ts";
-import type { Participation, Participations } from "./participation.ts";
+import type { LockedParticipation, Participation, Participations } from "./participation.ts";
 import { teachingAssignments, type TeachingAssignment } from "./teaching-assignments.ts";
 import { rosterMemberships, type RosterMembership } from "./roster-memberships.ts";
 
@@ -1062,11 +1062,11 @@ export async function lockPermittedParticipation(
   actor: Actor,
   participations: Participations,
   id: string,
-): Promise<Participation & { termLastDate: SchoolDate }> {
+): Promise<LockedParticipation> {
   const permitted = authorizeManageParticipation(actor, participations, id, await participations.find(transaction, id));
   return (
     (await participations.lock(transaction, permitted)) ??
-    authorizeManageParticipation<Participation & { termLastDate: SchoolDate }>(actor, participations, id, null)
+    authorizeManageParticipation<LockedParticipation>(actor, participations, id, null)
   );
 }
 

@@ -84,8 +84,8 @@ function checkBounds(bounds: Bounds, termLastDate: SchoolDate, until: SchoolDate
  * the membership, with its reason.
  *
  * Called by the transaction that revoked or narrowed the membership, once it
- * has, so the membership and its assignments end together (CONTEXT.md:
- * Teaching assignment).
+ * has, so the membership and its assignments end together: what ending a
+ * Faculty membership does (CONTEXT.md: Teaching assignment).
  */
 export async function endTeachingWithMembership(
   transaction: Queryable,
