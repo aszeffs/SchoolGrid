@@ -553,6 +553,13 @@ export function useTestServer({
     }
     await ownerPool.end();
 
+    // pg-pool resolves end() before its connections have closed, so the forced
+    // drop below can terminate one still closing. The pool re-emits that as an
+    // error, which unheard would fail the whole run; the database is going
+    // anyway.
+    for (const ended of [pool, ownerPool]) {
+      ended.on("error", () => {});
+    }
     await withAdminConnection(async (admin) => {
       await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
     });

@@ -227,8 +227,8 @@ test("the shell is reached from the keyboard, with focus shown", async ({ page }
       return { text: element.textContent ?? "", outline: getComputedStyle(element).outlineStyle };
     });
 
-  // Tabbed through in order: the switcher, sign-out, then each page of the School.
-  const expected = ["Switch School", "Sign out", ...SECTIONS.map(({ label }) => label)];
+  // Tabbed through in order, down the sidebar: the switcher, then each page of the School.
+  const expected = ["Switch School", ...SECTIONS.map(({ label }) => label)];
   const reached: string[] = [];
   for (const _ of expected) {
     await page.keyboard.press("Tab");

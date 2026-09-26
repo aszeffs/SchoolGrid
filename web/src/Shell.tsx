@@ -164,24 +164,33 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
     account,
     head: (
       <div className="shell-head">
-        <div className="shell-head__who">
-          <p className="shell-head__school">{school.name}</p>
-          <div className="shell-head__actor">
-            {who(school.displayName)}
-            <ul className="held" aria-label={`Your roles in ${school.name}`}>
-              {school.roles.map((role) => (
-                <li key={role}>{ROLE_NAMES[role]}</li>
-              ))}
-            </ul>
+        <p className="shell-head__school">
+          <span className="shell-head__badge" aria-hidden="true">
+            {initials(school.name)}
+          </span>
+          <span>{school.name}</span>
+        </p>
+        {(school.viewingAs !== undefined || session.schools.length > 1) && (
+          <div className="shell-head__ways">
+            {school.viewingAs !== undefined && (
+              <RoleSwitcher viewingAs={school.viewingAs} onChoose={(role) => void viewAs(school.schoolId, role)} />
+            )}
+            <Switcher current={school} schools={session.schools} />
           </div>
+        )}
+      </div>
+    ),
+    foot: (
+      <div className="shell-foot">
+        <div className="shell-foot__actor">
+          {who(school.displayName)}
+          <ul className="held" aria-label={`Your roles in ${school.name}`}>
+            {school.roles.map((role) => (
+              <li key={role}>{ROLE_NAMES[role]}</li>
+            ))}
+          </ul>
         </div>
-        <div className="actions">
-          {school.viewingAs !== undefined && (
-            <RoleSwitcher viewingAs={school.viewingAs} onChoose={(role) => void viewAs(school.schoolId, role)} />
-          )}
-          <Switcher current={school} schools={session.schools} />
-          {signOutButton}
-        </div>
+        {signOutButton}
       </div>
     ),
     ...(school.trialExpiresAt === undefined
@@ -196,22 +205,37 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
         }),
     nav: (
       <nav aria-label={school.name} className="shell-nav">
-        <ul>
-          {sectionsFor(school).map((section) => (
-            <li key={section.name}>
-              <Link
-                to={{ name: section.name, schoolId: school.schoolId }}
-                current={
-                  section.name === route.name ? "page" : section.name === sectionOf(route).name ? "section" : undefined
-                }
-              >
-                {section.label}
-              </Link>
-              {/* The seal on the page being read, or on the list it was opened from: one, so a move slides it to the next. */}
-              {section.name === sectionOf(route).name && <span className="shell-nav__seal" aria-hidden="true" />}
-            </li>
-          ))}
-        </ul>
+        {GROUPS.map((group) => {
+          const sections = sectionsFor(school).filter((section) => SECTION_GROUP[section.name] === group);
+          return (
+            sections.length > 0 && (
+              <div key={group} className="shell-nav__group">
+                <p className="shell-nav__heading">{group}</p>
+                <ul>
+                  {sections.map((section) => (
+                    <li key={section.name}>
+                      {/* The seal on the page being read, or on the list it was opened from: one, so a move slides it to the next. */}
+                      {section.name === sectionOf(route).name && <span className="shell-nav__seal" aria-hidden="true" />}
+                      <Link
+                        to={{ name: section.name, schoolId: school.schoolId }}
+                        current={
+                          section.name === route.name
+                            ? "page"
+                            : section.name === sectionOf(route).name
+                              ? "section"
+                              : undefined
+                        }
+                      >
+                        <SectionIcon name={section.name} />
+                        {section.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          );
+        })}
       </nav>
     ),
   };
@@ -225,6 +249,58 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
       <SchoolScreen route={route} school={school} />
     </ShellContext.Provider>
   );
+}
+
+/** The groups the navigation sorts a School's sections into, in order. */
+const GROUPS = ["You", "People", "Academic", "School"] as const;
+
+const SECTION_GROUP: Record<ReturnType<typeof sectionsFor>[number]["name"], (typeof GROUPS)[number]> = {
+  account: "You",
+  classes: "You",
+  persons: "People",
+  invitations: "People",
+  memberships: "People",
+  enrollments: "People",
+  guardianLinks: "People",
+  academicYears: "Academic",
+  courses: "Academic",
+  classOfferings: "Academic",
+  auditRecords: "School",
+  settings: "School",
+};
+
+/** Each section's glyph, drawn as strokes on a 24-unit grid. */
+const SECTION_ICONS: Record<keyof typeof SECTION_GROUP, string> = {
+  account: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
+  classes: "M4 19.5V5a2 2 0 0 1 2-2h14v14H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 21h14M9 7h7",
+  persons: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5",
+  invitations: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm0 0 9 6 9-6",
+  memberships: "M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z",
+  enrollments: "M4 4h11l5 5v11H4zM14 4v5h6M8 13h8M8 17h5",
+  guardianLinks: "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a7 7 0 0 1 11-5.7M17 14v7M13.5 17.5h7",
+  academicYears: "M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 9h18M8 2v4M16 2v4",
+  courses: "M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2zM4 21V5",
+  classOfferings: "M3 5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM13 5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2zM3 15a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM13 15a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z",
+  auditRecords: "M9 3h10v18H5V7zM9 3v4H5M9 12h6M9 16h6",
+  settings: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M16 4v4M10 10v4M18 16v4",
+};
+
+function SectionIcon({ name }: { name: keyof typeof SECTION_ICONS }) {
+  return (
+    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d={SECTION_ICONS[name]} />
+    </svg>
+  );
+}
+
+/** Up to two letters standing for a School beside its name, from its first two words. */
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter((word) => word !== "")
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join("");
 }
 
 /** The School a route names, if the account reaches it. */

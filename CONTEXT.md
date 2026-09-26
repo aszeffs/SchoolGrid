@@ -37,8 +37,12 @@ An actor who operates the platform itself, provisioning Schools and their first 
 _Avoid_: School Administrator
 
 **Trial School**:
-A School a visitor starts for themselves from the public site, filled with invented data and private to them. It holds one User account per School role, none with a usable password; the visitor acts as a role by the trial issuing a Session for that role's account, never by signing in. It lives two hours: at expiry its Sessions stop being live, and it is later deleted whole, with every Person, record, Audit record and User account created in it (ADR-0012). A School that is not a Trial School is never deleted.
+A School a visitor starts for themselves from the public site, filled with invented data and private to them. It holds one User account per School role, none with a usable password; the visitor acts as a role by the trial issuing a Session for that role's account, never by signing in. It lives two hours: at expiry its Sessions stop being live, and it is later deleted whole, with every Person, record, Audit record and User account created in it (ADR-0012). A School that is not a Trial School is never deleted. A Trial School is started only by a Trial visitor, who has at most one live at a time; asking for another while it lives returns them to it.
 _Avoid_: Demo, sandbox, tenant
+
+**Trial visitor**:
+Someone who has proven an outside identity, such as a GitHub or Google sign-in, in order to start or return to a Trial School. A Trial visitor is not a User account and not a Person: SchoolGrid knows them only by that outside identity, with no name or email, and forgets them once no Trial School of theirs remains.
+_Avoid_: Visitor account, guest, trial user
 
 **Faculty**:
 A School-scoped actor assigned to teach one or more Class Offerings and record academic activity for their assigned rosters.
@@ -109,19 +113,23 @@ A School date on which a School is in session, configured per Academic Year as a
 _Avoid_: School day, session day
 
 **Attendance**:
-One Student's status for one Class Offering on one School date. Supported statuses are Present, Tardy, Excused absence, Unexcused absence, and Absent-pending-review, with at most one Attendance record for that Student, offering, and date. Attendance is readable by permitted actors as soon as it is recorded.
+One Student's status for one Class Offering on one School date. Supported statuses are Present, Tardy, Excused absence, Unexcused absence, and Absent-pending-review, with at most one Attendance record for that Student, offering, and date. Attendance is readable by permitted actors as soon as it is recorded. It is recorded only by Faculty whose Teaching assignment both covers that School date and is currently active, for a School date no later than the School's today; every other change, including any by a School Administrator, goes through a Correction request.
 _Avoid_: Presence record
+
+**Attendance totals**:
+For one Student in one Class Offering and Term, the count of each Attendance status over Instructional days, plus Not recorded: the Instructional days up to the School's today, within the Student's Roster membership, that have no Attendance. Attendance on a School date that is no longer an Instructional day is not counted.
+_Avoid_: Attendance rate, attendance summary
 
 **Absent-pending-review**:
 An Attendance status recorded by Faculty when the reason for an absence is not yet established. It is visible to permitted actors immediately and is resolved to another status by a School Administrator through a Correction request, whether or not the Attendance window is open.
 _Avoid_: Unknown absence, provisional absence
 
 **Attendance window**:
-The duration, configured per School and measured from each School date, in which Faculty may record or correct that date's Attendance normally. Changes after it closes require a Correction request.
+The duration, configured per School and measured from each School date, in which Faculty may record or correct that date's Attendance normally. Changes after it closes require a Correction request. The current setting applies to every School date, so changing it opens or closes past dates at once.
 _Avoid_: Edit period
 
 **Attendance session**:
-The Faculty workflow for recording Attendance for a Roster snapshot on one School date. A session may be saved while some roster members remain unmarked and may be reopened for normal-window corrections.
+The Faculty workflow for recording Attendance for a Roster snapshot on one School date. A session may be saved while some roster members remain unmarked and may be reopened for normal-window corrections. There is one session per Class Offering and School date, shared by every Faculty member who may record it; a mark changed by someone else since it was loaded is refused rather than overwritten.
 _Avoid_: Attendance form, class check-in
 
 **Roster snapshot**:
@@ -133,17 +141,21 @@ The versioned list of allowed result values a School permits, such as A through 
 _Avoid_: Grading scale, rubric
 
 **Term result**:
-A Faculty-created academic result for a Student in a Class Offering for one Term. It begins as a draft and carries a value from the School's Result value scale, an optional numeric score, and an optional comment. Drafts are visible only to Faculty ever assigned to that Class Offering and to School Administrators.
+A Faculty-created academic result for a Student in a Class Offering for one Term. It begins as a draft and carries a value from the School's Result value scale, an optional numeric score, and an optional comment. Drafts are visible only to Faculty ever assigned to that Class Offering and to School Administrators. Changing a draft's value binds it to the scale version then in force; an untouched draft keeps its version, and a published result never changes version.
 _Avoid_: Grade, marking-period result, assignment grade
+
+**Term report**:
+One Student's view of one Term: each Class Offering they were rostered in, with its published Term result and Attendance totals. A Guardian sees only the parts their Access profile grants, with nothing marking what is withheld.
+_Avoid_: Report card, transcript
 
 **Publication**:
 The irreversible transition making one Student's Term result visible to that Student and to permitted Guardians. It is performed for a Class Offering at once, publishing every result carrying a value at that moment, and is refused while any active roster member's result lacks a value. A result created afterwards is published by a later act without reversing or re-asserting anything. Publication applies to results only; Attendance does not publish.
 _Avoid_: Approval, release
 
 **Correction request**:
-A record of a proposed change requiring School Administrator approval: Attendance outside its window, resolution of an Absent-pending-review, or a published Term result. It carries the requester, a reason, the before and after values, its state, and the approver, and may be raised at any time with no deadline. Faculty and School Administrators may raise one; a School Administrator other than the requester approves it, unless the School has a single Administrator, whose self-approval is marked on the Audit record. Approval applies the change and records it in the same transaction.
+A record of a proposed change requiring School Administrator approval: Attendance outside its window, resolution of an Absent-pending-review, or a published Term result. It carries the requester, a reason, the before and after values, its state, and the approver, and may be raised at any time with no deadline. Faculty and School Administrators may raise one; a School Administrator other than the requester approves it, unless the School has a single Administrator, whose self-approval is marked on the Audit record. Approval applies the change and records it in the same transaction. A Correction request is Pending until it is Approved, Rejected with a reason, or Withdrawn by its requester. Approval is refused while the target's current value differs from the request's before value, which is none when the request adds Attendance where none was recorded. Faculty may raise one only for a Class Offering they are currently assigned to.
 _Avoid_: Edit request, change ticket
 
 **Audit record**:
-An append-only trace of an authentication event, a Safe denial, a sensitive academic mutation, or a School configuration change. It carries actor, School, target, timestamp, action, reason, and relevant before/after values without credentials or unnecessary Student data. No actor may alter or delete one, and it outlives the Enrollment it describes. The one exception is the deletion of a whole expired Trial School, which takes its Audit records with it. Successful routine reads are not audited.
+An append-only trace of an authentication event, a Safe denial, a sensitive academic mutation, or a School configuration change. It carries actor, School, target, timestamp, action, reason, and relevant before/after values without credentials or unnecessary Student data. No actor may alter or delete one, and it outlives the Enrollment it describes. The one exception is the deletion of a whole expired Trial School, which takes its Audit records with it. Successful routine reads are not audited, nor is a first Attendance mark, which carries its own recorder and time; changing one is audited.
 _Avoid_: Log entry

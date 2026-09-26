@@ -27,7 +27,9 @@ export function NotAvailable() {
       }
     >
       <h1>Not available</h1>
-      <p>This page is not available.</p>
+      <div className="panel">
+        <p>This page is not available.</p>
+      </div>
     </Sheet>
   );
   return shell === null ? (

@@ -24,6 +24,11 @@ async function list(schoolId: string) {
   return { ok: true as const, body: { memberships, persons, today } };
 }
 
+/** A moment a membership starts or ends, kept on one line in the record. */
+function Moment({ at }: { at: string }) {
+  return <time dateTime={at}>{MOMENT.format(new Date(at))}</time>;
+}
+
 /** What is waiting on a confirmation: which membership, and which of the two changes to it. */
 type Confirming = { kind: "narrow" | "revoke"; membership: Membership };
 
@@ -143,16 +148,16 @@ function MembershipsSheet({
             cell: (membership) =>
               new Date(membership.startsAt) > now ? (
                 <>
-                  <span className="mark mark--open">Starts later</span> {MOMENT.format(new Date(membership.startsAt))}
+                  <span className="mark mark--open">Starts later</span> <Moment at={membership.startsAt} />
                 </>
               ) : (
-                MOMENT.format(new Date(membership.startsAt))
+                <Moment at={membership.startsAt} />
               ),
           },
           {
             head: "Until",
             cell: (membership) =>
-              membership.endsAt === null ? <span className="mark">No end</span> : MOMENT.format(new Date(membership.endsAt)),
+              membership.endsAt === null ? <span className="mark">No end</span> : <Moment at={membership.endsAt} />,
           },
           {
             head: "Change",
@@ -231,8 +236,8 @@ function MembershipsSheet({
           columns={[
             { head: "Person", cell: (membership) => nameOf(membership.personId) },
             { head: "Role", cell: (membership) => ROLE_NAMES[membership.role] },
-            { head: "From", cell: (membership) => MOMENT.format(new Date(membership.startsAt)) },
-            { head: "Ended", cell: (membership) => MOMENT.format(new Date(membership.endsAt!)) },
+            { head: "From", cell: (membership) => <Moment at={membership.startsAt} /> },
+            { head: "Ended", cell: (membership) => <Moment at={membership.endsAt!} /> },
           ]}
         />
       </section>

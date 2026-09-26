@@ -5,6 +5,25 @@ export function courseTitle(course: Course): string {
   return course.code === null ? course.name : `${course.name} (${course.code})`;
 }
 
+/** The six Course colours, each a token in both renditions. */
+const HUES = ["indigo", "rose", "teal", "amber", "violet", "sky"] as const;
+
+export type Hue = (typeof HUES)[number];
+
+/**
+ * The colour a Course owns, the same on every page and for every role. It is
+ * worked out from the Course's id alone, since no page but a School
+ * Administrator's reads the School's whole list of Courses; two Courses can
+ * therefore share one, and are still told apart by name and code.
+ */
+export function courseHue(course: { id: string }): Hue {
+  let hash = 0;
+  for (const character of course.id) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return HUES[hash % HUES.length]!;
+}
+
 /** A Class Offering by its Course, and its label when it has one. */
 export function offeringName(offering: ClassOffering): string {
   return offering.label === null ? offering.course.name : `${offering.course.name}, ${offering.label}`;

@@ -7,34 +7,28 @@ related_targets: ["src/Sheet.tsx","src/ShellContext.ts","src/Link.tsx","src/styl
 
 ## Scope
 
-The School shell: the frame every signed-in page renders inside (report header, section tabs, School switcher, sign-out, the page frame `Sheet` draws), plus the global tokens and base controls in `src/styles.css` that every screen inherits. First surface of a whole-app redesign that replaces the ditto-sheet world; the screens inside the shell are restyled only as far as the shared tokens and controls carry them. Visitor mode: **Operate**.
+The School shell and every shared primitive: the frame every signed-in page renders inside (app bar, section sidebar, School switcher, sign-out, the page frame `Sheet` draws), plus the global tokens and base controls in `src/styles.css` that every screen inherits. First surface of a whole-app restyle (spec #207, slice #208) that replaces the "School Report" world. Visitor mode: **Operate**.
 
 ## Audience and task
 
-Faculty and School Administrators on a school day, often between lessons: know which School, who they are acting as, and where they are, then reach the next section in one move. Evaluators opening the demo cold must read the same thing in seconds. Binding: `CONTEXT.md` vocabulary verbatim, Safe denial (`NotAvailable` explains nothing), CSP (no inline style, script or handler; fonts self-hosted), WCAG 2.2 AA, light and dark renditions following the system setting (supersedes ADR-0009). User rejected: theme costumes, cramped density, eye strain.
+Faculty and School Administrators on a school day, between lessons: know which School, who they act as, where they are, and reach the next section in one move. Evaluators opening a Trial School cold must read it as a current SaaS product at Stripe Dashboard / Notion craft. Binding: `CONTEXT.md` vocabulary verbatim, Safe denial, CSP (no inline style/script/handler, fonts self-hosted), WCAG 2.2 AA in both renditions, light/dark follow the browser (ADR-0010), no component library (ADR-0006). Pinned by owner: Atkinson Hyperlegible stays; comfortable density (44px controls, 56px roster rows). Owner rejected the previous look as too plain, dated in layout, flat, and unable to follow a SaaS landing page.
 
 ## Direction contract
 
-THESIS: Every screen reads as an official school record: whom it concerns, who is acting, what was recorded, in that order. It refuses the portal default (white cards on grey behind a left rail) and any themed costume, including the ditto sheet it replaces.
+THESIS: The School's week, pinned in the staff room: every Class Offering owns a colour, and the app is read like a timetable wall chart. It refuses both the colourless "official record" it replaces and the anonymous grey-card admin panel.
 
-OWN-WORLD: A calm achromatic reading field, cool near-white in light and deep slate in dark, with one seal blue for action and marks; colour lives only in hairline edges and seal marks. One hyperlegible sans throughout, tabular figures in strict columns. Ruled sections, no shadows, no floating cards, no pills. State is a word plus a seal mark (filled, ringed, struck), never colour alone.
+OWN-WORLD: White (light) or deep ink (dark) ground in white-guttered blocks. A six-hue categorical set (indigo, amber, teal, orange, rose, violet), assigned to Courses so a Class Offering keeps its colour everywhere: its block, its chip, its column edge. Indigo is also the action colour. Blocks are softly rounded (10px) with one quiet shadow step; tables inside are ruled and neutral. Atkinson Hyperlegible Next, bold condensed-feeling headings via weight and tracking, tabular figures.
 
-STORY: Staff see which School, who they act as, and where they are within seconds; trust the record because it names its actor; act and move on.
+STORY: Staff see their School and their week at a glance, find a Class Offering by its colour, act, and move on. Evaluators see a polished, colourful, credible product.
 
-FIRST VIEWPORT: A report header band across the full width: School name large at left, beneath it "Signed in as <name>" with their roles as small seal-edged labels; School switcher and Sign out at right. Under it, the School's sections as a row of report-page tabs, the current one lifted onto the page with a seal-blue top edge while its siblings stay visible. Then the page title with its primary action at the right of the same line, and the record in a wide ruled column below. Signature interaction: moving between sections slides the seal edge to the new tab while the reading plane stays still.
+FIRST VIEWPORT: Left sidebar (School switcher at top, sections grouped People / Academic / School, current section a filled indigo-tinted row), app bar with page title, a primary action at right of the title line, a strip of colour-keyed summary blocks (counts in large tabular figures), then a ruled record table where each Class Offering row carries its course colour on its leading edge. Signature interaction: hovering or focusing a Course anywhere lights every block of that colour on the page.
 
-FORM: School Report, candidate 4 of seven grounded directions, assigned by the roll after one re-roll. Seed key 41e95cfa.
+FORM: Timetable Wall Chart, candidate 1 of seven grounded directions, chosen as the pick card over the roll. Seed key 141c5e00.
 
-RAISES: From Iridescent Cloud Edge: colour confined to hairline edges; the reading field stays calm. From Phosphor Terminal: state prints itself into the record as words and marks. From Datamatics: tabular figures in strict columns. From Star Atlas: emphasis on one fixed ramp. From Midnight Transit: the current section leads while siblings stay visible. From Miura Fold: on a phone one section unfolds at a time.
+RAISES: From Japanese high-density web: every module headed by a small coloured tab. From Nixie counter: counts own their space in large tabular figures. From Industrial quote grammar: ended records take a diagonal hatch. From Iridescent cloud edge: reading text stays on neutral ground. From Vertical feed: a Dialog owns the viewport. From Cracktro: one systematic state scale (filled, ringed, hatched).
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
-## Recorded deviations
-
-- Page title with its primary action on one line: owed by every screen, not by the shell. The shell ships the frame; each screen brief must carry it when that screen is redesigned (Persons today puts "Add Person" well below its title).
-- On a phone, "one section unfolds at a time" ships as ruled rows of sections, three to a row and edge to edge, with the key moved below the record. A fold that hides sections was declined: the browser suite requires every section to be reachable in the first screen at 360px.
-- State colour: one seal blue carries every mark (filled, ringed); struck marks are soft ink. `--alarm` red is the one sanctioned exception, for errors and actions that take something away.
-
 ## Unresolved
 
-Whether a manual light/dark override is wanted beyond the system setting.
+- Course colour assignment rule (stable hash of Course id vs chosen by School Administrator) — decide in the build.

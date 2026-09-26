@@ -1,47 +1,187 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-23T00:00:00Z",
+  "generatedAt": "2026-09-26T00:00:00Z",
   "title": "Design System: SchoolGrid",
   "extensions": {
     "colorMeta": {
-      "seal": { "role": "primary", "displayName": "Seal Blue", "canonical": "#234aa6", "darkValue": "#8eaefc", "tonalRamp": ["#0c1a3d", "#132a63", "#1a3a88", "#234aa6", "#4a6cc0", "#8eaefc", "#b3c8ff", "#e3ebff"] },
-      "seal-strong": { "role": "primary", "displayName": "Deep Seal", "canonical": "#1a3a88", "darkValue": "#b3c8ff", "tonalRamp": ["#0c1a3d", "#132a63", "#1a3a88", "#234aa6", "#4a6cc0", "#8eaefc", "#b3c8ff", "#e3ebff"] },
-      "on-seal": { "role": "primary", "displayName": "On Seal", "canonical": "#ffffff", "darkValue": "#0d1321" },
-      "alarm": { "role": "secondary", "displayName": "Alarm Red", "canonical": "#a3262d", "darkValue": "#ff9d97", "tonalRamp": ["#3d0e11", "#6b1a1f", "#a3262d", "#c4454b", "#e0706e", "#ff9d97", "#ffc9c5", "#ffecea"] },
-      "page": { "role": "neutral", "displayName": "Page", "canonical": "#f7f8fa", "darkValue": "#12161d", "tonalRamp": ["#0d1016", "#12161d", "#1a1f28", "#4a5467", "#a4adbb", "#e5e8ee", "#eceff4", "#f7f8fa"] },
-      "band": { "role": "neutral", "displayName": "Band", "canonical": "#eceff4", "darkValue": "#1a1f28" },
-      "field": { "role": "neutral", "displayName": "Field", "canonical": "#ffffff", "darkValue": "#0d1016" },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#18202e", "darkValue": "#e5e8ee", "tonalRamp": ["#0d1016", "#18202e", "#2c3546", "#4a5467", "#6f7888", "#a4adbb", "#d3d8e0", "#eceff4"] },
-      "ink-soft": { "role": "neutral", "displayName": "Soft Ink", "canonical": "#4a5467", "darkValue": "#a4adbb" },
-      "rule": { "role": "neutral", "displayName": "Rule", "canonical": "color-mix(in srgb, var(--ink) 22%, transparent)", "darkValue": "color-mix(in srgb, var(--ink) 20%, transparent)" },
-      "rule-faint": { "role": "neutral", "displayName": "Faint Rule", "canonical": "color-mix(in srgb, var(--ink) 11%, transparent)", "darkValue": "color-mix(in srgb, var(--ink) 10%, transparent)" },
-      "wash": { "role": "neutral", "displayName": "Wash", "canonical": "color-mix(in srgb, var(--ink) 5%, transparent)", "darkValue": "color-mix(in srgb, var(--ink) 6%, transparent)" },
-      "wash-seal": { "role": "neutral", "displayName": "Seal Wash", "canonical": "color-mix(in srgb, var(--seal) 8%, transparent)", "darkValue": "color-mix(in srgb, var(--seal) 12%, transparent)" }
+      "action": {
+        "role": "primary",
+        "displayName": "Indigo",
+        "canonical": "#4338ca",
+        "darkValue": "#a5b4fc"
+      },
+      "action-strong": {
+        "role": "primary",
+        "displayName": "Deep Indigo",
+        "canonical": "#3730a3",
+        "darkValue": "#c7d0ff"
+      },
+      "on-action": {
+        "role": "primary",
+        "displayName": "On Indigo",
+        "canonical": "#ffffff",
+        "darkValue": "#11142a"
+      },
+      "action-wash": {
+        "role": "primary",
+        "displayName": "Indigo Wash",
+        "canonical": "#e8e7fb",
+        "darkValue": "#232846"
+      },
+      "alarm": {
+        "role": "secondary",
+        "displayName": "Alarm Red",
+        "canonical": "#b42318",
+        "darkValue": "#ff9b8f"
+      },
+      "course-indigo": {
+        "role": "secondary",
+        "displayName": "Course Indigo",
+        "canonical": "#4338ca",
+        "darkValue": "#4f46e5"
+      },
+      "course-rose": {
+        "role": "secondary",
+        "displayName": "Course Rose",
+        "canonical": "#be123c",
+        "darkValue": "#be123c"
+      },
+      "course-teal": {
+        "role": "secondary",
+        "displayName": "Course Teal",
+        "canonical": "#0f766e",
+        "darkValue": "#0f766e"
+      },
+      "course-amber": {
+        "role": "secondary",
+        "displayName": "Course Amber",
+        "canonical": "#b45309",
+        "darkValue": "#b45309"
+      },
+      "course-violet": {
+        "role": "secondary",
+        "displayName": "Course Violet",
+        "canonical": "#6d28d9",
+        "darkValue": "#7c3aed"
+      },
+      "course-sky": {
+        "role": "secondary",
+        "displayName": "Course Sky",
+        "canonical": "#0369a1",
+        "darkValue": "#0369a1"
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#f4f5f8",
+        "darkValue": "#0e1118"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#ffffff",
+        "darkValue": "#171b25"
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Rail",
+        "canonical": "#eef0f5",
+        "darkValue": "#12151d"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#161b28",
+        "darkValue": "#e8ebf2"
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#505a6e",
+        "darkValue": "#a3acbd"
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#dfe2ea",
+        "darkValue": "#262c3a"
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Strong Rule",
+        "canonical": "#c7ccd8",
+        "darkValue": "#394155"
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "School name", "purpose": "The School's name in the report head only; 1.375rem below 52rem." },
-      "headline": { "displayName": "Page title", "purpose": "h1." },
-      "title": { "displayName": "Section", "purpose": "h2 and the slip heading." },
-      "lead": { "displayName": "Lead", "purpose": "h3; roster names at 600." },
-      "body": { "displayName": "Body", "purpose": "Running text, inputs, buttons, record cells; 68ch measure." },
-      "label": { "displayName": "Label", "purpose": "Form labels, column heads, fact terms, tabs, the key, state words, quiet and stamp buttons." },
-      "small": { "displayName": "Small", "purpose": "Role labels; stacked field names on phone records." },
-      "figures": { "displayName": "Figures", "purpose": "Identifiers and codes in Atkinson Hyperlegible Mono; records use tabular-nums." }
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "h3; roster names at 600."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text, inputs, buttons, record cells; 68ch measure."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels, column heads, fact terms, tabs, the key, state words, quiet and stamp buttons."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Role labels; stacked field names on phone records."
+      },
+      "figures": {
+        "displayName": "Figures",
+        "purpose": "Identifiers and codes in Atkinson Hyperlegible Mono; records use tabular-nums."
+      },
+      "title": {
+        "displayName": "Title",
+        "roleHint": "Page title (h1)"
+      },
+      "section": {
+        "displayName": "Section",
+        "roleHint": "Section headings (h2) and dialog headings"
+      }
     },
-    "shadows": [],
+    "shadows": [
+      {
+        "name": "shadow",
+        "value": "0 1px 2px rgb(22 27 40 / 0.06), 0 4px 14px rgb(22 27 40 / 0.06)",
+        "purpose": "Lifts every block off the ground."
+      },
+      {
+        "name": "shadow-lift",
+        "value": "0 2px 4px rgb(22 27 40 / 0.08), 0 14px 32px rgb(22 27 40 / 0.14)",
+        "purpose": "What sits over the page: an open dialog, a Course block under the pointer."
+      }
+    ],
     "motion": [
-      { "name": "settle", "value": "200ms cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Every colour, border and background transition." },
-      { "name": "seal-slide", "value": "240ms cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "View transition moving the seal edge to the new tab; the page swaps in place without a fade." },
-      { "name": "press", "value": "transform 90ms ease-out, translateY(1px)", "purpose": "Button press." },
-      { "name": "holding", "value": "1.6s ease-in-out infinite alternate, opacity 1 to 0.45", "purpose": "Loading placeholder in the shape of a record." },
-      { "name": "reduced-motion", "value": "transition-duration 1ms; animations off", "purpose": "prefers-reduced-motion: reduce; the seal slide is skipped." }
+      {
+        "name": "settle",
+        "value": "200ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Every colour, border and background transition."
+      },
+      {
+        "name": "seal-slide",
+        "value": "240ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "View transition sliding the current-section row to the new section; the page swaps in place."
+      },
+      {
+        "name": "rise",
+        "value": "220ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "A dialog rising 8px into place; dropped under reduced motion."
+      }
     ],
     "breakpoints": [
-      { "name": "narrow", "value": "52rem", "purpose": "The one breakpoint: tabs to a three-column grid, key below record, records stacked into entries." }
+      {
+        "name": "narrow",
+        "value": "52rem",
+        "purpose": "The one breakpoint (a zoomed desktop reaches it too): the sidebar folds into a top header with sections as a three-column grid, the key moves below the record, tables stack into entries."
+      }
     ],
     "renditions": {
       "selector": "@media (prefers-color-scheme: dark) on :root",
-      "record": "ADR-0010 (supersedes ADR-0009)",
+      "record": "ADR-0010",
       "manualOverride": "none"
     }
   },
@@ -52,7 +192,7 @@
       "refersTo": "button-primary",
       "description": "The one filled action on a screen.",
       "html": "<button class=\"ds-btn\">Add Person</button>",
-      "css": ".ds-btn { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 20px; background: var(--seal); border: 1px solid var(--seal); border-radius: var(--corner); color: var(--on-seal); font: inherit; font-weight: 650; cursor: pointer; transition: background-color 200ms cubic-bezier(0.22,1,0.36,1), transform 90ms ease-out; } .ds-btn:hover { background: var(--seal-strong); border-color: var(--seal-strong); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 3px solid var(--seal); outline-offset: 2px; }"
+      "css": ".ds-btn { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 20px; background: var(--action); border: 1px solid var(--action); border-radius: 10px; color: var(--on-action); font: inherit; font-weight: 650; cursor: pointer; transition: background-color 200ms cubic-bezier(0.22,1,0.36,1), transform 90ms ease-out; } .ds-btn:hover { background: var(--action-strong); border-color: var(--action-strong); } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 3px solid var(--action); outline-offset: 2px; }"
     },
     {
       "name": "Ghost Button",
@@ -60,7 +200,7 @@
       "refersTo": "button-ghost",
       "description": "The second action beside a first: outlined, not filled.",
       "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
-      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 20px; background: transparent; border: 1px solid var(--rule); border-radius: var(--corner); color: var(--seal); font: inherit; font-weight: 650; cursor: pointer; transition: background-color 200ms cubic-bezier(0.22,1,0.36,1); } .ds-btn-ghost:hover { background: var(--wash-seal); border-color: color-mix(in srgb, var(--seal) 55%, transparent); color: var(--seal-strong); } .ds-btn-ghost:focus-visible { outline: 3px solid var(--seal); outline-offset: 2px; }"
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 20px; background: transparent; border: 1px solid var(--rule-strong); border-radius: 10px; color: var(--action); font: inherit; font-weight: 650; cursor: pointer; transition: background-color 200ms cubic-bezier(0.22,1,0.36,1); } .ds-btn-ghost:hover { background: var(--action-wash); border-color: color-mix(in srgb, var(--action) 55%, transparent); color: var(--action-strong); } .ds-btn-ghost:focus-visible { outline: 3px solid var(--action); outline-offset: 2px; }"
     },
     {
       "name": "Quiet Button",
@@ -68,7 +208,7 @@
       "refersTo": "button-quiet",
       "description": "Head actions such as Sign out, and pager steps.",
       "html": "<button class=\"ds-btn-quiet\">Sign out</button>",
-      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 14px; background: transparent; border: 1px solid var(--rule); border-radius: var(--corner); color: var(--ink); font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; } .ds-btn-quiet:hover { background: var(--wash-seal); border-color: color-mix(in srgb, var(--seal) 55%, transparent); color: var(--seal-strong); } .ds-btn-quiet:focus-visible { outline: 3px solid var(--seal); outline-offset: 2px; }"
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 14px; background: transparent; border: 1px solid var(--rule-strong); border-radius: 10px; color: var(--ink); font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; } .ds-btn-quiet:hover { background: var(--action-wash); border-color: color-mix(in srgb, var(--action) 55%, transparent); color: var(--action-strong); } .ds-btn-quiet:focus-visible { outline: 3px solid var(--action); outline-offset: 2px; }"
     },
     {
       "name": "Stamp Button",
@@ -76,7 +216,7 @@
       "refersTo": "button-stamp",
       "description": "An action that takes something away: alarm as text and outline, never a fill.",
       "html": "<button class=\"ds-btn-stamp\">End membership</button>",
-      "css": ".ds-btn-stamp { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 14px; background: transparent; border: 1px solid color-mix(in srgb, var(--alarm) 55%, transparent); border-radius: var(--corner); color: var(--alarm); font: inherit; font-size: 0.875rem; font-weight: 650; cursor: pointer; } .ds-btn-stamp:hover { background: color-mix(in srgb, var(--alarm) 10%, transparent); border-color: var(--alarm); } .ds-btn-stamp:focus-visible { outline: 3px solid var(--alarm); outline-offset: 2px; }"
+      "css": ".ds-btn-stamp { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 14px; background: transparent; border: 1px solid color-mix(in srgb, var(--alarm) 55%, transparent); border-radius: 10px; color: var(--alarm); font: inherit; font-size: 0.875rem; font-weight: 650; cursor: pointer; } .ds-btn-stamp:hover { background: color-mix(in srgb, var(--alarm) 10%, transparent); border-color: var(--alarm); } .ds-btn-stamp:focus-visible { outline: 3px solid var(--alarm); outline-offset: 2px; }"
     },
     {
       "name": "Held Button",
@@ -84,23 +224,23 @@
       "refersTo": "button-disabled",
       "description": "Disabled: dashed outline and softened words, never mistaken for a quiet button.",
       "html": "<button class=\"ds-btn-held\" disabled>Older</button>",
-      "css": ".ds-btn-held { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 20px; background: transparent; border: 1px dashed var(--rule); border-radius: var(--corner); color: color-mix(in srgb, var(--ink-soft) 80%, transparent); font: inherit; font-weight: 650; cursor: not-allowed; }"
+      "css": ".ds-btn-held { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 20px; background: transparent; border: 1px dashed var(--rule-strong); border-radius: 10px; color: color-mix(in srgb, var(--ink-soft) 80%, transparent); font: inherit; font-weight: 650; cursor: not-allowed; }"
     },
     {
       "name": "Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "Label above, field-ground well, seal border on focus.",
+      "description": "Label above, surface well, indigo border on focus.",
       "html": "<label class=\"ds-label\">Find by name<input class=\"ds-input\" type=\"search\"></label>",
-      "css": ".ds-label { display: grid; gap: 6px; font-size: 0.875rem; font-weight: 650; color: var(--ink); } .ds-input { min-height: 2.75rem; padding: 9px 12px; background: var(--field); border: 1px solid var(--rule); border-radius: var(--corner); color: var(--ink); font: inherit; font-size: 1rem; font-weight: 400; transition: border-color 200ms cubic-bezier(0.22,1,0.36,1); } .ds-input:hover:not(:focus) { border-color: color-mix(in srgb, var(--ink) 40%, transparent); } .ds-input:focus { border-color: var(--seal); } .ds-input:focus-visible { outline: 3px solid var(--seal); outline-offset: 1px; }"
+      "css": ".ds-label { display: grid; gap: 6px; font-size: 0.875rem; font-weight: 650; color: var(--ink); } .ds-input { min-height: 2.75rem; padding: 9px 12px; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 10px; color: var(--ink); font: inherit; font-size: 1rem; font-weight: 400; transition: border-color 200ms cubic-bezier(0.22,1,0.36,1); } .ds-input:hover:not(:focus) { border-color: color-mix(in srgb, var(--ink) 40%, transparent); } .ds-input:focus { border-color: var(--action); } .ds-input:focus-visible { outline: 3px solid var(--action); outline-offset: 1px; }"
     },
     {
-      "name": "Section Tabs",
+      "name": "Sidebar navigation",
       "kind": "nav",
       "refersTo": "tab",
-      "description": "Report-page tabs in the band; the current one lifted onto the page under the single seal edge.",
-      "html": "<nav class=\"ds-nav\"><ul><li><a href=\"#\">Your account</a></li><li><a href=\"#\" aria-current=\"page\">People<span class=\"ds-seal\"></span></a></li><li><a href=\"#\">Invitations</a></li></ul></nav>",
-      "css": ".ds-nav { padding: 0 16px; background: var(--band); border-bottom: 1px solid var(--rule); } .ds-nav ul { display: flex; gap: 2px; margin: 0 0 -1px; padding: 0; list-style: none; } .ds-nav a { position: relative; display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 16px; border: 1px solid transparent; border-bottom: 0; border-radius: var(--corner) var(--corner) 0 0; color: var(--ink-soft); font-size: 0.875rem; font-weight: 600; text-decoration: none; } .ds-nav a:not([aria-current]):hover { background: var(--wash); color: var(--ink); } .ds-nav a[aria-current=page] { background: var(--page); border-color: var(--rule); color: var(--ink); } .ds-seal { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: var(--corner) var(--corner) 0 0; background: var(--seal); } .ds-nav a:focus-visible { outline: 3px solid var(--seal); outline-offset: 2px; }"
+      "description": "Grouped sections in the sidebar; the current one on an indigo-washed row that slides between rows.",
+      "html": "<nav class=\"ds-nav\"><p class=\"ds-h\">People</p><ul><li><a href=\"#\">People</a></li><li><a href=\"#\" aria-current=\"page\">Invitations</a></li><li><a href=\"#\">Roles</a></li></ul></nav>",
+      "css": ".ds-nav { width: 15rem; padding: 12px; background: var(--rail); } .ds-h { margin: 0 0 4px; padding: 0 10px; color: var(--ink-soft); font-size: 0.8125rem; font-weight: 650; } .ds-nav ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; } .ds-nav a { display: flex; align-items: center; min-height: 2.5rem; padding: 0 10px; border-radius: 8px; color: var(--ink); font-size: 0.875rem; font-weight: 600; text-decoration: none; } .ds-nav a:hover { background: var(--wash); } .ds-nav a[aria-current=page] { background: var(--action-wash); color: var(--action-strong); } .ds-nav a:focus-visible { outline: 3px solid var(--action); outline-offset: 2px; }"
     },
     {
       "name": "School Switcher",
@@ -108,7 +248,7 @@
       "refersTo": "switcher",
       "description": "The other Schools, opened under the button that offers them.",
       "html": "<details class=\"ds-switcher\" open><summary>Switch School</summary><ul><li><a href=\"#\">Hillcrest Primary</a></li><li><a href=\"#\">All your Schools</a></li></ul></details>",
-      "css": ".ds-switcher { position: relative; display: inline-block; } .ds-switcher summary { display: inline-flex; align-items: center; gap: 6px; min-height: 2.5rem; padding: 0 14px; background: var(--field); border: 1px solid var(--rule); border-radius: var(--corner); font-size: 0.875rem; font-weight: 600; list-style: none; cursor: pointer; } .ds-switcher summary::after { content: ''; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); } .ds-switcher[open] summary::after { transform: translateY(2px) rotate(-135deg); } .ds-switcher summary:hover { border-color: color-mix(in srgb, var(--ink) 40%, transparent); } .ds-switcher ul { margin: 6px 0 0; padding: 4px 0; min-width: 14rem; background: var(--field); border: 1px solid var(--rule); border-radius: var(--corner); list-style: none; } .ds-switcher li a { display: block; padding: 8px 16px; color: var(--seal); text-decoration: none; } .ds-switcher li a:hover { background: var(--wash-seal); } .ds-switcher li:last-child { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--rule-faint); }"
+      "css": ".ds-switcher { position: relative; display: inline-block; } .ds-switcher summary { display: inline-flex; align-items: center; gap: 6px; min-height: 2.5rem; padding: 0 14px; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 10px; font-size: 0.875rem; font-weight: 600; list-style: none; cursor: pointer; } .ds-switcher summary::after { content: ''; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); } .ds-switcher[open] summary::after { transform: translateY(2px) rotate(-135deg); } .ds-switcher summary:hover { border-color: color-mix(in srgb, var(--ink) 40%, transparent); } .ds-switcher ul { margin: 6px 0 0; padding: 4px 0; min-width: 14rem; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 10px; list-style: none; } .ds-switcher li a { display: block; padding: 8px 16px; color: var(--action); text-decoration: none; } .ds-switcher li a:hover { background: var(--action-wash); } .ds-switcher li:last-child { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--rule); }"
     },
     {
       "name": "State Marks",
@@ -116,7 +256,7 @@
       "refersTo": "mark-filled",
       "description": "State as a word with a disc: filled, ringed, struck. Never colour alone.",
       "html": "<span class=\"ds-mark ds-mark--filled\">May read</span> <span class=\"ds-mark ds-mark--open\">Unclaimed</span> <span class=\"ds-mark ds-mark--struck\">May not read</span>",
-      "css": ".ds-mark { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; color: var(--ink-soft); font-size: 0.875rem; font-weight: 600; } .ds-mark::before { content: ''; width: 0.625rem; height: 0.625rem; border: 1.5px solid var(--rule); border-radius: 50%; } .ds-mark--filled, .ds-mark--open { color: var(--seal); } .ds-mark--filled::before { background: var(--seal); border-color: var(--seal); } .ds-mark--open::before { border: 2px solid var(--seal); } .ds-mark--struck::before { border-color: var(--ink-soft); background: linear-gradient(135deg, transparent calc(50% - 0.75px), var(--ink-soft) calc(50% - 0.75px) calc(50% + 0.75px), transparent calc(50% + 0.75px)); }"
+      "css": ".ds-mark { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; color: var(--ink-soft); font-size: 0.875rem; font-weight: 600; } .ds-mark::before { content: ''; width: 0.625rem; height: 0.625rem; border: 1.5px solid var(--rule-strong); border-radius: 50%; } .ds-mark--filled, .ds-mark--open { color: var(--action); } .ds-mark--filled::before { background: var(--action); border-color: var(--action); } .ds-mark--open::before { border: 2px solid var(--action); } .ds-mark--struck::before { border-color: var(--ink-soft); background: linear-gradient(135deg, transparent calc(50% - 0.75px), var(--ink-soft) calc(50% - 0.75px) calc(50% + 0.75px), transparent calc(50% + 0.75px)); }"
     },
     {
       "name": "Record",
@@ -124,15 +264,15 @@
       "refersTo": "record-cell",
       "description": "A ruled table in tabular figures; soft-ink heads over a rule, faint rules between rows.",
       "html": "<table class=\"ds-record\"><thead><tr><th>Person</th><th>State</th></tr></thead><tbody><tr><td>Alex Lindqvist<span class=\"ds-id\">5c4001a0-0000-4000-8000-000000000204</span></td><td>Claimed</td></tr><tr><td>Sam Achterberg<span class=\"ds-id\">5c4001a0-0000-4000-8000-000000000201</span></td><td>Unclaimed</td></tr></tbody></table>",
-      "css": ".ds-record { width: 100%; border-collapse: collapse; text-align: left; font-variant-numeric: tabular-nums; color: var(--ink); } .ds-record th { padding: 0 12px 8px 8px; border-bottom: 1px solid var(--rule); color: var(--ink-soft); font-size: 0.875rem; font-weight: 650; } .ds-record td { padding: 12px 12px 12px 8px; border-bottom: 1px solid var(--rule-faint); transition: background-color 200ms cubic-bezier(0.22,1,0.36,1); } .ds-record tbody tr:hover { background: var(--wash); } .ds-id { display: block; margin-top: 2px; color: var(--ink-soft); font-family: 'Atkinson Hyperlegible Mono', ui-monospace, monospace; font-size: 0.8125rem; }"
+      "css": ".ds-record { width: 100%; border-collapse: collapse; text-align: left; font-variant-numeric: tabular-nums; color: var(--ink); } .ds-record th { padding: 0 12px 8px 8px; border-bottom: 1px solid var(--rule-strong); color: var(--ink-soft); font-size: 0.875rem; font-weight: 650; } .ds-record td { padding: 12px 12px 12px 8px; border-bottom: 1px solid var(--rule); transition: background-color 200ms cubic-bezier(0.22,1,0.36,1); } .ds-record tbody tr:hover { background: var(--wash); } .ds-id { display: block; margin-top: 2px; color: var(--ink-soft); font-family: 'Atkinson Hyperlegible Mono', ui-monospace, monospace; font-size: 0.8125rem; }"
     },
     {
       "name": "Slip",
       "kind": "card",
       "refersTo": "slip",
-      "description": "An issued record or the one modal overlay: field ground, rule border, 3px seal top edge, square corners.",
+      "description": "An issued record or the one modal overlay: surface, rule border, 16px corner, block shadow (lift shadow when it is the dialog).",
       "html": "<div class=\"ds-slip\"><h2>End this membership?</h2><p>Morgan Reyes will no longer hold School Administrator here.</p><div class=\"ds-actions\"><button class=\"ds-slip-stamp\">End membership</button><button class=\"ds-slip-ghost\">Keep it</button></div></div>",
-      "css": ".ds-slip { display: grid; gap: 12px; padding: 24px; background: var(--field); border: 1px solid var(--rule); border-top: 3px solid var(--seal); color: var(--ink); } .ds-slip h2 { margin: 0; font-size: 1.375rem; font-weight: 700; } .ds-slip p { margin: 0; } .ds-actions { display: flex; flex-wrap: wrap; gap: 12px; } .ds-slip-stamp { min-height: 2.75rem; padding: 0 14px; background: transparent; border: 1px solid color-mix(in srgb, var(--alarm) 55%, transparent); border-radius: var(--corner); color: var(--alarm); font: inherit; font-size: 0.875rem; font-weight: 650; } .ds-slip-ghost { min-height: 2.75rem; padding: 0 20px; background: transparent; border: 1px solid var(--rule); border-radius: var(--corner); color: var(--seal); font: inherit; font-weight: 650; }"
+      "css": ".ds-slip { display: grid; gap: 12px; padding: 24px; background: var(--surface); border: 1px solid var(--rule-strong);  color: var(--ink); } .ds-slip h2 { margin: 0; font-size: 1.375rem; font-weight: 700; } .ds-slip p { margin: 0; } .ds-actions { display: flex; flex-wrap: wrap; gap: 12px; } .ds-slip-stamp { min-height: 2.75rem; padding: 0 14px; background: transparent; border: 1px solid color-mix(in srgb, var(--alarm) 55%, transparent); border-radius: 10px; color: var(--alarm); font: inherit; font-size: 0.875rem; font-weight: 650; } .ds-slip-ghost { min-height: 2.75rem; padding: 0 20px; background: transparent; border: 1px solid var(--rule-strong); border-radius: 10px; color: var(--action); font: inherit; font-weight: 650; }"
     },
     {
       "name": "Notice, Error, Empty",
@@ -140,48 +280,17 @@
       "refersTo": "notice",
       "description": "Seal-washed notice; error named in words over an alarm wash; empty record in a dashed box.",
       "html": "<p class=\"ds-notice\">Access profiles take effect on the next page a Guardian opens.</p><p class=\"ds-error\">That Invitation has already been used.</p><p class=\"ds-empty\">No Invitations are open.</p>",
-      "css": ".ds-notice { max-width: 68ch; padding: 12px 16px; background: var(--wash-seal); border: 1px solid color-mix(in srgb, var(--seal) 25%, transparent); border-radius: var(--corner); color: var(--ink); } .ds-error { padding: 10px 14px; background: color-mix(in srgb, var(--alarm) 9%, transparent); border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent); border-radius: var(--corner); color: var(--alarm); font-weight: 600; } .ds-empty { padding: 32px 16px; border: 1px dashed var(--rule); border-radius: var(--corner); color: var(--ink-soft); text-align: center; }"
+      "css": ".ds-notice { max-width: 68ch; padding: 12px 16px; background: var(--action-wash); border: 1px solid color-mix(in srgb, var(--action) 25%, transparent); border-radius: 10px; color: var(--ink); } .ds-error { padding: 10px 14px; background: color-mix(in srgb, var(--alarm) 9%, transparent); border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent); border-radius: 10px; color: var(--alarm); font-weight: 600; } .ds-empty { padding: 32px 16px; border: 1px dashed var(--rule-strong); border-radius: 10px; color: var(--ink-soft); text-align: center; }"
     }
   ],
   "narrative": {
-    "northStar": "The School Report",
-    "overview": "Every screen reads as an official school record: whom it concerns, who is acting, and what was recorded, in that order. The reading field is calm and nearly colourless, cool near-white in light and deep slate in dark, and a single seal blue marks what can be acted on and what is current. Colour lives in hairline edges and seal marks, never in large fills beyond the one primary button.\n\nThe page is a report: a full-width band carries the wordmark, the School's name set as the largest type on the page, \"Signed in as\" with the roles held, and the section tabs; the current tab is lifted onto the page and wears the seal along its top edge. Below, a narrow key sits at the left edge beside a wide ruled record. Density is comfortable, not cramped: 44px controls, ruled rows at least 56px tall on rosters, and a 68ch reading measure.\n\nThe system refuses the portal default (white cards on grey behind a left rail) and any themed costume, including the ditto sheet it replaced. There are two renditions, light and dark, and the browser's own setting picks between them (ADR-0010); there is no manual toggle.",
-    "keyCharacteristics": [
-      "One hyperlegible sans for words, its mono cut for identifiers and codes, tabular figures in records.",
-      "One hue (seal blue) for action, current place and state marks; alarm red only for errors and actions that take something away.",
-      "State is always a word with a mark beside it: filled, ringed or struck disc.",
-      "Ruled, flat surfaces: hairlines and a one-step tonal band, no shadows.",
-      "A fixed type scale that does not grow with the window.",
-      "Every colour is a token defined for both renditions."
-    ],
+    "northStar": "The Timetable Wall Chart",
+    "overview": "Every School runs on the week pinned in the staff room: each Course a coloured block, the grid between them white. A quiet grey ground carries white blocks lifted by one soft shadow; each Course owns one of six saturated colours and keeps it wherever its Class Offerings appear; indigo marks what can be acted on and where you are. Inside a School the shell is a sidebar, and the sheet fills the rest of the window at any width.",
     "rules": [
-      { "name": "The One Seal Rule", "body": "Seal blue is the only hue in the system. It marks what can be acted on, what is current, and what state a record is in. No second accent, no status greens or ambers.", "section": "colors" },
-      { "name": "The Alarm Exception Rule", "body": "Alarm red is sanctioned for two things only: an error, named in words, and an action that takes something away (the stamp button and the confirming button in a removal slip). It is text and outline; it is never a fill and never the only signal.", "section": "colors" },
-      { "name": "The Two Renditions Rule", "body": "Every colour is a token defined for both light and dark. A rule that names a raw colour breaks one of the renditions.", "section": "colors" },
-      { "name": "The Fixed Ramp Rule", "body": "One fixed scale (0.8125, 0.875, 1, 1.125, 1.375, 1.75, 2rem). A product's type does not grow with the window; the only responsive change is the School's name stepping down on a phone.", "section": "typography" },
-      { "name": "The One Family Rule", "body": "One sans for all words, bold for emphasis, its mono cut for figures. No second display face, no uppercase tracking labels.", "section": "typography" },
-      { "name": "The Ruled, Not Raised Rule", "body": "Separate things with hairlines and the band's one tonal step, never with shadow or a floating card in the reading plane.", "section": "elevation" }
-    ],
-    "dos": [
-      "Do name every colour through a token that has both a light and a dark value.",
-      "Do pair every state with a word and a filled, ringed or struck seal disc; the mark is never the only difference.",
-      "Do keep seal blue for action, the current place, links, focus and marks, and nothing else.",
-      "Do confine alarm red to errors and to actions that take something away, as text and outline.",
-      "Do separate with 1px hairlines (`rule` for sections, `rule-faint` between rows) and the band's one tonal step.",
-      "Do set identifiers in Atkinson Hyperlegible Mono and keep records in tabular figures.",
-      "Do keep controls at least 44px tall (40px for quiet and switcher), with the 3px seal focus outline.",
-      "Do draw a held control with a dashed rule border and softened words.",
-      "Do let things settle in 200ms on cubic-bezier(0.22, 1, 0.36, 1), and honour reduced motion by dropping transitions and the seal slide."
-    ],
-    "donts": [
-      "Don't use shadows, or float cards in the reading plane; the switcher list and the slip dialog are the only things over the page.",
-      "Don't fill a control with alarm red, or use colour alone to carry state.",
-      "Don't introduce a second accent hue or status colours (green, amber).",
-      "Don't round role labels or tags into pills; they keep a 2px corner.",
-      "Don't scale type with the viewport.",
-      "Don't add a second typeface, uppercase tracked labels, or icon-font glyphs; draw small marks from borders.",
-      "Don't put more than one seal edge in the tab row.",
-      "Don't reach for an inline style; the Content Security Policy forbids it and the build fails on it."
+      "The Course Colour Rule: a Course colour means that Course and nothing else.",
+      "The Neutral Reading Rule: running text sits on surface or ground; only a Course block puts white words on colour.",
+      "The Two Renditions Rule: every colour is a token with a light and a dark value.",
+      "The Fixed Ramp Rule: type grows only with the reader's zoom, never with the window."
     ]
   }
 }

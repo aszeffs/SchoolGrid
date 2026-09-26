@@ -25,10 +25,12 @@ export function TrialEnded() {
       }
     >
       <h1>Your trial School has been deleted</h1>
-      <p>
-        Its two hours are up. Every Person, record and Audit record in it was invented, and none of it remains.
-      </p>
-      <StartTrial label="Start a new trial" />
+      <div className="panel">
+        <p>
+          Its two hours are up. Every Person, record and Audit record in it was invented, and none of it remains.
+        </p>
+        <StartTrial label="Start a new trial" />
+      </div>
     </Sheet>
   );
 }

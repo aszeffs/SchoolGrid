@@ -17,6 +17,19 @@ export async function signIn(page: Page, { username, password }: { username: str
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+/** Switches the page to the dark rendition, with motion reduced so nothing is audited mid-fade. */
+export async function darken(page: Page) {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  // Two frames painted in the dark rendition, so axe reads no text still drawn in the light one.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+}
+
+/** Closes the open dialog without doing what it asks, and waits for it to go. */
+export async function cancelDialog(page: Page) {
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+}
+
 export function schoolsList(page: Page) {
   return page.getByRole("list", { name: "Schools" }).getByRole("listitem");
 }
@@ -78,6 +91,13 @@ export async function schoolIdOf(page: Page, name: string): Promise<string> {
     schools: { schoolId: string; name: string }[];
   };
   return schools.find((school) => school.name === name)!.schoolId;
+}
+
+/** The Person a seeded account resolves to in this School. */
+export async function personIdOf(page: Page, schoolId: string, account: { displayName: string }): Promise<string> {
+  const response = await page.request.get(`/api/schools/${schoolId}/persons`);
+  const { persons } = (await response.json()) as { persons: { id: string; displayName: string }[] };
+  return persons.find((person) => person.displayName === account.displayName)!.id;
 }
 
 /**
@@ -205,4 +225,25 @@ export function changesSent(page: Page): string[] {
     }
   });
   return sent;
+}
+
+/** One page of a School's trail, as the API answers it. */
+export interface TrailPage {
+  auditRecords: unknown[];
+  nextCursor: string | null;
+}
+
+/**
+ * Answers the trail from `pages` by the cursor asked for (`first` for none), so
+ * paging is asserted against pages of a known length. The server's own bound
+ * and ordering are the API suite's to assert. Returns every cursor asked for.
+ */
+export async function stubTrail(page: Page, pages: Record<string, TrailPage>): Promise<string[]> {
+  const asked: string[] = [];
+  await page.route("**/api/schools/*/audit-records*", (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    asked.push(cursor ?? "first");
+    return route.fulfill({ status: 200, json: pages[cursor ?? "first"] });
+  });
+  return asked;
 }
