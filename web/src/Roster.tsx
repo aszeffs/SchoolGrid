@@ -5,7 +5,7 @@ import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { offeringName } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
-import { dayOf, schoolDay } from "./standing.ts";
+import { dayOf, schoolDateAfter, schoolDay } from "./standing.ts";
 
 /** What is waiting on a confirmation: which membership, and which of the two changes to it. */
 type Confirming = { kind: "dates" | "end"; membership: RosterMembership };
@@ -33,7 +33,7 @@ export function Roster({
   administers: boolean;
   offering: TaughtClassOffering;
   roster: RosterMembership[];
-  /** The Students who may be rostered now: enrolled, and not on this roster already. */
+  /** The Students who may be rostered now: enrolled, and not on this roster to the Term's last day. */
   rosterable: ListedPerson[];
   busy: boolean;
   onRoster: (rostering: { personIds: string[]; firstDate?: string; lastDate?: string }) => Promise<ApiResult<unknown>>;
@@ -141,7 +141,8 @@ export function Roster({
       {administers &&
         (rosterable.length === 0 ? (
           <p className="empty">
-            Every Student with an open Enrollment has been on this roster already. To roster someone else, start their
+            Every Student with an open Enrollment is on this roster to the end of the Term already. To roster someone
+            else, start their
             Enrollment on <Link to={{ name: "enrollments", schoolId }}>Enrollments</Link> first.
           </p>
         ) : (
@@ -155,6 +156,7 @@ export function Roster({
       {rostering && (
         <RosterStudents
           offering={offering}
+          roster={roster}
           rosterable={rosterable}
           busy={busy}
           onCancel={() => setRostering(false)}
@@ -223,7 +225,8 @@ export function Roster({
  * The rostering dialog: every Student who may be rostered, found by name and
  * ticked, as many as the class needs, and rostered in one request. Nothing is
  * sent until it is confirmed, and one Student who cannot be rostered leaves
- * every other unrostered too.
+ * every other unrostered too. So a Student who was on the roster before, and
+ * left, holds the dialog back until the dates chosen begin after they left.
  *
  * Native checkboxes in a fieldset, and a search field above them, so it is
  * worked from the keyboard like any form: Tab between the fields, Space to
@@ -231,12 +234,14 @@ export function Roster({
  */
 function RosterStudents({
   offering,
+  roster,
   rosterable,
   busy,
   onCancel,
   onRoster,
 }: {
   offering: TaughtClassOffering;
+  roster: RosterMembership[];
   rosterable: ListedPerson[];
   busy: boolean;
   onCancel: () => void;
@@ -251,6 +256,27 @@ function RosterStudents({
   const shown = rosterable.filter((person) => person.displayName.toLocaleLowerCase().includes(looking));
   const inOrder = firstDate === "" || lastDate === "" || lastDate >= firstDate;
   const count = chosen.size === 1 ? "1 Student" : `${chosen.size} Students`;
+  /** The last day each Student chosen before was on this roster: memberships run to their Term's end while open. */
+  const heldUntil = new Map<string, string>();
+  for (const membership of roster) {
+    const until = membership.lastDate ?? term.lastDate;
+    if (until > (heldUntil.get(membership.person.id) ?? "")) {
+      heldUntil.set(membership.person.id, until);
+    }
+  }
+  // The bounds sent, as the server reads blanks, against every membership each chosen Student held.
+  const from = firstDate === "" ? term.firstDate : firstDate;
+  const until = lastDate === "" ? term.lastDate : lastDate;
+  const overlapping = rosterable.filter(
+    (person) =>
+      chosen.has(person.id) &&
+      roster.some(
+        (membership) =>
+          membership.person.id === person.id &&
+          membership.firstDate <= until &&
+          from <= (membership.lastDate ?? term.lastDate),
+      ),
+  );
 
   const toggle = (personId: string, on: boolean) =>
     setChosen((was) => {
@@ -267,7 +293,7 @@ function RosterStudents({
     <ConfirmDialog
       title={`Roster Students in ${offeringName(offering)}`}
       confirm={chosen.size === 0 ? "Roster Students" : `Roster ${count}`}
-      busy={busy || chosen.size === 0 || !inOrder}
+      busy={busy || chosen.size === 0 || !inOrder || overlapping.length > 0}
       onCancel={onCancel}
       onConfirm={() =>
         onRoster({
@@ -278,7 +304,10 @@ function RosterStudents({
         })
       }
     >
-      <p>Only Students with an open Enrollment who are not on this roster already are listed.</p>
+      <p>
+        Only Students with an open Enrollment who are not on this roster to the end of the Term are listed. One who was
+        on it before is rostered again from after the day they left.
+      </p>
       <search className="filter">
         <label>
           Find by name
@@ -304,6 +333,9 @@ function RosterStudents({
                 onChange={(event) => toggle(person.id, event.currentTarget.checked)}
               />
               {person.displayName}
+              {heldUntil.has(person.id) && (
+                <span className="muted"> on this roster until {schoolDay(heldUntil.get(person.id)!)}</span>
+              )}
             </label>
           ))
         )}
@@ -334,6 +366,15 @@ function RosterStudents({
         />
       </label>
       <p className="muted">Left blank, each membership runs with the Term, from its first day to its last.</p>
+      {overlapping.length > 0 && (
+        <p role="alert" className="error">
+          These dates overlap a membership of this roster, so no one can be rostered with them.
+          {overlapping.map((person) => {
+            const held = heldUntil.get(person.id)!;
+            return ` ${person.displayName} was on it until ${schoolDay(held)}: choose From ${schoolDay(schoolDateAfter(held))} or later, or roster them on their own.`;
+          })}
+        </p>
+      )}
     </ConfirmDialog>
   );
 }
