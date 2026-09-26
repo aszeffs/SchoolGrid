@@ -42,10 +42,7 @@ export const MOMENT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", 
 /** A day as a reader expects it. */
 export const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
-/**
- * The day after this moment's, as a date field writes it. The earliest day an
- * end can be set for: the start of today has already gone by.
- */
+/** The day after this moment's, in the reader's own time zone, as a date field writes it. */
 export function dayAfter(moment: Date): string {
   const next = new Date(moment);
   next.setHours(0, 0, 0, 0);

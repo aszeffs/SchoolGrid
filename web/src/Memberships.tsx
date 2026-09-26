@@ -6,19 +6,22 @@ import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES, ROLES } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { byName, dayAfter, hasEnded, MOMENT, namesOf, formatSchoolDate } from "./standing.ts";
+import { byName, hasEnded, MOMENT, namesOf, formatSchoolDate, schoolDateAfter } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "School memberships" };
 
-/** A School's memberships, with the Persons they are held by so each can be named. */
+/**
+ * A School's memberships, with the Persons they are held by so each can be
+ * named, and the School's today, which the earliest end is counted from.
+ */
 async function list(schoolId: string) {
-  const answered = await readAll([api.memberships(schoolId), api.persons(schoolId)]);
+  const answered = await readAll([api.memberships(schoolId), api.persons(schoolId), api.schoolDate(schoolId)]);
   if (!answered.ok) {
     return answered;
   }
-  const [{ memberships }, { persons }] = answered.body;
-  return { ok: true as const, body: { memberships, persons } };
+  const [{ memberships }, { persons }, { schoolDate: today }] = answered.body;
+  return { ok: true as const, body: { memberships, persons, today } };
 }
 
 /** What is waiting on a confirmation: which membership, and which of the two changes to it. */
@@ -59,6 +62,7 @@ function MembershipsSheet({
   schoolId,
   memberships,
   persons,
+  today,
   busy,
   onGrant,
   onNarrow,
@@ -67,6 +71,8 @@ function MembershipsSheet({
   schoolId: string;
   memberships: Membership[];
   persons: ListedPerson[];
+  /** The School's today, as the server sees it in the School's timezone. */
+  today: string;
   busy: boolean;
   onGrant: (grant: { personId: string; role: Role; endsOn?: string }) => Promise<{ ok: boolean }>;
   onNarrow: (membership: Membership, endsOn: string) => void;
@@ -74,6 +80,11 @@ function MembershipsSheet({
 }) {
   const [confirming, setConfirming] = useState<Confirming | null>(null);
   const now = new Date();
+  // Not before the School's tomorrow: the server refuses an end whose
+  // midnight has gone by, which would claim access was not held when it was.
+  // Counted from the School's today rather than the browser's, which can be a
+  // date ahead of it or behind it.
+  const earliest = schoolDateAfter(today);
   const nameOf = namesOf(persons);
   const ordered = [...memberships].sort(byName((membership) => nameOf(membership.personId)));
   const held = ordered.filter((membership) => !hasEnded(membership, now));
@@ -202,7 +213,7 @@ function MembershipsSheet({
         </label>
         <label>
           Ends on (optional)
-          <input type="date" name="endsOn" min={dayAfter(now)} />
+          <input type="date" name="endsOn" min={earliest} />
         </label>
         <p className="muted">It is in force from now. Left without an end, it holds until it is narrowed or revoked.</p>
         <button type="submit" disabled={busy}>
@@ -230,6 +241,7 @@ function MembershipsSheet({
         <Narrow
           schoolId={schoolId}
           membership={confirming.membership}
+          schoolTomorrow={earliest}
           whose={whose(confirming.membership)}
           name={nameOf(confirming.membership.personId)}
           busy={busy}
@@ -275,6 +287,7 @@ function MembershipsSheet({
 function Narrow({
   schoolId,
   membership,
+  schoolTomorrow,
   whose,
   name,
   busy,
@@ -283,6 +296,8 @@ function Narrow({
 }: {
   schoolId: string;
   membership: Membership;
+  /** The School's tomorrow, the earliest end for a membership already in force. */
+  schoolTomorrow: string;
   whose: string;
   name: string;
   busy: boolean;
@@ -290,14 +305,32 @@ function Narrow({
   onNarrow: (endsOn: string) => void;
 }) {
   const [endsOn, setEndsOn] = useState("");
-  // Not before tomorrow, and not before it starts: the server refuses an end
-  // already gone by, which would claim access was not held when it was.
-  const earliest = [dayAfter(new Date()), dayAfter(new Date(membership.startsAt))].sort().at(-1)!;
+  const startsLater = new Date(membership.startsAt) > new Date();
+  // One that starts later ends no earlier than the School date after its
+  // start, which the server names: that date is its timezone's to say.
+  const [fromStart, setFromStart] = useState<string | null>(null);
+  useEffect(() => {
+    if (!startsLater) {
+      return;
+    }
+    let current = true;
+    void api.schoolDate(schoolId, membership.startsAt).then((answered) => {
+      if (current && answered.ok) {
+        setFromStart(schoolDateAfter(answered.body.schoolDate));
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [startsLater, schoolId, membership.startsAt]);
+  // Until the server has named it, nothing is offered.
+  const earliest = !startsLater ? schoolTomorrow : fromStart && [schoolTomorrow, fromStart].sort().at(-1)!;
+  const allowed = earliest !== null && endsOn !== "" && endsOn >= earliest;
   return (
     <ConfirmDialog
       title="Narrow this School membership?"
       confirm="Set the end"
-      busy={busy || endsOn === "" || endsOn < earliest}
+      busy={busy || !allowed}
       onCancel={onCancel}
       onConfirm={() => onNarrow(endsOn)}
     >
@@ -311,12 +344,12 @@ function Narrow({
           type="date"
           name="endsOn"
           required
-          min={earliest}
+          min={earliest ?? undefined}
           value={endsOn}
           onChange={(event) => setEndsOn(event.currentTarget.value)}
         />
       </label>
-      {endsOn !== "" && endsOn >= earliest && (
+      {allowed && (
         <EndsTeaching
           schoolId={schoolId}
           membership={membership}
