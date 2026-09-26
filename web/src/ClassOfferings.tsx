@@ -95,7 +95,7 @@ function ClassOfferingsSheet({
         <Key term="Class Offering">
           A Course offered for one Term. Its Faculty and roster belong to it alone, not to the Course.
         </Key>
-        <Key term="Faculty and Roster">
+        <Key term="Faculty and roster size">
           Who teaches each offering and how many Students are on its roster: today, in a Term running now. A Term still
           to come shows who starts it, and one that has ended, who finished it.
         </Key>
@@ -197,13 +197,7 @@ function ClassOfferingsSheet({
           {
             head: "Roster",
             cell: ({ rosterSize }) =>
-              rosterSize === 0 ? (
-                <span className="muted">No Students</span>
-              ) : rosterSize === 1 ? (
-                "1 Student"
-              ) : (
-                `${rosterSize} Students`
-              ),
+              rosterSize === 0 ? <span className="muted">No Students</span> : studentCount(rosterSize),
           },
         ]}
       />
@@ -267,4 +261,8 @@ function currentTerm(terms: Term[]): Term | undefined {
     terms.find((term) => today < term.firstDate) ??
     terms.at(-1)
   );
+}
+
+function studentCount(count: number): string {
+  return count === 1 ? "1 Student" : `${count} Students`;
 }

@@ -175,12 +175,12 @@ test("a School Administrator rosters several Students in one go from the keyboar
   const listed = recordRows(page, "Class Offerings in Whole year").filter({ hasText: own.offering });
   await expect(listed).toContainText("No one assigned");
   await expect(listed).toContainText("1 Student");
-  const teacher = `Tatum ${token}`;
-  const personId = await arrangePerson(page, own.schoolId, teacher, ["faculty"]);
+  const facultyName = `Tatum ${token}`;
+  const personId = await arrangePerson(page, own.schoolId, facultyName, ["faculty"]);
   await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
   await page.reload();
   await page.getByLabel("Term").selectOption({ label: own.term.heading });
-  await expect(listed).toContainText(teacher);
+  await expect(listed).toContainText(facultyName);
   await audit(page);
 });
 
