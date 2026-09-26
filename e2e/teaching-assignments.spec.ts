@@ -19,10 +19,11 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 interface Own {
   schoolId: string;
   classOfferingId: string;
+  courseId: string;
   /** The offering as its page is headed: its Course and label. */
   offering: string;
   /** The Term it runs in, as `YYYY-MM-DD`. */
-  term: { firstDate: string; lastDate: string };
+  term: { id: string; firstDate: string; lastDate: string };
 }
 
 /** A School Administrator in the first School, with a Class Offering of the test's own in a year of its own. */
@@ -50,7 +51,13 @@ async function withOwnOffering(page: Page): Promise<Own> {
     termId: year.terms[0]!.id,
     label: "Section A",
   });
-  return { schoolId, classOfferingId: classOffering.id, offering: `${courseName}, Section A`, term };
+  return {
+    schoolId,
+    classOfferingId: classOffering.id,
+    courseId: course.id,
+    offering: `${courseName}, Section A`,
+    term: { id: year.terms[0]!.id, ...term },
+  };
 }
 
 /** The Person a seeded account resolves to in the first School, as its School Administrator lists it. */
@@ -208,6 +215,44 @@ test("a Faculty member with no class is told so, and other roles are not offered
   await expect(page.getByRole("navigation").getByRole("link", { name: "Your classes" })).toHaveCount(0);
   await page.goto(`/schools/${await schoolIdOf(page, schools[0]!)}/classes`);
   await expect(page.getByRole("heading", { level: 1, name: "Not available" })).toBeVisible();
+});
+
+test("a Person who is both Faculty and a Student finds the Class Offerings they teach and those they take", async ({
+  page,
+  audit,
+}) => {
+  const own = await withOwnOffering(page);
+  const token = randomUUID().slice(0, 8);
+  const personId = await arrangePerson(page, own.schoolId, `Casey ${token}`, ["faculty", "student"]);
+  await arrange(page, own.schoolId, "/enrollments", { studentPersonId: personId });
+  await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
+  const { classOffering: taken } = await arrange<{ classOffering: { id: string } }>(
+    page,
+    own.schoolId,
+    "/class-offerings",
+    { courseId: own.courseId, termId: own.term.id, label: "Section B" },
+  );
+  await arrange(page, own.schoolId, `/class-offerings/${taken.id}/roster-memberships`, { personIds: [personId] });
+  // Redeeming an Invitation to them signs the page in as their new account.
+  const { link } = await arrange<{ link: string }>(page, own.schoolId, "/invitations", { personId });
+  const redeemed = await page.request.post("/api/invitations/redeem", {
+    headers: { origin: new URL(page.url()).origin },
+    data: { secret: new URL(link).hash.slice(1), username: `casey-${token}`, password: "a teacher who studies too" },
+  });
+  expect(redeemed.status()).toBe(201);
+
+  await page.goto(`/schools/${own.schoolId}/account`);
+  await openSection(page, "Your classes");
+  await expect(page.getByRole("heading", { level: 2, name: "Classes you teach" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Classes you take" })).toBeVisible();
+  await expect(recordRows(page, "Your current Class Offerings").filter({ hasText: own.offering })).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("table", { name: /^Your Class Offerings in / })
+      .getByRole("row")
+      .filter({ hasText: own.offering.replace(/Section A$/, "Section B") }),
+  ).toHaveCount(1);
+  await audit(page);
 });
 
 test.describe("on a phone", () => {

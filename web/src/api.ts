@@ -107,6 +107,8 @@ export interface ReachedSchool {
   personId: string;
   displayName: string;
   roles: Role[];
+  /** How many Class Offerings the Person was ever assigned to teach, once their Faculty membership has ended too. */
+  classOfferingsTaught: number;
   /** When the School expires, only when it is a Trial School (ADR-0012). */
   trialExpiresAt?: string;
   /**
