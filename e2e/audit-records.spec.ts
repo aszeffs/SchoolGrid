@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrangePerson, openSchool, openSection, recordRows, schoolIdOf, signIn } from "./app.ts";
+import {
+  arrangePerson,
+  openSchool,
+  openSection,
+  recordRows,
+  schoolIdOf,
+  signIn,
+  stubTrail,
+  type TrailPage,
+} from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
@@ -52,7 +61,7 @@ test.describe("paged by the cursor each page carries", () => {
     target: { type: "request", id: `GET /api/schools/${randomUUID()}/persons/${randomUUID()}` },
     reason: "no-such-person",
   };
-  const PAGES: Record<string, { auditRecords: unknown[]; nextCursor: string | null }> = {
+  const PAGES: Record<string, TrailPage> = {
     first: {
       auditRecords: [
         { ...RECORD, id: randomUUID(), action: "newest.one" },
@@ -66,24 +75,9 @@ test.describe("paged by the cursor each page carries", () => {
     },
   };
 
-  /**
-   * Answers the trail from `PAGES` by the cursor asked for, so the paging is
-   * asserted against pages of a known length. The server's own bound and
-   * ordering are the API suite's to assert.
-   */
-  async function stubTrail(page: Page): Promise<string[]> {
-    const asked: string[] = [];
-    await page.route("**/api/schools/*/audit-records*", (route) => {
-      const cursor = new URL(route.request().url()).searchParams.get("cursor");
-      asked.push(cursor ?? "first");
-      return route.fulfill({ status: 200, json: PAGES[cursor ?? "first"] });
-    });
-    return asked;
-  }
-
   test("pages older and back to newer, saying which page is shown", async ({ page, audit }) => {
     await openAudit(page);
-    const asked = await stubTrail(page);
+    const asked = await stubTrail(page, PAGES);
     await openSection(page, "Audit");
     const newer = pager(page).getByRole("button", { name: "Newer" });
     const older = pager(page).getByRole("button", { name: "Older" });
@@ -119,7 +113,7 @@ test.describe("paged by the cursor each page carries", () => {
 
     test("the record stacks, and a long request path wraps rather than scrolling", async ({ page, audit }) => {
       await openAudit(page);
-      await stubTrail(page);
+      await stubTrail(page, PAGES);
       await openSection(page, "Audit");
       await expect(rows(page).filter({ hasText: "newest.one" })).toHaveCount(1);
 

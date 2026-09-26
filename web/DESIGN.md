@@ -280,7 +280,7 @@ There is one breakpoint, 52rem, which a zoomed desktop reaches too. Below it the
 
 ## Elevation & Depth
 
-Two shadow steps and no more. `shadow` (a 1px contact shadow plus a soft 14px blur) lifts every block off the ground: records, the key, the School block, secondary buttons, switcher lists. `shadow-lift` (a 32px blur) is reserved for what sits over the page: an open dialog, and a Course block under the pointer. The sidebar is set apart by its rail colour and a hairline, not by shadow.
+Two shadow steps and no more. `shadow` (a 1px contact shadow plus a soft 14px blur) lifts every block off the ground: records, the key, the School block, secondary buttons, switcher lists. `shadow-lift` (a 32px blur) is reserved for what sits over the page: an open dialog, and a Course block under the pointer. The sidebar is set apart by its rail colour and a hairline, not by shadow. A primary button's contact shadow and inner highlight are `shadow-press`, part of the button rather than a third step.
 
 ## Shapes
 
@@ -302,7 +302,7 @@ Group headings in small soft ink; each section a 40px row with its glyph. The cu
 Native disclosures: a full-width field-like button with a chevron drawn from two borders; the list opens in flow beneath it as a white block, entries 6px-cornered with the indigo wash on hover.
 
 ### Records
-A table in a white block: 12px corner, rule border, block shadow. Column heads on a 3% ink tint, label size, soft ink. Rows at least 56px, divided by rules, washed on hover; actions right-aligned and side by side on the row's line, stacking only when the row does. Below 52rem each row stacks into an entry. Rosters use the same block.
+A table in a white block: 12px corner, rule border, block shadow. Column heads on a 3% ink tint, label size, soft ink. Rows at least 56px, divided by rules, washed on hover; actions right-aligned and side by side on the row's line, stacking only when the row does. Below 52rem each row stacks into an entry. A moment to the second sets its day over its time, the time at label size in soft ink; a path or an action name may break after each `/` and `.`, and an identifier only at its hyphens. A record read a page at a time has Newer and Older at either end of a line above it, with where the reader stands between them; on a phone, where they stand reads first and the two ways share the row under it. Rosters use the same block.
 
 ### Course blocks (wall chart)
 A Class Offering as its Course's colour: a solid block at 12px corner with white code, name, Faculty and a large roster figure; lifted 2px with `shadow-lift` under the pointer or the focus. A Term's blocks head the Class Offerings screen above its record, two to a row on a phone. Every block and row of the pointed-at Course stays bright while the others dim to 35%.
