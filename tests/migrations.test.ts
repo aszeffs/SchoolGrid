@@ -207,13 +207,30 @@ describe("migrations", () => {
         { name: "Westbrook", timezone: "UTC" },
       ]);
     });
+  });
 
-    // The image one deploy behind still creates a School by name alone (#92).
-    it("still accepts a School created by name alone, as the previous image creates one", async () => {
-      await server().database.query(`INSERT INTO app.school (name) VALUES ('Eastfield')`);
+  // Once no image in production creates a School by name alone (#92), every
+  // School has to name its timezone.
+  describe("dropping the School timezone default", () => {
+    const MIGRATION = "0020_school_timezone_required.sql";
 
-      const { rows } = await server().database.query(`SELECT timezone FROM app.school WHERE name = 'Eastfield'`);
-      expect(rows).toEqual([{ timezone: "UTC" }]);
+    // Returns the database to where it stood before the migration, when the
+    // column still defaulted to UTC.
+    async function undoMigration() {
+      const owner = server().ownerDatabase;
+      await owner.query(`ALTER TABLE app.school ALTER COLUMN timezone SET DEFAULT 'UTC'`);
+      await owner.query(`DELETE FROM public.schema_migrations WHERE name = $1`, [MIGRATION]);
+    }
+
+    it("refuses a School created without a timezone", async () => {
+      await undoMigration();
+
+      const result = await migrate(server().ownerDatabase);
+
+      expect(result.applied).toEqual([MIGRATION]);
+      await expect(server().database.query(`INSERT INTO app.school (name) VALUES ('Eastfield')`)).rejects.toThrow(
+        /null value in column "timezone"/,
+      );
     });
   });
 
