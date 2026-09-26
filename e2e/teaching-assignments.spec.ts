@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrange, arrangePerson, changesSent, openSchool, openSection, recordRows, schoolIdOf, signIn } from "./app.ts";
+import { arrange, arrangePerson, changesSent, openSchool, openSection, recordRows, schoolIdOf, signIn, withOwnOffering } from "./app.ts";
 import { seeded, type Account } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
@@ -15,50 +15,6 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * ahead that no other spec's can overlap it. Every assignment there is still
  * to begin, so ending one removes it.
  */
-
-interface Own {
-  schoolId: string;
-  classOfferingId: string;
-  courseId: string;
-  /** The offering as its page is headed: its Course and label. */
-  offering: string;
-  /** The Term it runs in, as `YYYY-MM-DD`. */
-  term: { id: string; firstDate: string; lastDate: string };
-}
-
-/** A School Administrator in the first School, with a Class Offering of the test's own in a year of its own. */
-async function withOwnOffering(page: Page): Promise<Own> {
-  const { schoolAdministrator, schools } = seeded();
-  await signIn(page, schoolAdministrator);
-  await openSchool(page, schools[0]!);
-  const schoolId = await schoolIdOf(page, schools[0]!);
-  const starts = 2100 + Math.floor(Math.random() * 7000);
-  const term = { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
-  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
-    name: `Year ${randomUUID().slice(0, 8)}`,
-    ...term,
-  });
-  const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
-    headers: { origin: new URL(page.url()).origin },
-    data: { terms: [{ name: "Whole year", ...term }] },
-  });
-  expect(divided.ok()).toBe(true);
-  const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
-  const courseName = `Course ${randomUUID().slice(0, 8)}`;
-  const { course } = await arrange<{ course: { id: string } }>(page, schoolId, "/courses", { name: courseName });
-  const { classOffering } = await arrange<{ classOffering: { id: string } }>(page, schoolId, "/class-offerings", {
-    courseId: course.id,
-    termId: year.terms[0]!.id,
-    label: "Section A",
-  });
-  return {
-    schoolId,
-    classOfferingId: classOffering.id,
-    courseId: course.id,
-    offering: `${courseName}, Section A`,
-    term: { id: year.terms[0]!.id, ...term },
-  };
-}
 
 /** The Person a seeded account resolves to in the first School, as its School Administrator lists it. */
 async function personIdOf(page: Page, schoolId: string, account: Account): Promise<string> {
