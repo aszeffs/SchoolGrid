@@ -87,7 +87,7 @@ A Student's bounded participation in a School. Enrollment history is retained wh
 _Avoid_: Registration, transfer
 
 **Roster membership**:
-A Student's participation in a Class Offering, bounded by School dates. A Student may have multiple memberships across offerings in one Term.
+A Student's participation in a Class Offering, bounded by School dates. A Student may have multiple memberships across offerings in one Term, and more than one in the same offering so long as their dates never overlap: a Student who left part way through may be rostered again.
 _Avoid_: Enrollment
 
 **Teaching assignment**:

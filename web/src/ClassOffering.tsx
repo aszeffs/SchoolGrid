@@ -17,7 +17,7 @@ import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts";
+import { courseTitle, labelConflictMessage, offeringName, runsTo } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
 import { Roster } from "./Roster.tsx";
 import { useScreen } from "./screen.ts";
@@ -138,18 +138,22 @@ function assignableFaculty(memberships: Membership[], persons: ListedPerson[]): 
 }
 
 /**
- * The Students with an open Enrollment who have never been on this roster, by
- * name: rostered with the Term's bounds, as the dialog does unless told
- * otherwise, anyone else would overlap a membership they hold, and refuse the
- * whole request.
+ * The Students with an open Enrollment who are not on this roster to the
+ * Term's last day, by name. One who left part way through may be rostered
+ * again; the dialog holds back dates that would overlap what they held, so one
+ * Student never refuses the whole request.
  */
 function rosterableStudents(offering: Offering, enrollments: Enrollment[], persons: ListedPerson[]): ListedPerson[] {
   const enrolled = new Set(
     enrollments.filter((enrollment) => enrollment.endedAt === null).map((enrollment) => enrollment.studentPersonId),
   );
-  const onRoster = new Set((offering.rosterMemberships ?? []).map((membership) => membership.person.id));
+  const toTermEnd = new Set(
+    (offering.rosterMemberships ?? [])
+      .filter((membership) => runsTo(membership, offering.term) >= offering.term.lastDate)
+      .map((membership) => membership.person.id),
+  );
   return persons
-    .filter((person) => enrolled.has(person.id) && !onRoster.has(person.id))
+    .filter((person) => enrolled.has(person.id) && !toTermEnd.has(person.id))
     .sort(byName((person) => person.displayName));
 }
 
