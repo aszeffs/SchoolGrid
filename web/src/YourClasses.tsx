@@ -7,7 +7,7 @@ import { teaches } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { schoolDay } from "./standing.ts";
-import { RosteredClasses, RosteredKeys } from "./StudentClasses.tsx";
+import { RosteredClasses, RosteredKeys } from "./RosteredClasses.tsx";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Your classes" };
@@ -18,13 +18,13 @@ interface Taught {
 }
 
 /** What the page lists: the Class Offerings the Person teaches, those they are on the roster of, or both. */
-interface Classes {
+interface OwnClasses {
   taught?: Taught;
   rostered?: RosteredTerm[];
 }
 
 /** Reads each list asked for, and is the one refusal if either is refused. */
-async function read(schoolId: string, taught: boolean, rostered: boolean): Promise<ApiResult<Classes>> {
+async function read(schoolId: string, taught: boolean, rostered: boolean): Promise<ApiResult<OwnClasses>> {
   const [teaching, roster] = await Promise.all([
     taught ? api.ownClassOfferings(schoolId) : undefined,
     rostered ? api.ownRosterMemberships(schoolId) : undefined,
@@ -84,15 +84,15 @@ function ClassesSheet({
 }: {
   schoolId: string;
   personId: string;
-} & Classes) {
+} & OwnClasses) {
   if (taught !== undefined && rostered !== undefined) {
     const legend = (
       <>
         <h2>Key</h2>
         <p>The Class Offerings you teach and those you are on the roster of, and nothing about anyone else&rsquo;s.</p>
-        <h3>Classes you teach</h3>
+        <h3>Class Offerings you teach</h3>
         <TaughtKeys />
-        <h3>Classes you take</h3>
+        <h3>Class Offerings you are on the roster of</h3>
         <RosteredKeys />
       </>
     );
@@ -100,11 +100,11 @@ function ClassesSheet({
       <Sheet {...SHEET} legend={legend}>
         <h1>Your classes</h1>
         <section>
-          <h2>Classes you teach</h2>
+          <h2>Class Offerings you teach</h2>
           <TaughtClasses schoolId={schoolId} personId={personId} {...taught} level="h3" />
         </section>
         <section>
-          <h2>Classes you take</h2>
+          <h2>Class Offerings you are on the roster of</h2>
           <RosteredClasses schoolId={schoolId} terms={rostered} level="h3" />
         </section>
       </Sheet>

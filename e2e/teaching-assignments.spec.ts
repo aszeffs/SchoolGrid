@@ -217,7 +217,7 @@ test("a Faculty member with no class is told so, and other roles are not offered
   await expect(page.getByRole("heading", { level: 1, name: "Not available" })).toBeVisible();
 });
 
-test("a Person who is both Faculty and a Student finds the Class Offerings they teach and those they take", async ({
+test("a Person who is both Faculty and a Student finds the Class Offerings they teach and those they are on the roster of", async ({
   page,
   audit,
 }) => {
@@ -243,8 +243,8 @@ test("a Person who is both Faculty and a Student finds the Class Offerings they 
 
   await page.goto(`/schools/${own.schoolId}/account`);
   await openSection(page, "Your classes");
-  await expect(page.getByRole("heading", { level: 2, name: "Classes you teach" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Classes you take" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Class Offerings you teach" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Class Offerings you are on the roster of" })).toBeVisible();
   await expect(recordRows(page, "Your current Class Offerings").filter({ hasText: own.offering })).toHaveCount(1);
   await expect(
     page

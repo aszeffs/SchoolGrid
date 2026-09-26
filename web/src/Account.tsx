@@ -170,7 +170,7 @@ function Permits({ permitted }: { permitted: boolean }) {
 /** Which Class Offerings of theirs a Person finds on Your classes, in the words the page uses. */
 function classesHeld(taught: boolean, rostered: boolean): string {
   if (taught && rostered) {
-    return "teach and those you are on the roster of";
+    return "teach or taught, and those you are on the roster of,";
   }
-  return taught ? "are assigned to teach" : "are on the roster of";
+  return taught ? "teach or taught" : "are on the roster of";
 }
