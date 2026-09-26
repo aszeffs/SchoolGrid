@@ -948,6 +948,7 @@ button {
   }
 
   .button-ghost:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 4%, var(--surface));
     border-color: var(--ink-soft);
   }
 
