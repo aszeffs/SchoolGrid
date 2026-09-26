@@ -579,7 +579,7 @@ describe("Teaching assignments", () => {
       // Arranged where the School date is not UTC's today, whenever this runs,
       // and hours from midnight either way.
       const utcHour = new Date().getUTCHours();
-      const world = await arrange(utcHour < 9 ? "Pacific/Pago_Pago" : "Pacific/Kiritimati");
+      const world = await arrange(utcHour < 11 ? "Etc/GMT+12" : "Pacific/Kiritimati");
       const { today } = world;
       expect(today).not.toBe(new Date().toISOString().slice(0, 10));
       const running = await assign(world.alice, world.offering, {
