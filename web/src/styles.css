@@ -1221,6 +1221,126 @@ button:disabled {
   gap: var(--step);
 }
 
+/* ---- Courses and the wall chart -------------------------------------- */
+
+/*
+ * A Course owns one of six colours and keeps it wherever it appears (DESIGN.md:
+ * The Course Colour Rule). The colour is only ever a chip beside its name, or
+ * the fill of its own block, where the words on it are white.
+ */
+[data-hue="indigo"] {
+  --hue: var(--course-indigo);
+}
+
+[data-hue="rose"] {
+  --hue: var(--course-rose);
+}
+
+[data-hue="teal"] {
+  --hue: var(--course-teal);
+}
+
+[data-hue="amber"] {
+  --hue: var(--course-amber);
+}
+
+[data-hue="violet"] {
+  --hue: var(--course-violet);
+}
+
+[data-hue="sky"] {
+  --hue: var(--course-sky);
+}
+
+.course {
+  display: inline-flex;
+  align-items: baseline;
+  gap: calc(var(--step) * 1.25);
+}
+
+.course__chip {
+  flex: none;
+  align-self: center;
+  width: 0.75rem;
+  height: 0.75rem;
+  background: var(--hue);
+  border-radius: 4px;
+}
+
+.chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
+  gap: calc(var(--step) * 1.5);
+  margin: calc(var(--step) * 3) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chart li {
+  display: flex;
+  transition: opacity var(--settle), filter var(--settle);
+}
+
+.chart a {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 8.25rem;
+  padding: calc(var(--step) * 1.75) calc(var(--step) * 2) calc(var(--step) * 2);
+  background: var(--hue);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
+  color: var(--on-course);
+  font-size: var(--size-label);
+  text-decoration: none;
+  transition: transform var(--settle), box-shadow var(--settle);
+}
+
+.chart a:hover,
+.chart a:focus-visible {
+  color: var(--on-course);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+.chart code {
+  font-size: var(--size-small);
+  font-weight: 600;
+}
+
+.chart b {
+  font-size: var(--size-lead);
+  line-height: 1.25;
+}
+
+.chart__count {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--step) * 0.75);
+  margin-top: auto;
+  padding-top: var(--step);
+  font-weight: 600;
+}
+
+.chart__count strong {
+  font-size: 2rem;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* Pointing at a Course keeps its blocks and rows bright, and steps the others back. */
+.chart li[data-dimmed],
+.record tr[data-dimmed] {
+  opacity: 0.35;
+  filter: saturate(0.4);
+}
+
+.record tr {
+  transition: opacity var(--settle);
+}
+
 /* ---- Facts: a two-column entry --------------------------------------- */
 
 .facts {
@@ -1840,6 +1960,21 @@ td[aria-selected="true"] > .day {
   .record .record__buttons {
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  /* Two blocks to a row on a phone, so a Term's wall chart still reads at a glance. */
+  .chart {
+    grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
+    gap: var(--step);
+  }
+
+  .chart a {
+    min-height: 7rem;
+    padding: calc(var(--step) * 1.5);
+  }
+
+  .chart b {
+    font-size: var(--size-body);
   }
 }
 

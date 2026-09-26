@@ -305,7 +305,9 @@ Native disclosures: a full-width field-like button with a chevron drawn from two
 A table in a white block: 12px corner, rule border, block shadow. Column heads on a 3% ink tint, label size, soft ink. Rows at least 56px, divided by rules, washed on hover; actions right-aligned and side by side on the row's line, stacking only when the row does. Below 52rem each row stacks into an entry. Rosters use the same block.
 
 ### Course blocks (wall chart)
-A Class Offering as its Course's colour: a solid block at 12px corner with white code, name, Faculty and a large roster figure; lifted 2px with `shadow-lift` under the pointer. Every block and row of the pointed-at Course stays bright while the others dim. (Built with the Class Offerings screen.)
+A Class Offering as its Course's colour: a solid block at 12px corner with white code, name, Faculty and a large roster figure; lifted 2px with `shadow-lift` under the pointer or the focus. A Term's blocks head the Class Offerings screen above its record, two to a row on a phone. Every block and row of the pointed-at Course stays bright while the others dim to 35%.
+
+Wherever else a Course or Class Offering is named in a record or its facts, a 12px chip of its colour at a 4px corner sits beside the name, which stays ink. A Course's colour is worked out from its id, so it is the same on every page and for every role; two Courses can share one, and are still told apart by name and code.
 
 ### Dialog
 The app's one overlay, a native modal `<dialog>`: surface, 16px corner, `shadow-lift`, over the veil with a 3px blur; rises 8px into place in 220ms. Its actions sit in a tinted footer bar pinned to its bottom, right-aligned. A row of actions within its words, such as copying an Invitation's link, stays in the flow above the footer.

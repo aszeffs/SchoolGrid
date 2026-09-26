@@ -1,4 +1,5 @@
 import type { RosteredClassOffering, RosteredTerm } from "./api.ts";
+import { CourseName } from "./CourseChart.tsx";
 import { Link } from "./Link.tsx";
 import { offeringName } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
@@ -64,9 +65,11 @@ export function RosteredClasses({
             {
               head: "Class Offering",
               cell: (offering) => (
-                <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>
-                  {offeringName(offering)}
-                </Link>
+                <CourseName course={offering.course}>
+                  <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>
+                    {offeringName(offering)}
+                  </Link>
+                </CourseName>
               ),
             },
             { head: "Taught by", cell: taughtBy },
