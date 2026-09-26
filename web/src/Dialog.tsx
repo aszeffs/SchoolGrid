@@ -94,7 +94,7 @@ function Dialog({
     >
       <h2 id={headingId}>{title}</h2>
       {children}
-      <div className="actions">{actions}</div>
+      <div className="actions slip__foot">{actions}</div>
     </dialog>
   );
 }

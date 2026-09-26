@@ -302,13 +302,13 @@ Group headings in small soft ink; each section a 40px row with its glyph. The cu
 Native disclosures: a full-width field-like button with a chevron drawn from two borders; the list opens in flow beneath it as a white block, entries 6px-cornered with the indigo wash on hover.
 
 ### Records
-A table in a white block: 12px corner, rule border, block shadow. Column heads on a 3% ink tint, label size, soft ink. Rows at least 56px, divided by rules, washed on hover; actions right-aligned. Below 52rem each row stacks into an entry. Rosters use the same block.
+A table in a white block: 12px corner, rule border, block shadow. Column heads on a 3% ink tint, label size, soft ink. Rows at least 56px, divided by rules, washed on hover; actions right-aligned and side by side on the row's line, stacking only when the row does. Below 52rem each row stacks into an entry. Rosters use the same block.
 
 ### Course blocks (wall chart)
 A Class Offering as its Course's colour: a solid block at 12px corner with white code, name, Faculty and a large roster figure; lifted 2px with `shadow-lift` under the pointer. Every block and row of the pointed-at Course stays bright while the others dim. (Built with the Class Offerings screen.)
 
 ### Dialog
-The app's one overlay, a native modal `<dialog>`: surface, 16px corner, `shadow-lift`, over the veil with a 3px blur; rises 8px into place in 220ms. Its actions sit in a tinted footer bar pinned to its bottom, right-aligned.
+The app's one overlay, a native modal `<dialog>`: surface, 16px corner, `shadow-lift`, over the veil with a 3px blur; rises 8px into place in 220ms. Its actions sit in a tinted footer bar pinned to its bottom, right-aligned. A row of actions within its words, such as copying an Invitation's link, stays in the flow above the footer.
 
 ### Panel
 A form that stands on its own (signing in, redeeming an Invitation), or a short message with its one way on (a trial that ended, a page not available), sits in a white block: 12px corner, rule border, block shadow, at most 30rem wide. Its heading stays above it on the ground.
