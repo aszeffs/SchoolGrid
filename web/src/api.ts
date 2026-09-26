@@ -283,6 +283,16 @@ export interface ClassOffering {
 }
 
 /**
+ * A Class Offering as the School's list shows it: who teaches it and how many
+ * Students are on its roster, on today while its Term runs, or the Term's
+ * nearest day to today while it does not.
+ */
+export interface ListedClassOffering extends ClassOffering {
+  faculty: { id: string; displayName: string }[];
+  rosterSize: number;
+}
+
+/**
  * A Faculty member's assignment to a Class Offering, bounded by School dates.
  * A last date of null is one still open, running to the end of its Term.
  */
@@ -564,7 +574,7 @@ export const api = {
   deleteCourse: (schoolId: string, courseId: string) =>
     request<{ course: Course }>("DELETE", inSchool(schoolId, `/courses/${encodeURIComponent(courseId)}`)),
   classOfferings: (schoolId: string) =>
-    request<{ classOfferings: ClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
+    request<{ classOfferings: ListedClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
   classOffering: (schoolId: string, classOfferingId: string) =>
     request<{ classOffering: TaughtClassOffering }>(
       "GET",

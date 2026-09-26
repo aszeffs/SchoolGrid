@@ -91,6 +91,11 @@ test("a Course is created, offered in a Term, and its Class Offering opens on it
     `${name} is already offered in ${term.name} with that label, or without one. Give this offering a label that tells the two apart.`,
   );
 
+  // Listed with no one teaching it and no one on its roster, and saying so.
+  const listed = recordRows(page, `Class Offerings in ${term.name}`).filter({ hasText: `${name}, Section A` });
+  await expect(listed).toContainText("No one assigned");
+  await expect(listed).toContainText("No Students");
+
   await recordRows(page, `Class Offerings in ${term.name}`).getByRole("link", { name: `${name}, Section A` }).click();
   await expect(page.getByRole("heading", { level: 1, name: `${name}, Section A` })).toBeVisible();
   await expect(page.getByRole("main")).toContainText(term.option);

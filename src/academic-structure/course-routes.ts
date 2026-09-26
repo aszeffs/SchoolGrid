@@ -7,6 +7,7 @@ import {
   authorizeReadOwnClassOfferings,
   authorizeReadOwnRosterMemberships,
   mayReadRosterOf,
+  offeringsAtAGlance,
   ownClassOfferings,
   ownRosterMemberships,
   rostersServedOn,
@@ -195,10 +196,15 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
   });
 
   // Every Class Offering at once (ADR-0008), each naming its Term, for the
-  // browser to show a Term's.
+  // browser to show a Term's, and who teaches it and how many are on its
+  // roster: see offeringsAtAGlance.
   scope.get("/class-offerings", async (actor) => {
     const schoolId = authorizeManageAcademicStructure(actor);
-    return { classOfferings: (await classOfferingsInSchool(database, schoolId)).map(presentOffering) };
+    const offerings = await classOfferingsInSchool(database, schoolId);
+    const glances = await offeringsAtAGlance(database, actor, offerings);
+    return {
+      classOfferings: offerings.map((offering) => ({ ...presentOffering(offering), ...glances.get(offering.id)! })),
+    };
   });
 
   scope.post("/class-offerings", async (actor, { body }) => {
