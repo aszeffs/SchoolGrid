@@ -437,6 +437,12 @@ export const api = {
     ),
   memberships: (schoolId: string) =>
     request<{ memberships: Membership[] }>("GET", inSchool(schoolId, "/memberships")),
+  /** The School date the instant `at` falls on, in the School's timezone; today's when none is named. */
+  schoolDate: (schoolId: string, at?: string) =>
+    request<{ schoolDate: string; instructionalDay: boolean }>(
+      "GET",
+      inSchool(schoolId, `/school-date${at === undefined ? "" : `?at=${encodeURIComponent(at)}`}`),
+    ),
   /**
    * Starts now, and ends at midnight on `endsOn`, a School date, in the
    * School's timezone. A missing `endsOn` leaves it with no end.
