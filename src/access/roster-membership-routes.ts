@@ -33,7 +33,7 @@ import {
 } from "./roster-memberships.ts";
 
 /**
- * The most Students one request rosters. A class of any real size fits well
+ * The most Students one request rosters. A Class Offering of any real size fits well
  * inside it; the bound is there so one request cannot hold a transaction open
  * over an unbounded list.
  */

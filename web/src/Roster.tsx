@@ -209,7 +209,7 @@ export function Roster({
           ) : (
             <p>
               {confirming.membership.person.displayName} stays on the roster of {offeringName(offering)} until the end
-              of today. The membership stays on this sheet as ended, as the record of who was on its roster and when.
+              of today. The membership stays on this sheet as ended, as the record of who was on the roster and when.
             </p>
           )}
         </ConfirmDialog>
