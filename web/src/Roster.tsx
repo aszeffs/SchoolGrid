@@ -209,7 +209,7 @@ export function Roster({
           ) : (
             <p>
               {confirming.membership.person.displayName} stays on the roster of {offeringName(offering)} until the end
-              of today. The membership stays on this sheet as ended, as the record of who was in the class and when.
+              of today. The membership stays on this sheet as ended, as the record of who was on its roster and when.
             </p>
           )}
         </ConfirmDialog>
@@ -220,7 +220,7 @@ export function Roster({
 
 /**
  * The rostering dialog: every Student who may be rostered, found by name and
- * ticked, as many as the class needs, and rostered in one request. Nothing is
+ * ticked, as many as the Class Offering needs, and rostered in one request. Nothing is
  * sent until it is confirmed, and one Student who cannot be rostered leaves
  * every other unrostered too. So a Student who was on the roster before, and
  * left, holds the dialog back until the dates chosen begin after they left.

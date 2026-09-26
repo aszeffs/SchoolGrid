@@ -131,7 +131,7 @@ interface Standing {
   /**
    * The Class Offerings the Actor, as a Student, was ever rostered in. Like
    * those taught, these outlast the membership's end, and the Enrollment's: a
-   * departed Student keeps reading the classes they took part in (CONTEXT.md:
+   * departed Student keeps reading the Class Offerings they took part in (CONTEXT.md:
    * Enrollment).
    */
   rosteredClassOfferingIds: ReadonlySet<string>;
@@ -933,7 +933,7 @@ export function authorizeReadClassOffering<O extends { id: string; schoolId: str
 /**
  * Whether the actor, already permitted to read this Class Offering, may read
  * its roster too: a School Administrator, and anyone ever assigned to teach
- * it. A Student reads their own classes but never their classmates, so the
+ * it. A Student reads their own Class Offerings but never their classmates, so the
  * roster is left out of what they are served altogether.
  */
 export function mayReadRosterOf(actor: Actor, offering: { id: string; schoolId: string }): boolean {
@@ -996,7 +996,7 @@ export function authorizeManageRosterMembership<M extends RosterMembership>(
 /**
  * Returns the School whose Class Offerings the actor may list as the ones they
  * teach and taught, and refuses otherwise. Only a Faculty member has any: the
- * slice giving Students their own classes widens this.
+ * slice giving Students their own Class Offerings widens this.
  */
 export function authorizeReadOwnClassOfferings(actor: Actor): string {
   if (!holds(actor, "faculty")) {

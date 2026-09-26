@@ -89,7 +89,7 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
         </section>
       )}
 
-      {/* Faculty and Students have their classes now; Attendance and Term results are still to come for Guardians. */}
+      {/* Faculty and Students have their Class Offerings now; Attendance and Term results are still to come for Guardians. */}
       {holds("guardian") && (
         <section className="not-built">
           <h2>Not built yet</h2>

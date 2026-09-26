@@ -8,7 +8,7 @@ import type { Person } from "../identity/index.ts";
  * Class Offering, bounded by School dates inside its Term (ADR-0011); a Person
  * rostered twice in one offering holds two rows that never overlap
  * (migrations/0017). One that has begun is ended rather than deleted, as the
- * record of who was in the class and when.
+ * record of who was on its roster and when.
  *
  * Nothing here decides whether anyone may see or change a membership: that is
  * the decision in ./index.ts, made before any of this is reached.

@@ -317,20 +317,20 @@ export interface RosterMembership {
 /**
  * A Class Offering read by itself, or among a Faculty member's own: with who
  * teaches it, and its roster for a reader who may see it. A Student reading
- * one of their own classes is not given the roster.
+ * one of their own Class Offerings is not given the roster.
  */
 export interface TaughtClassOffering extends ClassOffering {
   teachingAssignments: TeachingAssignment[];
   rosterMemberships?: RosterMembership[];
 }
 
-/** One of a Student's own classes: who teaches it, and when the Student was on its roster. */
+/** One of a Student's own Class Offerings: who teaches it, and when the Student was on its roster. */
 export interface RosteredClassOffering extends ClassOffering {
   teachingAssignments: TeachingAssignment[];
   rosterMemberships: { id: string; firstDate: string; lastDate: string | null }[];
 }
 
-/** One Term a Student has classes in, and whether it is the one running today. */
+/** One Term a Student has Class Offerings in, and whether it is the one running today. */
 export interface RosteredTerm {
   term: ClassOffering["term"];
   current: boolean;
@@ -586,7 +586,7 @@ export const api = {
       "GET",
       inSchool(schoolId, "/account/class-offerings"),
     ),
-  /** A Student's own: every class they are or were rostered in, by Term, the current one first. */
+  /** A Student's own: every Class Offering they are or were rostered in, by Term, the current one first. */
   ownRosterMemberships: (schoolId: string) =>
     request<{ terms: RosteredTerm[] }>("GET", inSchool(schoolId, "/account/roster-memberships")),
   /** Several Students at once, all or nothing. Bounds left unstated run with the Term's. */
