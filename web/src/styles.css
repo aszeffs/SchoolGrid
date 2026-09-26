@@ -1615,7 +1615,8 @@ dialog.slip::backdrop {
 /*
  * Newer and Older at either end, with where the reader stands between them.
  * On a phone, where it stands reads first and the two ways share the row
- * under it.
+ * under it; only the drawing moves, so the order read aloud stays Newer,
+ * where, Older.
  */
 .pager {
   display: grid;

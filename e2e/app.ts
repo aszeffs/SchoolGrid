@@ -226,3 +226,24 @@ export function changesSent(page: Page): string[] {
   });
   return sent;
 }
+
+/** One page of a School's trail, as the API answers it. */
+export interface TrailPage {
+  auditRecords: unknown[];
+  nextCursor: string | null;
+}
+
+/**
+ * Answers the trail from `pages` by the cursor asked for (`first` for none), so
+ * paging is asserted against pages of a known length. The server's own bound
+ * and ordering are the API suite's to assert. Returns every cursor asked for.
+ */
+export async function stubTrail(page: Page, pages: Record<string, TrailPage>): Promise<string[]> {
+  const asked: string[] = [];
+  await page.route("**/api/schools/*/audit-records*", (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    asked.push(cursor ?? "first");
+    return route.fulfill({ status: 200, json: pages[cursor ?? "first"] });
+  });
+  return asked;
+}

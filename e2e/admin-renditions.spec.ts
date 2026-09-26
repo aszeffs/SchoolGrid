@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { darken, openSchool, openSection, recordRows, schoolIdOf, signIn } from "./app.ts";
+import { darken, openSchool, openSection, recordRows, schoolIdOf, signIn, stubTrail, type TrailPage } from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, test } from "./test.ts";
 
@@ -18,9 +18,9 @@ const RECORD = {
   reason: "no-such-person",
 };
 
-/** Two pages of a trail, answered by the cursor asked for; a refused request's long path among them. */
-async function stubTrail(page: Page, schoolId: string) {
-  const pages: Record<string, unknown> = {
+/** Two pages of a trail, a refused request's long path among them. */
+function trailOf(schoolId: string): Record<string, TrailPage> {
+  return {
     first: {
       auditRecords: [
         {
@@ -39,14 +39,10 @@ async function stubTrail(page: Page, schoolId: string) {
       nextCursor: null,
     },
   };
-  await page.route("**/api/schools/*/audit-records*", (route) => {
-    const cursor = new URL(route.request().url()).searchParams.get("cursor");
-    return route.fulfill({ status: 200, json: pages[cursor ?? "first"] });
-  });
 }
 
 /** Answers the settings as the server holds them, with the timezone fixed or not as the test needs. */
-async function stubFixed(page: Page, timezoneFixed: boolean) {
+async function stubTimezoneFixed(page: Page, timezoneFixed: boolean) {
   await page.route("**/api/schools/*/settings", async (route) => {
     const held = (await (await route.fetch()).json()) as { settings: { timezoneFixed: boolean } };
     return route.fulfill({ status: 200, json: { ...held, settings: { ...held.settings, timezoneFixed } } });
@@ -58,7 +54,7 @@ test("Audit, paged, and School settings stay legible in the dark rendition", asy
   await signIn(page, schoolAdministrator);
   await openSchool(page, schools[1]!);
   const schoolId = await schoolIdOf(page, schools[1]!);
-  await stubTrail(page, schoolId);
+  await stubTrail(page, trailOf(schoolId));
   await darken(page);
 
   await openSection(page, "Audit");
@@ -72,7 +68,7 @@ test("Audit, paged, and School settings stay legible in the dark rendition", asy
 
   for (const timezoneFixed of [false, true]) {
     await page.unrouteAll();
-    await stubFixed(page, timezoneFixed);
+    await stubTimezoneFixed(page, timezoneFixed);
     await page.goto(`/schools/${schoolId}/settings`);
     await expect(
       timezoneFixed

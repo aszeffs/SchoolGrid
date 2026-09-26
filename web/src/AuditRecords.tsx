@@ -19,8 +19,9 @@ interface Reached {
 /** The People list, read once for the screen rather than again with every page. */
 const listPersons = (schoolId: string) => api.persons(schoolId);
 
-/** A moment to the second: records written within one minute are told apart by it. */
+/** The day a record was written. */
 const ON_THE_DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+/** Its time to the second: records written within one minute are told apart by it. */
 const TO_THE_SECOND = new Intl.DateTimeFormat(undefined, { timeStyle: "medium" });
 
 /** What each kind of target is called, in the glossary's words. A Person and the School are named instead. */
@@ -186,7 +187,7 @@ function AuditSheet({
         columns={[
           {
             head: "When",
-            cell: (record) => <Moment at={record.occurredAt} />,
+            cell: (record) => <WrittenAt at={record.occurredAt} />,
           },
           { head: "Actor", cell: actorOf },
           { head: "Action", cell: (record) => <Breakable text={record.action} /> },
@@ -199,7 +200,7 @@ function AuditSheet({
 }
 
 /** When a record was written: the day, and under it the time to the second, so the record's columns keep their room. */
-function Moment({ at }: { at: string }) {
+function WrittenAt({ at }: { at: string }) {
   const moment = new Date(at);
   return (
     <time className="moment" dateTime={at}>
@@ -216,9 +217,9 @@ function Moment({ at }: { at: string }) {
 function Breakable({ text }: { text: string }) {
   return (
     <code>
-      {text.split(/(?<=[/.])/).map((part, at) => (
-        <Fragment key={at}>
-          {at > 0 && <wbr />}
+      {text.split(/(?<=[/.])/).map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && <wbr />}
           {part}
         </Fragment>
       ))}
