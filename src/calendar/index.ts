@@ -1,14 +1,16 @@
 import type { Queryable } from "../db/transaction.ts";
 
 /**
- * The School calendar: the one place an instant becomes a School date, and
- * the one place a School date is found to be an Instructional day or not.
+ * The School calendar: the one place an instant becomes a School date or a
+ * School date an instant, and the one place a School date is found to be an
+ * Instructional day or not.
  *
  * A School date is a calendar date as observed in the School's timezone
  * (CONTEXT.md: School date), written `YYYY-MM-DD`. Working one out means
  * knowing the School's timezone, its daylight-saving rules, and where its
  * midnight falls in UTC, and all of that stays in here. Everything else asks
- * this module a question and gets a date back, never an offset to apply.
+ * this module a question and gets a date or an instant back, never an offset
+ * to apply.
  *
  * The arithmetic is the database's, and every School's timezone is one of the
  * names the database itself knows (migrations/0012), so a timezone a School
@@ -43,9 +45,10 @@ export async function schoolDateAt(
 }
 
 /**
- * The instant this School date begins: midnight on it in the School's
- * timezone, or null when there is no such School. On a date whose midnight
- * the clocks skip, it is the first moment the School's clocks show that day.
+ * Midnight on this School date in the School's timezone, or null when there
+ * is no such School. On a date whose midnight the clocks skip, it is the first
+ * moment the School's clocks show that day; on one whose midnight they show
+ * twice, it is the second. Either way it falls on that School date.
  */
 export async function midnightOn(
   database: Queryable,

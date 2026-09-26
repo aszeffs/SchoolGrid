@@ -62,7 +62,7 @@ function valuesOf({
  * on that date in the School's timezone. The Admin console names a date, so
  * the day picked is the School's whatever timezone the browser keeps.
  */
-async function endNamed(
+async function endFrom(
   database: Queryable,
   schoolId: string,
   fields: Record<string, unknown>,
@@ -97,7 +97,7 @@ async function parseGrant(transaction: Queryable, schoolId: string, body: unknow
   if (startsAt !== null && startsAt < now) {
     throw new InvalidRequest("startsAt may not be in the past");
   }
-  const endsAt = (await endNamed(transaction, schoolId, fields)) ?? null;
+  const endsAt = (await endFrom(transaction, schoolId, fields)) ?? null;
   if (endsAt !== null && endsAt <= (startsAt ?? now)) {
     throw new InvalidRequest("the end must be after the membership starts");
   }
@@ -107,7 +107,7 @@ async function parseGrant(transaction: Queryable, schoolId: string, body: unknow
 /** Only a membership's end can change, and not into the past, for the same reason as a grant. */
 async function parseChange(transaction: Queryable, body: unknown, membership: Membership, now: Date) {
   const fields = fieldsOf(body, ["endsAt", "endsOn", "reason"]);
-  const endsAt = await endNamed(transaction, membership.schoolId, fields);
+  const endsAt = await endFrom(transaction, membership.schoolId, fields);
   if (endsAt === undefined) {
     throw new InvalidRequest("endsAt or endsOn is required");
   }
@@ -253,7 +253,7 @@ export function registerAccessRoutes(
     scope.get("/memberships/:membershipId/consequences", async (actor, { params, query }) => {
       const membershipId = params["membershipId"]!;
       const membership = authorizeManageMembership(actor, membershipId, await findMembership(database, membershipId));
-      const at = (await endNamed(database, membership.schoolId, query)) ?? (await transactionTime(database));
+      const at = (await endFrom(database, membership.schoolId, query)) ?? (await transactionTime(database));
       if (membership.role !== "faculty") {
         return { consequences: { teachingAssignments: 0 } };
       }
