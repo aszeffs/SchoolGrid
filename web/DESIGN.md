@@ -190,6 +190,12 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.control}"
     padding: "12px 16px"
+  panel:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.block}"
+    padding: "clamp(16px, 3vw, 24px)"
+    width: "30rem"
   empty:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink-soft}"
@@ -303,6 +309,9 @@ A Class Offering as its Course's colour: a solid block at 12px corner with white
 
 ### Dialog
 The app's one overlay, a native modal `<dialog>`: surface, 16px corner, `shadow-lift`, over the veil with a 3px blur; rises 8px into place in 220ms. Its actions sit in a tinted footer bar pinned to its bottom, right-aligned.
+
+### Panel
+A form that stands on its own (signing in, redeeming an Invitation), or a short message with its one way on (a trial that ended, a page not available), sits in a white block: 12px corner, rule border, block shadow, at most 30rem wide. Its heading stays above it on the ground.
 
 ### Key, notice, error, empty
 The key is a white block at the page's right, sticky on wide screens. A notice is indigo-washed with a 30% indigo border. An error is alarm words on a 9% alarm tint with a 45% alarm border. An empty record is a white block with a dashed border and centred soft-ink words.

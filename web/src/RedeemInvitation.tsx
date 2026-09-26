@@ -155,7 +155,7 @@ export function RedeemInvitation() {
           </p>
           {state.account === "new" ? (
             <>
-              <form key="new" onSubmit={redeemWithNewAccount}>
+              <form key="new" className="panel" onSubmit={redeemWithNewAccount}>
                 <label>
                   Username
                   <input name="username" autoComplete="username" required />
@@ -185,7 +185,7 @@ export function RedeemInvitation() {
             </>
           ) : (
             <>
-              <form key="existing" onSubmit={redeemWithExistingAccount}>
+              <form key="existing" className="panel" onSubmit={redeemWithExistingAccount}>
                 <label>
                   Username
                   <input name="username" autoComplete="username" required />
