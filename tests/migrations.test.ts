@@ -208,12 +208,15 @@ describe("migrations", () => {
       ]);
     });
 
-    // The image one deploy behind still creates a School by name alone (#92).
-    it("still accepts a School created by name alone, as the previous image creates one", async () => {
-      await server().database.query(`INSERT INTO app.school (name) VALUES ('Eastfield')`);
+  });
 
-      const { rows } = await server().database.query(`SELECT timezone FROM app.school WHERE name = 'Eastfield'`);
-      expect(rows).toEqual([{ timezone: "UTC" }]);
+  // Once no image in production creates a School by name alone (#92), every
+  // School has to name its timezone.
+  describe("dropping the School timezone default", () => {
+    it("refuses a School created without a timezone", async () => {
+      await expect(server().database.query(`INSERT INTO app.school (name) VALUES ('Eastfield')`)).rejects.toThrow(
+        /null value in column "timezone"/,
+      );
     });
   });
 
