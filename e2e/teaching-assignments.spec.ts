@@ -169,6 +169,46 @@ test("ending a Faculty membership names the Teaching assignments it ends, and ca
   await expect(row).toContainText("No end");
 });
 
+test.describe("with the browser fourteen hours ahead of UTC", () => {
+  // Kiritimati's midnight is New York's 05:00 or 06:00 the day before, so a
+  // day read in the browser's timezone would end the membership, and the
+  // assignments with it, on the School date before the one picked.
+  test.use({ timezoneId: "Pacific/Kiritimati" });
+
+  test("narrowing a Faculty membership ends its Teaching assignments on the School date picked", async ({ page }) => {
+    const own = await withOwnOffering(page);
+    const teacher = `Jordan ${randomUUID().slice(0, 8)}`;
+    const personId = await arrangePerson(page, own.schoolId, teacher, ["faculty"]);
+    await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
+    await openSection(page, "Roles");
+    const row = recordRows(page, "School memberships in force").filter({ hasText: teacher });
+    const endsOn = own.term.lastDate.replace("06-30", "01-31");
+
+    await page.getByRole("button", { name: `Narrow ${teacher}’s Faculty membership` }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Ends on").fill(endsOn);
+    await expect(dialog).toContainText("1 Teaching assignment.");
+    await dialog.getByRole("button", { name: "Set the end" }).click();
+    await expect(row).not.toContainText("No end");
+
+    // Midnight in New York, on Eastern Standard Time in January.
+    const memberships = await page.request.get(`/api/schools/${own.schoolId}/memberships`);
+    const { memberships: held } = (await memberships.json()) as {
+      memberships: { personId: string; role: string; endsAt: string | null }[];
+    };
+    expect(held.find((membership) => membership.personId === personId && membership.role === "faculty")?.endsAt).toBe(
+      `${endsOn}T05:00:00.000Z`,
+    );
+    const offering = await page.request.get(`/api/schools/${own.schoolId}/class-offerings/${own.classOfferingId}`);
+    const { classOffering } = (await offering.json()) as {
+      classOffering: { teachingAssignments: { person: { id: string }; lastDate: string | null }[] };
+    };
+    expect(classOffering.teachingAssignments).toEqual([
+      expect.objectContaining({ person: expect.objectContaining({ id: personId }), lastDate: endsOn }),
+    ]);
+  });
+});
+
 test("a Faculty member finds their classes in the navigation and reads who teaches each", async ({ page, audit }) => {
   const { faculty, schools } = seeded();
   const own = await withOwnOffering(page);

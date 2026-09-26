@@ -437,24 +437,27 @@ export const api = {
     ),
   memberships: (schoolId: string) =>
     request<{ memberships: Membership[] }>("GET", inSchool(schoolId, "/memberships")),
-  /** Starts now. A missing `endsAt` leaves it with no end. */
-  grantMembership: (schoolId: string, grant: { personId: string; role: Role; endsAt?: string }) =>
+  /**
+   * Starts now, and ends at midnight on `endsOn`, a School date, in the
+   * School's timezone. A missing `endsOn` leaves it with no end.
+   */
+  grantMembership: (schoolId: string, grant: { personId: string; role: Role; endsOn?: string }) =>
     request<{ membership: Membership }>("POST", inSchool(schoolId, "/memberships"), grant),
-  /** Only a membership's end can change, and not into the past. */
-  narrowMembership: (schoolId: string, membershipId: string, endsAt: string) =>
+  /** Only a membership's end can change, and not into the past. It ends at midnight on `endsOn` in the School's timezone. */
+  narrowMembership: (schoolId: string, membershipId: string, endsOn: string) =>
     request<{ membership: Membership }>(
       "PATCH",
       inSchool(schoolId, `/memberships/${encodeURIComponent(membershipId)}`),
-      { endsAt },
+      { endsOn },
     ),
-  /** What ending a membership at `endsAt`, or now, would end with it. */
-  membershipConsequences: (schoolId: string, membershipId: string, endsAt?: string) =>
+  /** What ending a membership at midnight on `endsOn`, or now, would end with it. */
+  membershipConsequences: (schoolId: string, membershipId: string, endsOn?: string) =>
     request<{ consequences: { teachingAssignments: number } }>(
       "GET",
       inSchool(
         schoolId,
         `/memberships/${encodeURIComponent(membershipId)}/consequences${
-          endsAt === undefined ? "" : `?endsAt=${encodeURIComponent(endsAt)}`
+          endsOn === undefined ? "" : `?endsOn=${encodeURIComponent(endsOn)}`
         }`,
       ),
     ),

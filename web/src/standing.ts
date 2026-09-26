@@ -84,8 +84,3 @@ function localDay(date: string): Date {
   local.setFullYear(year, month - 1, day);
   return local;
 }
-
-/** The start of a day a date field names, in the reader's own time zone, as the API takes a moment. */
-export function startOfDay(day: string): string {
-  return new Date(`${day}T00:00`).toISOString();
-}
