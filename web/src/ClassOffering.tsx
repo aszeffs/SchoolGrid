@@ -17,7 +17,7 @@ import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts";
+import { courseTitle, labelConflictMessage, offeringName, runsTo } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
 import { Roster } from "./Roster.tsx";
 import { useScreen } from "./screen.ts";
@@ -149,7 +149,7 @@ function rosterableStudents(offering: Offering, enrollments: Enrollment[], perso
   );
   const toTermEnd = new Set(
     (offering.rosterMemberships ?? [])
-      .filter((membership) => membership.lastDate === null || membership.lastDate >= offering.term.lastDate)
+      .filter((membership) => runsTo(membership, offering.term) >= offering.term.lastDate)
       .map((membership) => membership.person.id),
   );
   return persons

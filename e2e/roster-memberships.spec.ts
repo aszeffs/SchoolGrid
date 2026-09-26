@@ -192,8 +192,10 @@ test("a Student who left the Term is rostered again, from after the day they lef
   const token = randomUUID().slice(0, 8);
   const returning = `Sasha ${token}`;
   const staying = `Sam ${token}`;
+  const joining = `Skye ${token}`;
   const returningId = await arrangeStudent(page, own.schoolId, returning);
   const stayingId = await arrangeStudent(page, own.schoolId, staying);
+  await arrangeStudent(page, own.schoolId, joining);
   const year = own.term.firstDate.slice(0, 4);
   const offering = `/class-offerings/${own.classOfferingId}/roster-memberships`;
   await arrange(page, own.schoolId, offering, { personIds: [returningId], lastDate: `${year}-10-31` });
@@ -205,13 +207,15 @@ test("a Student who left the Term is rostered again, from after the day they lef
   await page.getByRole("button", { name: "Roster Students" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Find by name").fill(token);
-  // Only the Student who left is offered; the one on it to the Term's end is not.
-  await expect(dialog.getByRole("checkbox")).toHaveCount(1);
+  // The Student who left is offered, and one never on it; the one on it to the Term's end is not.
+  await expect(dialog.getByRole("checkbox")).toHaveCount(2);
   await dialog.getByRole("checkbox", { name: returning }).check();
-  // With the Term's bounds, theirs would overlap the membership they held.
-  const confirm = dialog.getByRole("button", { name: "Roster 1 Student" });
+  await dialog.getByRole("checkbox", { name: joining }).check();
+  // With the Term's bounds, theirs would overlap the membership they held, and hold back the other too.
+  const confirm = dialog.getByRole("button", { name: "Roster 2 Students" });
   await expect(confirm).toBeDisabled();
   await expect(dialog.getByRole("alert")).toContainText(returning);
+  await expect(dialog.getByRole("alert")).not.toContainText(joining);
   await audit(page);
   await dialog.getByLabel("From (optional)").fill(`${year}-10-31`);
   await expect(confirm).toBeDisabled();
@@ -222,11 +226,12 @@ test("a Student who left the Term is rostered again, from after the day they lef
   await confirm.click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "rostered" })).toHaveText(
-    `1 Student is rostered in ${own.offering}.`,
+    `2 Students are rostered in ${own.offering}.`,
   );
   await expect(roster(page).filter({ hasText: returning })).toHaveCount(2);
+  await expect(roster(page).filter({ hasText: joining })).toHaveCount(1);
 
-  // Back on it to the Term's end, they are not offered again.
+  // Both on it to the Term's end, neither is offered again.
   await page.getByRole("button", { name: "Roster Students" }).click();
   await dialog.getByLabel("Find by name").fill(token);
   await expect(dialog).toContainText("No Student listed here has that in their name.");

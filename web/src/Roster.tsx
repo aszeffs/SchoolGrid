@@ -3,7 +3,7 @@ import type { ApiResult, ConflictDetail, ListedPerson, RosterMembership, TaughtC
 import { ChangeDates } from "./ChangeDates.tsx";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
-import { offeringName } from "./offerings.ts";
+import { offeringName, runsTo } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
 import { dayOf, schoolDateAfter, schoolDay } from "./standing.ts";
 
@@ -50,8 +50,6 @@ export function Roster({
   const [done, setDone] = useState("");
   const { term } = offering;
   const today = dayOf(new Date());
-  /** The last day a membership runs to: its own, or its Term's while it is open. */
-  const runsTo = (membership: RosterMembership) => membership.lastDate ?? term.lastDate;
   const whose = (membership: RosterMembership) => `${membership.person.displayName}’s Roster membership`;
 
   const settle = (sent: ApiResult<unknown>, success: string) => {
@@ -89,9 +87,9 @@ export function Roster({
           {
             head: "Until",
             cell: (membership) =>
-              runsTo(membership) < today ? (
+              runsTo(membership, term) < today ? (
                 <>
-                  <span className="mark mark--struck">Ended</span> {schoolDay(runsTo(membership))}
+                  <span className="mark mark--struck">Ended</span> {schoolDay(runsTo(membership, term))}
                 </>
               ) : membership.lastDate === null ? (
                 <span className="mark">End of Term</span>
@@ -105,7 +103,7 @@ export function Roster({
                   head: "Change",
                   actions: true,
                   cell: (membership: RosterMembership) =>
-                    runsTo(membership) < today ? null : (
+                    runsTo(membership, term) < today ? null : (
                       <span className="actions record__buttons">
                         <button
                           type="button"
@@ -141,9 +139,8 @@ export function Roster({
       {administers &&
         (rosterable.length === 0 ? (
           <p className="empty">
-            Every Student with an open Enrollment is on this roster to the end of the Term already. To roster someone
-            else, start their
-            Enrollment on <Link to={{ name: "enrollments", schoolId }}>Enrollments</Link> first.
+            Every Student with an open Enrollment is on this roster to the end of the Term already. To roster
+            someone else, start their Enrollment on <Link to={{ name: "enrollments", schoolId }}>Enrollments</Link> first.
           </p>
         ) : (
           <p>
@@ -256,25 +253,24 @@ function RosterStudents({
   const shown = rosterable.filter((person) => person.displayName.toLocaleLowerCase().includes(looking));
   const inOrder = firstDate === "" || lastDate === "" || lastDate >= firstDate;
   const count = chosen.size === 1 ? "1 Student" : `${chosen.size} Students`;
-  /** The last day each Student chosen before was on this roster: memberships run to their Term's end while open. */
+  /** The last day each Student was on this roster, by Person, for those who have been on it. */
   const heldUntil = new Map<string, string>();
   for (const membership of roster) {
-    const until = membership.lastDate ?? term.lastDate;
-    if (until > (heldUntil.get(membership.person.id) ?? "")) {
-      heldUntil.set(membership.person.id, until);
+    if (runsTo(membership, term) > (heldUntil.get(membership.person.id) ?? "")) {
+      heldUntil.set(membership.person.id, runsTo(membership, term));
     }
   }
-  // The bounds sent, as the server reads blanks, against every membership each chosen Student held.
-  const from = firstDate === "" ? term.firstDate : firstDate;
-  const until = lastDate === "" ? term.lastDate : lastDate;
+  // The bounds as the server reads them, blanks as the Term's, against every membership each chosen Student held.
+  const sentFrom = firstDate === "" ? term.firstDate : firstDate;
+  const sentUntil = lastDate === "" ? term.lastDate : lastDate;
   const overlapping = rosterable.filter(
     (person) =>
       chosen.has(person.id) &&
       roster.some(
         (membership) =>
           membership.person.id === person.id &&
-          membership.firstDate <= until &&
-          from <= (membership.lastDate ?? term.lastDate),
+          membership.firstDate <= sentUntil &&
+          sentFrom <= runsTo(membership, term),
       ),
   );
 
@@ -306,7 +302,7 @@ function RosterStudents({
     >
       <p>
         Only Students with an open Enrollment who are not on this roster to the end of the Term are listed. One who was
-        on it before is rostered again from after the day they left.
+        on it before may be rostered again, with dates after the day they left.
       </p>
       <search className="filter">
         <label>
@@ -371,7 +367,7 @@ function RosterStudents({
           These dates overlap a membership of this roster, so no one can be rostered with them.
           {overlapping.map((person) => {
             const held = heldUntil.get(person.id)!;
-            return ` ${person.displayName} was on it until ${schoolDay(held)}: choose From ${schoolDay(schoolDateAfter(held))} or later, or roster them on their own.`;
+            return ` ${person.displayName} was on it until ${schoolDay(held)}: choose From ${schoolDay(schoolDateAfter(held))} or later, or untick them.`;
           })}
         </p>
       )}
