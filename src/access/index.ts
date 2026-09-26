@@ -264,6 +264,13 @@ export interface ReachedSchool {
    */
   trialExpiresAt?: string;
   /**
+   * How many Class Offerings the Person was ever assigned to teach, ended
+   * assignments included. What they taught outlasts their Faculty membership
+   * (CONTEXT.md: Teaching assignment), so this is the one fact beyond the roles
+   * a client needs to lead a Person to it once that role has ended.
+   */
+  classOfferingsTaught: number;
+  /**
    * The role this account acts as, only when it is one of a Trial School's
    * role accounts: its visitor may change to any other (ADR-0012).
    */
@@ -303,6 +310,7 @@ export async function actorInEachSchool(
       // In the order ROLES declares, so the response does not vary with what
       // the database happened to return first.
       roles: ROLES.filter((role) => held.has(role)),
+      classOfferingsTaught: (await classOfferingIdsTaughtBy(database, person)).size,
       ...(trialExpiresAt === null ? {} : { trialExpiresAt: trialExpiresAt.toISOString() }),
       ...(viewingAs === null ? {} : { viewingAs }),
     });
@@ -995,11 +1003,15 @@ export function authorizeManageRosterMembership<M extends RosterMembership>(
 
 /**
  * Returns the School whose Class Offerings the actor may list as the ones they
- * teach and taught, and refuses otherwise. Only a Faculty member has any: the
- * slice giving Students their own Class Offerings widens this.
+ * teach and taught, and refuses otherwise. A Faculty member lists theirs, none
+ * though they may be. So does anyone ever assigned to teach in the School, once
+ * their Faculty membership has ended too: they keep reading what they taught
+ * (CONTEXT.md: Teaching assignment), so they keep the list of it. A Student's
+ * own are authorizeReadOwnRosterMemberships's.
  */
 export function authorizeReadOwnClassOfferings(actor: Actor): string {
-  if (!holds(actor, "faculty")) {
+  const taught = standingOf.get(actor)?.taughtClassOfferingIds.size ?? 0;
+  if (!holds(actor, "faculty") && taught === 0) {
     throw new Refused("forbidden", { type: "school", id: actor.schoolId });
   }
   return actor.schoolId;

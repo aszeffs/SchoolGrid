@@ -112,6 +112,8 @@ export interface Section {
   label: string;
   /** The roles that reach it; null for every role. */
   reachedBy: readonly Role[] | null;
+  /** Whether anyone ever assigned to teach reaches it too, whatever roles they hold now. */
+  reachedByTaught?: true;
 }
 
 /**
@@ -126,7 +128,7 @@ export interface Section {
  */
 export const SECTIONS: readonly Section[] = [
   { name: "account", label: "Your account", reachedBy: null },
-  { name: "classes", label: "Your classes", reachedBy: ["faculty", "student"] },
+  { name: "classes", label: "Your classes", reachedBy: ["faculty", "student"], reachedByTaught: true },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
   { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },
@@ -139,10 +141,23 @@ export const SECTIONS: readonly Section[] = [
   { name: "settings", label: "Settings", reachedBy: ["school_administrator"] },
 ];
 
-/** The sections a Person holding these roles reaches, in navigation order. */
-export function sectionsFor(roles: readonly Role[]): Section[] {
+/**
+ * The sections a Person reaches, in navigation order: by the roles they hold,
+ * and by the Class Offerings they were ever assigned to teach, which outlast
+ * their Faculty membership (CONTEXT.md: Teaching assignment).
+ */
+export function sectionsFor({
+  roles,
+  classOfferingsTaught,
+}: {
+  roles: readonly Role[];
+  classOfferingsTaught: number;
+}): Section[] {
   return SECTIONS.filter(
-    (section) => section.reachedBy === null || section.reachedBy.some((role) => roles.includes(role)),
+    (section) =>
+      section.reachedBy === null ||
+      section.reachedBy.some((role) => roles.includes(role)) ||
+      (section.reachedByTaught === true && classOfferingsTaught > 0),
   );
 }
 

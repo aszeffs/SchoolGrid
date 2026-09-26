@@ -20,7 +20,6 @@ import { SchoolSettings } from "./SchoolSettings.tsx";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
-import { StudentClasses } from "./StudentClasses.tsx";
 import { rememberTrial, START_FAILED, timeLeft, trialHasEnded, useNow, useStartTrial } from "./trial.ts";
 import { YourClasses } from "./YourClasses.tsx";
 
@@ -198,7 +197,7 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
     nav: (
       <nav aria-label={school.name} className="shell-nav">
         <ul>
-          {sectionsFor(school.roles).map((section) => (
+          {sectionsFor(school).map((section) => (
             <li key={section.name}>
               <Link
                 to={{ name: section.name, schoolId: school.schoolId }}
@@ -244,8 +243,7 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
     case "account":
       return <Account school={school} />;
     case "classes":
-      // The Class Offerings a Faculty member teaches, or, for a Student, the ones they are in.
-      return school.roles.includes("faculty") ? <YourClasses school={school} /> : <StudentClasses school={school} />;
+      return <YourClasses school={school} />;
     case "persons":
       return <Persons school={school} />;
     case "invitations":

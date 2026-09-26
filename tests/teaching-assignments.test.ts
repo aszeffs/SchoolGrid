@@ -840,7 +840,7 @@ describe("Teaching assignments", () => {
       );
     });
 
-    it("lists no class for Faculty never assigned, and still reads what they taught once their Faculty membership ends", async () => {
+    it("lists no class for Faculty never assigned, and still lists and reads what they taught once their Faculty membership ends", async () => {
       const world = await arrange();
       await assign(world.alice, world.offering, {
         personId: world.frankiePerson.id,
@@ -857,11 +857,37 @@ describe("Teaching assignments", () => {
       const none = await world.flynn.get("/account/class-offerings");
       const read = await world.frankie.get(`/class-offerings/${world.offering.id}`);
       const classes = await world.frankie.get("/account/class-offerings");
+      // Alice administers the School but never taught in it.
+      const neverTaught = await world.alice.get("/account/class-offerings");
 
       expect(none.body).toEqual({ current: [], past: [] });
       expect(read.status).toBe(200);
-      // The list of their classes is a Faculty member's page alone.
-      expect(observable(classes)).toEqual(observable(refusal));
+      expect(classes.status).toBe(200);
+      const { current, past } = classes.body as { current: ClassOffering[]; past: ClassOffering[] };
+      expect([...current, ...past].map((offering) => offering.id)).toEqual([world.offering.id]);
+      expect(observable(neverTaught)).toEqual(observable(refusal));
+    });
+
+    it("lists a Person who is both Faculty and a Student the Class Offerings they teach and those they are rostered in", async () => {
+      const world = await arrange();
+      await server().grantMembership({ person: world.frankiePerson, role: "student" });
+      await server().enroll(world.frankiePerson);
+      await assign(world.alice, world.offering, { personId: world.frankiePerson.id });
+      const rostered = await world.alice.post(`/class-offerings/${world.nextOffering.id}/roster-memberships`, {
+        personIds: [world.frankiePerson.id],
+      });
+      expect(rostered.status).toBe(201);
+
+      const taught = await world.frankie.get("/account/class-offerings");
+      const rosteredIn = await world.frankie.get("/account/roster-memberships");
+
+      expect((taught.body as { current: ClassOffering[] }).current.map((offering) => offering.id)).toEqual([
+        world.offering.id,
+      ]);
+      const { terms } = rosteredIn.body as { terms: { classOfferings: ClassOffering[] }[] };
+      expect(terms.flatMap((term) => term.classOfferings.map((offering) => offering.id))).toEqual([
+        world.nextOffering.id,
+      ]);
     });
   });
 

@@ -2,7 +2,7 @@ import { api, type OwnAccount, type ReachedSchool, type Role } from "./api.ts";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
-import { ROLE_NAMES } from "./roles.ts";
+import { ROLE_NAMES, teaches } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
@@ -79,11 +79,11 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
       {holds("student") && <Enrollment enrollment={account.enrollment} />}
       {holds("guardian") && <LinkedStudents account={account} />}
 
-      {(holds("faculty") || holds("student")) && (
+      {(teaches(school) || holds("student")) && (
         <section>
           <h2>Your classes</h2>
           <p>
-            The Class Offerings you are {holds("faculty") ? "assigned to teach" : "on the roster of"} are on{" "}
+            The Class Offerings you {classesHeld(teaches(school), holds("student"))} are on{" "}
             <Link to={{ name: "classes", schoolId: school.schoolId }}>Your classes</Link>.
           </p>
         </section>
@@ -165,4 +165,12 @@ function Permits({ permitted }: { permitted: boolean }) {
   return (
     <span className={permitted ? "mark mark--filled" : "mark mark--struck"}>{permitted ? "May read" : "May not read"}</span>
   );
+}
+
+/** Which Class Offerings of theirs a Person finds on Your classes, in the words the page uses. */
+function classesHeld(taught: boolean, rostered: boolean): string {
+  if (taught && rostered) {
+    return "teach or taught, and those you are on the roster of,";
+  }
+  return taught ? "teach or taught" : "are on the roster of";
 }

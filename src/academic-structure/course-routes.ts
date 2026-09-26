@@ -237,7 +237,7 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
   });
 
   /*
-   * The Class Offerings a Faculty member teaches or taught, each with its
+   * The Class Offerings a Person teaches or taught, each with its
    * Teaching assignments: those still running today or later first, in Term
    * order, then those over, the most recent first.
    */

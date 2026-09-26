@@ -9,3 +9,4 @@
 - The response names only the calling actor. It is not a directory: no other Person's roles, and no School the account does not reach, appear in it.
 - Deriving the same thing client-side from `/schools` and a per-School memberships call was rejected: N+1 requests before the shell can paint, and a flash of empty navigation on every load.
 - When authorization grows a dimension the roles alone do not capture, the answer is a route that decides it, not a flag added here.
+- One fact beyond the roles is here: how many Class Offerings the Person was ever assigned to teach. What they taught outlasts their Faculty membership, so a Person who now holds only another role still has classes to reach, and the roles alone cannot lead them there. It is a count of the actor's own records, not a decision: the route listing them still decides who may.
