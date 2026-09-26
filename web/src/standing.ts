@@ -42,10 +42,7 @@ export const MOMENT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", 
 /** A day as a reader expects it. */
 export const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
-/**
- * The day after this moment's, as a date field writes it. The earliest day an
- * end can be set for: the start of today has already gone by.
- */
+/** The day after this moment's, in the reader's own time zone, as a date field writes it. */
 export function dayAfter(moment: Date): string {
   const next = new Date(moment);
   next.setHours(0, 0, 0, 0);
@@ -68,7 +65,7 @@ export function dayOf(moment: Date): string {
  * day the School saw, so it is read as that day wherever the reader is,
  * rather than as a moment their own timezone could move.
  */
-export function schoolDay(date: string): string {
+export function formatSchoolDate(date: string): string {
   return DAY.format(localDay(date));
 }
 
@@ -83,9 +80,4 @@ function localDay(date: string): Date {
   const local = new Date(0, 0, 1);
   local.setFullYear(year, month - 1, day);
   return local;
-}
-
-/** The start of a day a date field names, in the reader's own time zone, as the API takes a moment. */
-export function startOfDay(day: string): string {
-  return new Date(`${day}T00:00`).toISOString();
 }

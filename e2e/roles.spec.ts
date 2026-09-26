@@ -148,6 +148,63 @@ test("with no membership to list, the sheet says so and offers the first grant",
   await audit(page);
 });
 
+/** The School date after this one, counted in UTC so no local timezone can move it. */
+function dateAfter(date: string): string {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+}
+
+// The first School keeps New York's time. Kiritimati is a day ahead of it from
+// New York's 05:00 or 06:00, and Pago Pago a day behind it until its 06:00 or
+// 07:00, as daylight saving has it, so
+// whenever the suite runs one browser or the other is on a different date.
+for (const timezoneId of ["Pacific/Kiritimati", "Pacific/Pago_Pago"]) {
+  test.describe(`with the browser in ${timezoneId}`, () => {
+    test.use({ timezoneId });
+
+    test("the earliest end offered is the School's tomorrow, not the browser's", async ({ page }) => {
+      const displayName = await onRoles(page);
+      const schoolId = await schoolIdOf(page, seeded().schools[0]!);
+      const answered = await page.request.get(`/api/schools/${schoolId}/school-date`);
+      const { schoolDate: today } = (await answered.json()) as { schoolDate: string };
+      const tomorrow = dateAfter(today);
+
+      // Granted with an end: the School's today is refused by the field, before anything is sent.
+      const grant = page.getByRole("form", { name: "Grant a School membership" });
+      const endsOn = grant.getByLabel("Ends on (optional)");
+      await expect(endsOn).toHaveAttribute("min", tomorrow);
+      await grant.getByLabel("Person").selectOption({ label: displayName });
+      await grant.getByLabel("Role").selectOption({ label: "Guardian" });
+      const sent = changesSent(page);
+      await endsOn.fill(today);
+      await grant.getByRole("button", { name: "Grant membership" }).click();
+      expect(await endsOn.evaluate((input: HTMLInputElement) => input.validity.rangeUnderflow)).toBe(true);
+      expect(sent).toEqual([]);
+      await endsOn.fill(tomorrow);
+      await grant.getByRole("button", { name: "Grant membership" }).click();
+      const guardian = inForce(page).filter({ hasText: displayName }).filter({ hasText: "Guardian" });
+      await expect(guardian).not.toContainText("No end");
+
+      // Narrowed: the same bound, and the School's tomorrow counts what it ends.
+      await grant.getByLabel("Person").selectOption({ label: displayName });
+      await grant.getByLabel("Role").selectOption({ label: "Faculty" });
+      await grant.getByRole("button", { name: "Grant membership" }).click();
+      const faculty = inForce(page).filter({ hasText: displayName }).filter({ hasText: "Faculty" });
+      await expect(faculty).toContainText("No end");
+      await page.getByRole("button", { name: `Narrow ${displayName}’s Faculty membership` }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByLabel("Ends on")).toHaveAttribute("min", tomorrow);
+      await dialog.getByLabel("Ends on").fill(today);
+      await expect(dialog.getByRole("button", { name: "Set the end" })).toBeDisabled();
+      await dialog.getByLabel("Ends on").fill(tomorrow);
+      await expect(dialog).toContainText("0 Teaching assignments.");
+      await dialog.getByRole("button", { name: "Set the end" }).click();
+      await expect(faculty).not.toContainText("No end");
+    });
+  });
+}
+
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 360, height: 740 } });
 

@@ -5,8 +5,8 @@ import {
   readAll,
   type AcademicYear,
   type ApiResult,
-  type ClassOffering,
   type Course,
+  type ListedClassOffering,
   type ReachedSchool,
   type Term,
 } from "./api.ts";
@@ -16,7 +16,7 @@ import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts"
 import { RecordList } from "./RecordList.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { dayAfter, schoolDay } from "./standing.ts";
+import { dayAfter, formatSchoolDate } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Class Offerings" };
@@ -73,7 +73,7 @@ function ClassOfferingsSheet({
   onOffer,
 }: {
   schoolId: string;
-  classOfferings: ClassOffering[];
+  classOfferings: ListedClassOffering[];
   academicYears: AcademicYear[];
   courses: Course[];
   busy: boolean;
@@ -94,6 +94,10 @@ function ClassOfferingsSheet({
       <dl>
         <Key term="Class Offering">
           A Course offered for one Term. Its Faculty and roster belong to it alone, not to the Course.
+        </Key>
+        <Key term="Faculty and roster size">
+          Who teaches each offering and how many Students are on its roster: today, in a Term running now. A Term still
+          to come shows who starts it, and one that has ended, who finished it.
         </Key>
         <Key term="Label">
           What tells two offerings of one Course in one Term apart, such as Section A and Section B. At most one of them
@@ -163,7 +167,7 @@ function ClassOfferingsSheet({
         </select>
       </label>
       <p className="muted" role="status">
-        {done === "" ? `${schoolDay(term.firstDate)} to ${schoolDay(term.lastDate)}` : done}
+        {done === "" ? `${formatSchoolDate(term.firstDate)} to ${formatSchoolDate(term.lastDate)}` : done}
       </p>
 
       <RecordList
@@ -181,6 +185,20 @@ function ClassOfferingsSheet({
             ),
           },
           { head: "Code", cell: (offering) => offering.course.code ?? <span className="muted">None</span> },
+          {
+            head: "Faculty",
+            cell: ({ faculty }) =>
+              faculty.length === 0 ? (
+                <span className="muted">No one assigned</span>
+              ) : (
+                faculty.map((person) => person.displayName).join(", ")
+              ),
+          },
+          {
+            head: "Roster",
+            cell: ({ rosterSize }) =>
+              rosterSize === 0 ? <span className="muted">No Students</span> : studentCount(rosterSize),
+          },
         ]}
       />
 
@@ -243,4 +261,8 @@ function currentTerm(terms: Term[]): Term | undefined {
     terms.find((term) => today < term.firstDate) ??
     terms.at(-1)
   );
+}
+
+function studentCount(count: number): string {
+  return count === 1 ? "1 Student" : `${count} Students`;
 }

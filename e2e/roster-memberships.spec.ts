@@ -4,12 +4,11 @@ import {
   arrange,
   arrangePerson,
   changesSent,
-  openSchool,
   openSection,
   recordRows,
-  schoolIdOf,
   schoolsList,
   signIn,
+  withOwnOffering,
 } from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
@@ -28,21 +27,6 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * membership that has begun, so theirs is in a year around today.
  */
 
-interface Own {
-  schoolId: string;
-  classOfferingId: string;
-  /** The offering as its page is headed: its Course and label. */
-  offering: string;
-  /** The Term it runs in, as `YYYY-MM-DD`, and its name as a Student's page heads it. */
-  term: { firstDate: string; lastDate: string; heading: string };
-}
-
-/** A year far enough ahead that no other spec's can overlap it. */
-function yearAhead(): { firstDate: string; lastDate: string } {
-  const starts = 2100 + Math.floor(Math.random() * 7000);
-  return { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
-}
-
 /**
  * A year running from a month ago to a month ahead, so a membership of it has
  * begun and outlasts a departure today. No other spec arranges a year near
@@ -51,38 +35,6 @@ function yearAhead(): { firstDate: string; lastDate: string } {
 function yearAroundToday(): { firstDate: string; lastDate: string } {
   const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
   return { firstDate: day(-30), lastDate: day(30) };
-}
-
-/** A School Administrator in the first School, with a Class Offering of the test's own in a year of its own. */
-async function withOwnOffering(page: Page, term = yearAhead()): Promise<Own> {
-  const { schoolAdministrator, schools } = seeded();
-  await signIn(page, schoolAdministrator);
-  await openSchool(page, schools[0]!);
-  const schoolId = await schoolIdOf(page, schools[0]!);
-  const yearName = `Year ${randomUUID().slice(0, 8)}`;
-  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
-    name: yearName,
-    ...term,
-  });
-  const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
-    headers: { origin: new URL(page.url()).origin },
-    data: { terms: [{ name: "Whole year", ...term }] },
-  });
-  expect(divided.ok()).toBe(true);
-  const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
-  const courseName = `Course ${randomUUID().slice(0, 8)}`;
-  const { course } = await arrange<{ course: { id: string } }>(page, schoolId, "/courses", { name: courseName });
-  const { classOffering } = await arrange<{ classOffering: { id: string } }>(page, schoolId, "/class-offerings", {
-    courseId: course.id,
-    termId: year.terms[0]!.id,
-    label: "Section A",
-  });
-  return {
-    schoolId,
-    classOfferingId: classOffering.id,
-    offering: `${courseName}, Section A`,
-    term: { ...term, heading: `Whole year, ${yearName}` },
-  };
 }
 
 /** A Student of the spec's own, holding an open Enrollment, and returns their Person. */
@@ -165,8 +117,76 @@ test("a School Administrator rosters several Students in one go from the keyboar
   await page.getByRole("button", { name: "Delete Class Offering" }).click();
   await dialog.getByRole("button", { name: "Delete the Class Offering" }).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was in the class.",
+    "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was on its roster.",
   );
+
+  // The Term's list shows who teaches it and how many are on its roster,
+  // saying so when no one teaches it.
+  await openSection(page, "Class Offerings");
+  await page.getByLabel("Term").selectOption({ label: own.term.option });
+  const listed = recordRows(page, "Class Offerings in Whole year").filter({ hasText: own.offering });
+  await expect(listed).toContainText("No one assigned");
+  await expect(listed).toContainText("1 Student");
+  const facultyName = `Tatum ${token}`;
+  const personId = await arrangePerson(page, own.schoolId, facultyName, ["faculty"]);
+  await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
+  await page.reload();
+  await page.getByLabel("Term").selectOption({ label: own.term.option });
+  await expect(listed).toContainText(facultyName);
+  await audit(page);
+});
+
+test("a Student who left the Term is rostered again, from after the day they left, and nothing is sent until the dates fit", async ({
+  page,
+  audit,
+}) => {
+  const own = await withOwnOffering(page);
+  const token = randomUUID().slice(0, 8);
+  const returning = `Sasha ${token}`;
+  const staying = `Sam ${token}`;
+  const joining = `Skye ${token}`;
+  const returningId = await arrangeStudent(page, own.schoolId, returning);
+  const stayingId = await arrangeStudent(page, own.schoolId, staying);
+  await arrangeStudent(page, own.schoolId, joining);
+  const year = own.term.firstDate.slice(0, 4);
+  const offering = `/class-offerings/${own.classOfferingId}/roster-memberships`;
+  await arrange(page, own.schoolId, offering, { personIds: [returningId], lastDate: `${year}-10-31` });
+  await arrange(page, own.schoolId, offering, { personIds: [stayingId] });
+  await page.goto(`/schools/${own.schoolId}/class-offerings/${own.classOfferingId}`);
+  await expect(roster(page)).toHaveCount(3);
+  const sent = changesSent(page);
+
+  await page.getByRole("button", { name: "Roster Students" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Find by name").fill(token);
+  // The Student who left is offered, and one never on it; the one on it to the Term's end is not.
+  await expect(dialog.getByRole("checkbox")).toHaveCount(2);
+  await dialog.getByRole("checkbox", { name: returning }).check();
+  await dialog.getByRole("checkbox", { name: joining }).check();
+  // With the Term's bounds, theirs would overlap the membership they held, and hold back the other too.
+  const confirm = dialog.getByRole("button", { name: "Roster 2 Students" });
+  await expect(confirm).toBeDisabled();
+  await expect(dialog.getByRole("alert")).toContainText(returning);
+  await expect(dialog.getByRole("alert")).not.toContainText(joining);
+  await audit(page);
+  await dialog.getByLabel("From (optional)").fill(`${year}-10-31`);
+  await expect(confirm).toBeDisabled();
+  expect(sent).toEqual([]);
+
+  await dialog.getByLabel("From (optional)").fill(`${year}-11-01`);
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await confirm.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "rostered" })).toHaveText(
+    `2 Students are rostered in ${own.offering}.`,
+  );
+  await expect(roster(page).filter({ hasText: returning })).toHaveCount(2);
+  await expect(roster(page).filter({ hasText: joining })).toHaveCount(1);
+
+  // Both on it to the Term's end, neither is offered again.
+  await page.getByRole("button", { name: "Roster Students" }).click();
+  await dialog.getByLabel("Find by name").fill(token);
+  await expect(dialog).toContainText("No Student listed here has that in their name.");
 });
 
 test("ending an Enrollment counts the Roster memberships it ends, and cancelling sends nothing", async ({
@@ -221,7 +241,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
     await page.goto(`/schools/${own.schoolId}/account`);
     await openSection(page, "Your classes");
     await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
-    const row = recordRows(page, `Your classes in ${own.term.heading}`).filter({ hasText: own.offering });
+    const row = recordRows(page, `Your Class Offerings in ${own.term.option}`).filter({ hasText: own.offering });
     await expect(row).toContainText(teacher);
     return row;
   };
@@ -239,6 +259,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
 
   // Departed, they keep the classes they took part in.
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
   await signIn(page, schoolAdministrator);
   await expect(schoolsList(page)).not.toHaveCount(0);
   const ended = await page.request.delete(`/api/schools/${own.schoolId}/enrollments/${enrollmentId}`, {
@@ -247,6 +268,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
   });
   expect(ended.ok()).toBe(true);
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
   await signIn(page, credentials);
   await expect(page.getByRole("navigation")).toBeVisible();
   // Kept, but only to the day they left.
@@ -262,7 +284,7 @@ test("a Student with no class is told so", async ({ page, audit }) => {
   await giveAccount(page, own.schoolId, personId);
 
   await page.goto(`/schools/${own.schoolId}/classes`);
-  await expect(page.getByRole("main")).toContainText("You have no classes yet.");
+  await expect(page.getByRole("main")).toContainText("You are on no Class Offering’s roster yet.");
   await audit(page);
 });
 
@@ -304,7 +326,7 @@ test.describe("on a phone", () => {
 
       await giveAccount(page, own.schoolId, personId);
       await page.goto(`/schools/${own.schoolId}/classes`);
-      await expect(recordRows(page, `Your classes in ${own.term.heading}`)).toHaveCount(1);
+      await expect(recordRows(page, `Your Class Offerings in ${own.term.option}`)).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
     });

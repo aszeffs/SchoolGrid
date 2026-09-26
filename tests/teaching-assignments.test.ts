@@ -579,7 +579,7 @@ describe("Teaching assignments", () => {
       // Arranged where the School date is not UTC's today, whenever this runs,
       // and hours from midnight either way.
       const utcHour = new Date().getUTCHours();
-      const world = await arrange(utcHour < 9 ? "Pacific/Pago_Pago" : "Pacific/Kiritimati");
+      const world = await arrange(utcHour < 11 ? "Etc/GMT+12" : "Pacific/Kiritimati");
       const { today } = world;
       expect(today).not.toBe(new Date().toISOString().slice(0, 10));
       const running = await assign(world.alice, world.offering, {
@@ -692,6 +692,56 @@ describe("Teaching assignments", () => {
           (record) => (record.after as { lastDate: string }).lastDate,
         ),
       ).toEqual(["2040-03-06", "2040-03-07"]);
+    });
+
+    it("takes an end named as a School date to be midnight on it in New York, and ends them on that date", async () => {
+      const world = await arrange();
+      // New York keeps Eastern Standard Time until 11 March 2040, and Eastern
+      // Daylight Time through July: midnight is 05:00 UTC, then 04:00.
+      const [later] = await divide(world.alice, [{ name: "2040", firstDate: "2040-01-01", lastDate: "2040-06-30" }]);
+      const laterOffering = await offer(world.alice, await createCourse(world.alice, "Biology"), later!);
+      const running = await assign(world.alice, laterOffering, { personId: world.frankiePerson.id });
+      const membership = await membershipOf(world.alice, world.frankiePerson, "faculty");
+
+      const counted = [
+        await world.alice.get(`/memberships/${membership.id}/consequences?endsOn=2040-03-07`),
+        await world.alice.get(`/memberships/${membership.id}/consequences?endsOn=2040-07-01`),
+      ];
+      const granted = await world.alice.post("/memberships", {
+        personId: world.frankiePerson.id,
+        role: "guardian",
+        endsOn: "2040-07-04",
+      });
+      const narrowed = await world.alice.patch(`/memberships/${membership.id}`, { endsOn: "2040-03-07" });
+
+      expect(counted.map((response) => response.body)).toEqual([
+        { consequences: { teachingAssignments: 1 } },
+        { consequences: { teachingAssignments: 0 } },
+      ]);
+      expect(granted.body).toMatchObject({ membership: { endsAt: "2040-07-04T04:00:00.000Z" } });
+      expect(narrowed.body).toEqual({ membership: { ...membership, endsAt: "2040-03-07T05:00:00.000Z" } });
+      expect(await assignmentsOn(world.alice, laterOffering)).toEqual([{ ...running, lastDate: "2040-03-07" }]);
+    });
+
+    it.each([
+      ["a date that is not one", { endsOn: "2040-02-30" }],
+      ["an instant for a date", { endsOn: "2040-03-07T05:00:00Z" }],
+      ["both an instant and a date", { endsAt: "2040-03-07T05:00:00Z", endsOn: "2040-03-07" }],
+    ])("refuses %s as an end, and changes nothing", async (_case, end) => {
+      const world = await arrange();
+      const membership = await membershipOf(world.alice, world.frankiePerson, "faculty");
+      const query = new URLSearchParams(end).toString();
+
+      const counted = await world.alice.get(`/memberships/${membership.id}/consequences?${query}`);
+      const granted = await world.alice.post("/memberships", {
+        personId: world.frankiePerson.id,
+        role: "guardian",
+        ...end,
+      });
+      const narrowed = await world.alice.patch(`/memberships/${membership.id}`, end);
+
+      expect([counted.status, granted.status, narrowed.status]).toEqual([400, 400, 400]);
+      expect(await membershipOf(world.alice, world.frankiePerson, "faculty")).toEqual(membership);
     });
 
     it("counts nothing for a membership that is not Faculty, and refuses a malformed end", async () => {
@@ -840,7 +890,7 @@ describe("Teaching assignments", () => {
       );
     });
 
-    it("lists no class for Faculty never assigned, and still reads what they taught once their Faculty membership ends", async () => {
+    it("lists no class for Faculty never assigned, and still lists and reads what they taught once their Faculty membership ends", async () => {
       const world = await arrange();
       await assign(world.alice, world.offering, {
         personId: world.frankiePerson.id,
@@ -857,11 +907,37 @@ describe("Teaching assignments", () => {
       const none = await world.flynn.get("/account/class-offerings");
       const read = await world.frankie.get(`/class-offerings/${world.offering.id}`);
       const classes = await world.frankie.get("/account/class-offerings");
+      // Alice administers the School but never taught in it.
+      const neverTaught = await world.alice.get("/account/class-offerings");
 
       expect(none.body).toEqual({ current: [], past: [] });
       expect(read.status).toBe(200);
-      // The list of their classes is a Faculty member's page alone.
-      expect(observable(classes)).toEqual(observable(refusal));
+      expect(classes.status).toBe(200);
+      const { current, past } = classes.body as { current: ClassOffering[]; past: ClassOffering[] };
+      expect([...current, ...past].map((offering) => offering.id)).toEqual([world.offering.id]);
+      expect(observable(neverTaught)).toEqual(observable(refusal));
+    });
+
+    it("lists a Person who is both Faculty and a Student the Class Offerings they teach and those they are rostered in", async () => {
+      const world = await arrange();
+      await server().grantMembership({ person: world.frankiePerson, role: "student" });
+      await server().enroll(world.frankiePerson);
+      await assign(world.alice, world.offering, { personId: world.frankiePerson.id });
+      const rostered = await world.alice.post(`/class-offerings/${world.nextOffering.id}/roster-memberships`, {
+        personIds: [world.frankiePerson.id],
+      });
+      expect(rostered.status).toBe(201);
+
+      const taught = await world.frankie.get("/account/class-offerings");
+      const rosteredIn = await world.frankie.get("/account/roster-memberships");
+
+      expect((taught.body as { current: ClassOffering[] }).current.map((offering) => offering.id)).toEqual([
+        world.offering.id,
+      ]);
+      const { terms } = rosteredIn.body as { terms: { classOfferings: ClassOffering[] }[] };
+      expect(terms.flatMap((term) => term.classOfferings.map((offering) => offering.id))).toEqual([
+        world.nextOffering.id,
+      ]);
     });
   });
 

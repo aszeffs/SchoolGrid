@@ -34,6 +34,7 @@ describe("the session names the actor", () => {
           personId: schoolAdministrator.id,
           displayName: schoolAdministrator.displayName,
           roles: ["school_administrator", "faculty"],
+          classOfferingsTaught: 0,
         },
       ],
     });
@@ -65,9 +66,54 @@ describe("the session names the actor", () => {
           personId: bobsPerson.id,
           displayName: "Bob Faculty",
           roles: ["faculty"],
+          classOfferingsTaught: 0,
         },
       ],
     });
+  });
+
+  // What a Person taught outlasts their Faculty membership (CONTEXT.md:
+  // Teaching assignment), so the count stays once only another role is held.
+  it("counts the Class Offerings the Person was ever assigned to teach, once their Faculty membership has ended too", async () => {
+    const alice = await server().createAccount(ALICE);
+    const bob = await server().createAccount(BOB);
+    const { school } = await server().provisionSchool({ name: "Northside", administrator: alice });
+    const person = await server().createPerson({
+      schoolId: school.id,
+      displayName: "Bob Faculty",
+      account: bob,
+      role: "faculty",
+    });
+    await server().grantMembership({ person, role: "guardian" });
+    const admin = (await server().sessionFor(alice)).inSchool(school.id);
+    const today = ((await admin.get("/school-date")).body as { schoolDate: string }).schoolDate;
+    const year = await admin.post("/academic-years", { name: "The year", firstDate: today, lastDate: today });
+    const { academicYear } = year.body as { academicYear: { id: string } };
+    const divided = await admin.patch(`/academic-years/${academicYear.id}`, {
+      terms: [{ name: "Whole", firstDate: today, lastDate: today }],
+    });
+    const termId = (divided.body as { academicYear: { terms: { id: string }[] } }).academicYear.terms[0]!.id;
+    const courseId = ((await admin.post("/courses", { name: "Algebra I" })).body as { course: { id: string } }).course.id;
+    for (const label of ["A", "B"]) {
+      const offered = await admin.post("/class-offerings", { courseId, termId, label });
+      const { classOffering } = offered.body as { classOffering: { id: string } };
+      const assigned = await admin.post(`/class-offerings/${classOffering.id}/teaching-assignments`, {
+        personId: person.id,
+      });
+      expect(assigned.status).toBe(201);
+    }
+    const memberships = (await admin.get("/memberships")).body as {
+      memberships: { id: string; personId: string; role: string }[];
+    };
+    const faculty = memberships.memberships.find((each) => each.personId === person.id && each.role === "faculty")!;
+    expect((await admin.delete(`/memberships/${faculty.id}`)).status).toBe(200);
+
+    const caller = await server().signIn(BOB);
+    const response = await caller.get("/api/session");
+
+    expect((response.body as { schools: unknown[] }).schools).toEqual([
+      expect.objectContaining({ roles: ["guardian"], classOfferingsTaught: 2 }),
+    ]);
   });
 
   it("gives an account that reaches no School an empty list, not a refusal", async () => {
@@ -139,6 +185,7 @@ describe("the session names the actor", () => {
           personId: northside.schoolAdministrator.id,
           displayName: northside.schoolAdministrator.displayName,
           roles: ["school_administrator"],
+          classOfferingsTaught: 0,
         },
         {
           schoolId: westbrook.school.id,
@@ -146,6 +193,7 @@ describe("the session names the actor", () => {
           personId: aliceAtWestbrook.id,
           displayName: "Alice Guardian",
           roles: ["guardian"],
+          classOfferingsTaught: 0,
         },
       ],
     });
@@ -179,6 +227,7 @@ describe("the session names the actor", () => {
     const body = response.body as { schools: Record<string, unknown>[] };
     expect(Object.keys(response.body as object).sort()).toEqual(["account", "schools"]);
     expect(Object.keys(body.schools[0]!).sort()).toEqual([
+      "classOfferingsTaught",
       "displayName",
       "name",
       "personId",

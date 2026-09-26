@@ -10,6 +10,11 @@ export function offeringName(offering: ClassOffering): string {
   return offering.label === null ? offering.course.name : `${offering.course.name}, ${offering.label}`;
 }
 
+/** The last day a Roster membership runs to: its own, or its Term's while it is open. */
+export function runsTo(membership: { lastDate: string | null }, term: { lastDate: string }): string {
+  return membership.lastDate ?? term.lastDate;
+}
+
 /** Why an offering was not made or relabelled, in the words of the rule it would have broken. */
 export function labelConflictMessage(conflict: ConflictDetail, course: string, term: string): string {
   return conflict.conflict === "class_offering_label_taken"

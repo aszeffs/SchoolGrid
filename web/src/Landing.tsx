@@ -75,8 +75,8 @@ export function Landing() {
       {trialsOffered && (
         <div className="landing__trial">
           <p>
-            Try it in a School of your own, filled with invented Persons and classes. View it as each School role, and after
-            two hours it ends and is deleted.
+            Try it in a School of your own, filled with invented Persons and Class Offerings. View it as each School role,
+            and after two hours it ends and is deleted.
           </p>
           <StartTrial label="Start a trial" />
         </div>

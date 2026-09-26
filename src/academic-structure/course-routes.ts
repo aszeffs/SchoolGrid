@@ -1,12 +1,13 @@
 import {
   authorizeManageAcademicStructure,
-  authorizeManageClassOffering,
   authorizeManageCourse,
   authorizeManageTerm,
   authorizeReadClassOffering,
   authorizeReadOwnClassOfferings,
   authorizeReadOwnRosterMemberships,
+  lockPermittedOffering,
   mayReadRosterOf,
+  offeringsAtAGlance,
   ownClassOfferings,
   ownRosterMemberships,
   rostersServedOn,
@@ -30,7 +31,6 @@ import {
   deleteCourse,
   findClassOffering,
   findCourse,
-  lockClassOffering,
   lockCourse,
   relabelClassOffering,
   type ClassOffering,
@@ -129,22 +129,6 @@ async function holdPermittedTerm(transaction: Queryable, actor: Actor, termId: s
   return (await holdTerm(transaction, permitted)) ?? authorizeManageTerm<Term>(actor, termId, null);
 }
 
-async function lockPermittedOffering(
-  transaction: Queryable,
-  actor: Actor,
-  classOfferingId: string,
-): Promise<DescribedClassOffering> {
-  const permitted = authorizeManageClassOffering(
-    actor,
-    classOfferingId,
-    await findClassOffering(transaction, classOfferingId),
-  );
-  return (
-    (await lockClassOffering(transaction, permitted)) ??
-    authorizeManageClassOffering<DescribedClassOffering>(actor, classOfferingId, null)
-  );
-}
-
 /**
  * A School's Courses, and the Class Offerings that offer them in its Terms,
  * shaped by its School Administrator: every decision is the Access module's,
@@ -195,10 +179,15 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
   });
 
   // Every Class Offering at once (ADR-0008), each naming its Term, for the
-  // browser to show a Term's.
+  // browser to show a Term's, and who teaches it and how many are on its
+  // roster: see offeringsAtAGlance.
   scope.get("/class-offerings", async (actor) => {
     const schoolId = authorizeManageAcademicStructure(actor);
-    return { classOfferings: (await classOfferingsInSchool(database, schoolId)).map(presentOffering) };
+    const offerings = await classOfferingsInSchool(database, schoolId);
+    const glances = await offeringsAtAGlance(database, actor, offerings);
+    return {
+      classOfferings: offerings.map((offering) => ({ ...presentOffering(offering), ...glances.get(offering.id)! })),
+    };
   });
 
   scope.post("/class-offerings", async (actor, { body }) => {
@@ -231,7 +220,7 @@ export function registerCourseRoutes(scope: SchoolScope, database: Database): vo
   });
 
   /*
-   * The Class Offerings a Faculty member teaches or taught, each with its
+   * The Class Offerings a Person teaches or taught, each with its
    * Teaching assignments: those still running today or later first, in Term
    * order, then those over, the most recent first.
    */

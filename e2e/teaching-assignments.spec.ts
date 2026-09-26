@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrange, arrangePerson, changesSent, openSchool, openSection, recordRows, schoolIdOf, signIn } from "./app.ts";
+import { arrange, arrangePerson, changesSent, openSection, recordRows, schoolIdOf, signIn, withOwnOffering } from "./app.ts";
 import { seeded, type Account } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
@@ -15,43 +15,6 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * ahead that no other spec's can overlap it. Every assignment there is still
  * to begin, so ending one removes it.
  */
-
-interface Own {
-  schoolId: string;
-  classOfferingId: string;
-  /** The offering as its page is headed: its Course and label. */
-  offering: string;
-  /** The Term it runs in, as `YYYY-MM-DD`. */
-  term: { firstDate: string; lastDate: string };
-}
-
-/** A School Administrator in the first School, with a Class Offering of the test's own in a year of its own. */
-async function withOwnOffering(page: Page): Promise<Own> {
-  const { schoolAdministrator, schools } = seeded();
-  await signIn(page, schoolAdministrator);
-  await openSchool(page, schools[0]!);
-  const schoolId = await schoolIdOf(page, schools[0]!);
-  const starts = 2100 + Math.floor(Math.random() * 7000);
-  const term = { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
-  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
-    name: `Year ${randomUUID().slice(0, 8)}`,
-    ...term,
-  });
-  const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
-    headers: { origin: new URL(page.url()).origin },
-    data: { terms: [{ name: "Whole year", ...term }] },
-  });
-  expect(divided.ok()).toBe(true);
-  const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
-  const courseName = `Course ${randomUUID().slice(0, 8)}`;
-  const { course } = await arrange<{ course: { id: string } }>(page, schoolId, "/courses", { name: courseName });
-  const { classOffering } = await arrange<{ classOffering: { id: string } }>(page, schoolId, "/class-offerings", {
-    courseId: course.id,
-    termId: year.terms[0]!.id,
-    label: "Section A",
-  });
-  return { schoolId, classOfferingId: classOffering.id, offering: `${courseName}, Section A`, term };
-}
 
 /** The Person a seeded account resolves to in the first School, as its School Administrator lists it. */
 async function personIdOf(page: Page, schoolId: string, account: Account): Promise<string> {
@@ -162,6 +125,46 @@ test("ending a Faculty membership names the Teaching assignments it ends, and ca
   await expect(row).toContainText("No end");
 });
 
+test.describe("with the browser fourteen hours ahead of UTC", () => {
+  // Kiritimati's midnight is New York's 05:00 or 06:00 the day before, so a
+  // day read in the browser's timezone would end the membership, and the
+  // assignments with it, on the School date before the one picked.
+  test.use({ timezoneId: "Pacific/Kiritimati" });
+
+  test("narrowing a Faculty membership ends its Teaching assignments on the School date picked", async ({ page }) => {
+    const own = await withOwnOffering(page);
+    const teacher = `Jordan ${randomUUID().slice(0, 8)}`;
+    const personId = await arrangePerson(page, own.schoolId, teacher, ["faculty"]);
+    await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
+    await openSection(page, "Roles");
+    const row = recordRows(page, "School memberships in force").filter({ hasText: teacher });
+    const endsOn = own.term.lastDate.replace("06-30", "01-31");
+
+    await page.getByRole("button", { name: `Narrow ${teacher}’s Faculty membership` }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Ends on").fill(endsOn);
+    await expect(dialog).toContainText("1 Teaching assignment.");
+    await dialog.getByRole("button", { name: "Set the end" }).click();
+    await expect(row).not.toContainText("No end");
+
+    // Midnight in New York, on Eastern Standard Time in January.
+    const memberships = await page.request.get(`/api/schools/${own.schoolId}/memberships`);
+    const { memberships: held } = (await memberships.json()) as {
+      memberships: { personId: string; role: string; endsAt: string | null }[];
+    };
+    expect(held.find((membership) => membership.personId === personId && membership.role === "faculty")?.endsAt).toBe(
+      `${endsOn}T05:00:00.000Z`,
+    );
+    const offering = await page.request.get(`/api/schools/${own.schoolId}/class-offerings/${own.classOfferingId}`);
+    const { classOffering } = (await offering.json()) as {
+      classOffering: { teachingAssignments: { person: { id: string }; lastDate: string | null }[] };
+    };
+    expect(classOffering.teachingAssignments).toEqual([
+      expect.objectContaining({ person: expect.objectContaining({ id: personId }), lastDate: endsOn }),
+    ]);
+  });
+});
+
 test("a Faculty member finds their classes in the navigation and reads who teaches each", async ({ page, audit }) => {
   const { faculty, schools } = seeded();
   const own = await withOwnOffering(page);
@@ -171,11 +174,12 @@ test("a Faculty member finds their classes in the navigation and reads who teach
   await arrange(page, own.schoolId, path, { personId: await personIdOf(page, own.schoolId, faculty) });
   await arrange(page, own.schoolId, path, { personId: coTeacherId });
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
 
   await signIn(page, faculty);
   await openSection(page, "Your classes");
   await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
-  const current = recordRows(page, "Your current classes").filter({ hasText: own.offering });
+  const current = recordRows(page, "Your current Class Offerings").filter({ hasText: own.offering });
   await expect(current).toContainText(coTeacher);
   await audit(page);
 
@@ -199,15 +203,54 @@ test("a Faculty member with no class is told so, and other roles are not offered
   const { severalRoles, guardian, schools } = seeded();
   await signIn(page, severalRoles);
   await openSection(page, "Your classes");
-  await expect(page.getByRole("main")).toContainText("You have no classes yet.");
+  await expect(page.getByRole("main")).toContainText("You teach no Class Offering yet.");
   await audit(page);
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
 
   await signIn(page, guardian);
   await expect(page.getByRole("navigation")).toBeVisible();
   await expect(page.getByRole("navigation").getByRole("link", { name: "Your classes" })).toHaveCount(0);
   await page.goto(`/schools/${await schoolIdOf(page, schools[0]!)}/classes`);
   await expect(page.getByRole("heading", { level: 1, name: "Not available" })).toBeVisible();
+});
+
+test("a Person who is both Faculty and a Student finds the Class Offerings they teach and those they are on the roster of", async ({
+  page,
+  audit,
+}) => {
+  const own = await withOwnOffering(page);
+  const token = randomUUID().slice(0, 8);
+  const personId = await arrangePerson(page, own.schoolId, `Casey ${token}`, ["faculty", "student"]);
+  await arrange(page, own.schoolId, "/enrollments", { studentPersonId: personId });
+  await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
+  const { classOffering: taken } = await arrange<{ classOffering: { id: string } }>(
+    page,
+    own.schoolId,
+    "/class-offerings",
+    { courseId: own.courseId, termId: own.term.id, label: "Section B" },
+  );
+  await arrange(page, own.schoolId, `/class-offerings/${taken.id}/roster-memberships`, { personIds: [personId] });
+  // Redeeming an Invitation to them signs the page in as their new account.
+  const { link } = await arrange<{ link: string }>(page, own.schoolId, "/invitations", { personId });
+  const redeemed = await page.request.post("/api/invitations/redeem", {
+    headers: { origin: new URL(page.url()).origin },
+    data: { secret: new URL(link).hash.slice(1), username: `casey-${token}`, password: "a teacher who studies too" },
+  });
+  expect(redeemed.status()).toBe(201);
+
+  await page.goto(`/schools/${own.schoolId}/account`);
+  await openSection(page, "Your classes");
+  await expect(page.getByRole("heading", { level: 2, name: "Class Offerings you teach" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Class Offerings you are on the roster of" })).toBeVisible();
+  await expect(recordRows(page, "Your current Class Offerings").filter({ hasText: own.offering })).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("table", { name: /^Your Class Offerings in / })
+      .getByRole("row")
+      .filter({ hasText: own.offering.replace(/Section A$/, "Section B") }),
+  ).toHaveCount(1);
+  await audit(page);
 });
 
 test.describe("on a phone", () => {
@@ -237,11 +280,12 @@ test.describe("on a phone", () => {
       await audit(page);
       await dialog.getByRole("button", { name: "Cancel" }).click();
       await page.getByRole("button", { name: "Sign out" }).click();
+      await expect(page).toHaveURL("/sign-in");
 
       await signIn(page, faculty);
       await expect(page.getByRole("heading", { level: 1, name: "Your account" })).toBeVisible();
       await page.goto(`/schools/${own.schoolId}/classes`);
-      await expect(recordRows(page, "Your current classes").filter({ hasText: own.offering })).toHaveCount(1);
+      await expect(recordRows(page, "Your current Class Offerings").filter({ hasText: own.offering })).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
     });

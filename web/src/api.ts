@@ -107,6 +107,8 @@ export interface ReachedSchool {
   personId: string;
   displayName: string;
   roles: Role[];
+  /** How many Class Offerings the Person was ever assigned to teach, once their Faculty membership has ended too. */
+  classOfferingsTaught: number;
   /** When the School expires, only when it is a Trial School (ADR-0012). */
   trialExpiresAt?: string;
   /**
@@ -283,6 +285,16 @@ export interface ClassOffering {
 }
 
 /**
+ * A Class Offering as the School's list shows it: who teaches it and how many
+ * Students are on its roster, on today while its Term runs, or the Term's
+ * nearest day to today while it does not.
+ */
+export interface ListedClassOffering extends ClassOffering {
+  faculty: { id: string; displayName: string }[];
+  rosterSize: number;
+}
+
+/**
  * A Faculty member's assignment to a Class Offering, bounded by School dates.
  * A last date of null is one still open, running to the end of its Term.
  */
@@ -307,20 +319,20 @@ export interface RosterMembership {
 /**
  * A Class Offering read by itself, or among a Faculty member's own: with who
  * teaches it, and its roster for a reader who may see it. A Student reading
- * one of their own classes is not given the roster.
+ * one of their own Class Offerings is not given the roster.
  */
 export interface TaughtClassOffering extends ClassOffering {
   teachingAssignments: TeachingAssignment[];
   rosterMemberships?: RosterMembership[];
 }
 
-/** One of a Student's own classes: who teaches it, and when the Student was on its roster. */
+/** One of a Student's own Class Offerings: who teaches it, and when the Student was on its roster. */
 export interface RosteredClassOffering extends ClassOffering {
   teachingAssignments: TeachingAssignment[];
   rosterMemberships: { id: string; firstDate: string; lastDate: string | null }[];
 }
 
-/** One Term a Student has classes in, and whether it is the one running today. */
+/** One Term a Student has Class Offerings in, and whether it is the one running today. */
 export interface RosteredTerm {
   term: ClassOffering["term"];
   current: boolean;
@@ -425,24 +437,33 @@ export const api = {
     ),
   memberships: (schoolId: string) =>
     request<{ memberships: Membership[] }>("GET", inSchool(schoolId, "/memberships")),
-  /** Starts now. A missing `endsAt` leaves it with no end. */
-  grantMembership: (schoolId: string, grant: { personId: string; role: Role; endsAt?: string }) =>
+  /** The School date the instant `at` falls on, in the School's timezone; today's when none is named. */
+  schoolDate: (schoolId: string, at?: string) =>
+    request<{ schoolDate: string; instructionalDay: boolean }>(
+      "GET",
+      inSchool(schoolId, `/school-date${at === undefined ? "" : `?at=${encodeURIComponent(at)}`}`),
+    ),
+  /**
+   * Starts now, and ends at midnight on `endsOn`, a School date, in the
+   * School's timezone. A missing `endsOn` leaves it with no end.
+   */
+  grantMembership: (schoolId: string, grant: { personId: string; role: Role; endsOn?: string }) =>
     request<{ membership: Membership }>("POST", inSchool(schoolId, "/memberships"), grant),
-  /** Only a membership's end can change, and not into the past. */
-  narrowMembership: (schoolId: string, membershipId: string, endsAt: string) =>
+  /** Only a membership's end can change, and not into the past. It ends at midnight on `endsOn` in the School's timezone. */
+  narrowMembership: (schoolId: string, membershipId: string, endsOn: string) =>
     request<{ membership: Membership }>(
       "PATCH",
       inSchool(schoolId, `/memberships/${encodeURIComponent(membershipId)}`),
-      { endsAt },
+      { endsOn },
     ),
-  /** What ending a membership at `endsAt`, or now, would end with it. */
-  membershipConsequences: (schoolId: string, membershipId: string, endsAt?: string) =>
+  /** What ending a membership at midnight on `endsOn`, or now, would end with it. */
+  membershipConsequences: (schoolId: string, membershipId: string, endsOn?: string) =>
     request<{ consequences: { teachingAssignments: number } }>(
       "GET",
       inSchool(
         schoolId,
         `/memberships/${encodeURIComponent(membershipId)}/consequences${
-          endsAt === undefined ? "" : `?endsAt=${encodeURIComponent(endsAt)}`
+          endsOn === undefined ? "" : `?endsOn=${encodeURIComponent(endsOn)}`
         }`,
       ),
     ),
@@ -564,7 +585,7 @@ export const api = {
   deleteCourse: (schoolId: string, courseId: string) =>
     request<{ course: Course }>("DELETE", inSchool(schoolId, `/courses/${encodeURIComponent(courseId)}`)),
   classOfferings: (schoolId: string) =>
-    request<{ classOfferings: ClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
+    request<{ classOfferings: ListedClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
   classOffering: (schoolId: string, classOfferingId: string) =>
     request<{ classOffering: TaughtClassOffering }>(
       "GET",
@@ -576,7 +597,7 @@ export const api = {
       "GET",
       inSchool(schoolId, "/account/class-offerings"),
     ),
-  /** A Student's own: every class they are or were rostered in, by Term, the current one first. */
+  /** A Student's own: every Class Offering they are or were rostered in, by Term, the current one first. */
   ownRosterMemberships: (schoolId: string) =>
     request<{ terms: RosteredTerm[] }>("GET", inSchool(schoolId, "/account/roster-memberships")),
   /** Several Students at once, all or nothing. Bounds left unstated run with the Term's. */

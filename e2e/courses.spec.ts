@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrange, changesSent, openSchool, openSection, recordRows, schoolIdOf, signIn } from "./app.ts";
+import { arrange, changesSent, openSchool, openSection, recordRows, schoolIdOf, signIn, withOwnTerm } from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
@@ -15,39 +15,6 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * second seeded School is left with no Course and no Term, for the empty
  * states.
  */
-
-interface Own {
-  schoolId: string;
-  /** The Term the test offers in, as the Term picker names it. */
-  term: { id: string; option: string; name: string };
-}
-
-/** A School Administrator in the first School, with a year of the test's own divided into two Terms. */
-async function withOwnTerm(page: Page): Promise<Own> {
-  const { schoolAdministrator, schools } = seeded();
-  await signIn(page, schoolAdministrator);
-  await openSchool(page, schools[0]!);
-  const schoolId = await schoolIdOf(page, schools[0]!);
-  const starts = 2100 + Math.floor(Math.random() * 7000);
-  const name = `Year ${randomUUID().slice(0, 8)}`;
-  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
-    name,
-    firstDate: `${starts}-09-01`,
-    lastDate: `${starts + 1}-06-30`,
-  });
-  const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
-    headers: { origin: new URL(page.url()).origin },
-    data: {
-      terms: [
-        { name: "Fall", firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-01-15` },
-        { name: "Spring", firstDate: `${starts + 1}-01-16`, lastDate: `${starts + 1}-06-30` },
-      ],
-    },
-  });
-  expect(divided.ok()).toBe(true);
-  const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
-  return { schoolId, term: { id: year.terms[0]!.id, option: `Fall, ${name}`, name: "Fall" } };
-}
 
 /** A Course of the test's own, arranged through the API. */
 async function arrangeCourse(page: Page, schoolId: string, code: string | null = null) {
@@ -90,6 +57,11 @@ test("a Course is created, offered in a Term, and its Class Offering opens on it
   await expect(offer.getByRole("alert")).toHaveText(
     `${name} is already offered in ${term.name} with that label, or without one. Give this offering a label that tells the two apart.`,
   );
+
+  // Listed with no one teaching it and no one on its roster, and saying so.
+  const listed = recordRows(page, `Class Offerings in ${term.name}`).filter({ hasText: `${name}, Section A` });
+  await expect(listed).toContainText("No one assigned");
+  await expect(listed).toContainText("No Students");
 
   await recordRows(page, `Class Offerings in ${term.name}`).getByRole("link", { name: `${name}, Section A` }).click();
   await expect(page.getByRole("heading", { level: 1, name: `${name}, Section A` })).toBeVisible();

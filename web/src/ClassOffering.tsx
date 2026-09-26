@@ -17,12 +17,12 @@ import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts";
+import { courseTitle, labelConflictMessage, offeringName, runsTo } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
 import { Roster } from "./Roster.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { byName, dayOf, hasEnded, schoolDay } from "./standing.ts";
+import { byName, dayOf, hasEnded, formatSchoolDate } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Class Offering" };
@@ -138,18 +138,22 @@ function assignableFaculty(memberships: Membership[], persons: ListedPerson[]): 
 }
 
 /**
- * The Students with an open Enrollment who have never been on this roster, by
- * name: rostered with the Term's bounds, as the dialog does unless told
- * otherwise, anyone else would overlap a membership they hold, and refuse the
- * whole request.
+ * The Students with an open Enrollment who are not on this roster to the
+ * Term's last day, by name. One who left part way through may be rostered
+ * again; the dialog holds back dates that would overlap what they held, so one
+ * Student never refuses the whole request.
  */
 function rosterableStudents(offering: Offering, enrollments: Enrollment[], persons: ListedPerson[]): ListedPerson[] {
   const enrolled = new Set(
     enrollments.filter((enrollment) => enrollment.endedAt === null).map((enrollment) => enrollment.studentPersonId),
   );
-  const onRoster = new Set((offering.rosterMemberships ?? []).map((membership) => membership.person.id));
+  const toTermEnd = new Set(
+    (offering.rosterMemberships ?? [])
+      .filter((membership) => runsTo(membership, offering.term) >= offering.term.lastDate)
+      .map((membership) => membership.person.id),
+  );
   return persons
-    .filter((person) => enrolled.has(person.id) && !onRoster.has(person.id))
+    .filter((person) => enrolled.has(person.id) && !toTermEnd.has(person.id))
     .sort(byName((person) => person.displayName));
 }
 
@@ -297,7 +301,7 @@ function OfferingSheet({
         </dd>
         <dt>Runs</dt>
         <dd>
-          {schoolDay(term.firstDate)} to {schoolDay(term.lastDate)}
+          {formatSchoolDate(term.firstDate)} to {formatSchoolDate(term.lastDate)}
         </dd>
         <dt>Label</dt>
         <dd>{offering.label ?? <span className="muted">None</span>}</dd>
@@ -320,10 +324,10 @@ function OfferingSheet({
               cell: (assignment) =>
                 assignment.firstDate > today ? (
                   <>
-                    <span className="mark mark--open">Starts later</span> {schoolDay(assignment.firstDate)}
+                    <span className="mark mark--open">Starts later</span> {formatSchoolDate(assignment.firstDate)}
                   </>
                 ) : (
-                  schoolDay(assignment.firstDate)
+                  formatSchoolDate(assignment.firstDate)
                 ),
             },
             {
@@ -331,12 +335,12 @@ function OfferingSheet({
               cell: (assignment) =>
                 runsTo(assignment) < today ? (
                   <>
-                    <span className="mark mark--struck">Ended</span> {schoolDay(runsTo(assignment))}
+                    <span className="mark mark--struck">Ended</span> {formatSchoolDate(runsTo(assignment))}
                   </>
                 ) : assignment.lastDate === null ? (
                   <span className="mark">End of Term</span>
                 ) : (
-                  schoolDay(assignment.lastDate)
+                  formatSchoolDate(assignment.lastDate)
                 ),
             },
             ...(administers
@@ -419,7 +423,7 @@ function OfferingSheet({
                 <p className="muted">
                   Left blank, the assignment runs with the Term, from its first day to its last.
                   {leaving !== null &&
-                    ` This Faculty membership ends on ${schoolDay(dayOf(new Date(leaving)))}, so the assignment ends by then.`}
+                    ` This Faculty membership ends on ${formatSchoolDate(dayOf(new Date(leaving)))}, so the assignment ends by then.`}
                 </p>
                 {assignProblem !== null && (
                   <p role="alert" className="error">
@@ -564,7 +568,7 @@ function assignmentConflictMessage(conflict: ConflictDetail): string {
       return "Those days fall outside the Term. A Teaching assignment runs between the Term’s first and last days.";
     case "dependent":
       return conflict.dependent === "roster_membership"
-        ? "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was in the class."
+        ? "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was on its roster."
         : "Faculty have been assigned to this offering, and it is not deleted once they have: the assignments are the record of who taught it.";
     default:
       return "That change could not be made.";

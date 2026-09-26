@@ -27,6 +27,7 @@ interface ReachedSchool {
   name: string;
   displayName: string;
   roles: string[];
+  classOfferingsTaught: number;
   trialExpiresAt?: string;
   viewingAs?: string;
 }
@@ -74,6 +75,7 @@ describe("Trial Schools", () => {
           personId: expect.any(String),
           displayName: "Morgan Reyes",
           roles: ["school_administrator"],
+          classOfferingsTaught: 0,
           trialExpiresAt: expiresAt,
           viewingAs: "school_administrator",
         },

@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
+import { seeded } from "./seeded.ts";
 
 /**
  * Driving the app the way a School Administrator does, for the specs that need
@@ -112,6 +114,77 @@ export async function arrangePerson(
     await arrange(page, schoolId, "/memberships", { personId: person.id, role });
   }
   return person.id;
+}
+
+/** A year far enough ahead that no other spec's can overlap it. */
+export function yearAhead(): { firstDate: string; lastDate: string } {
+  const starts = 2100 + Math.floor(Math.random() * 7000);
+  return { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
+}
+
+/** A Term of the spec's own, its dates as `YYYY-MM-DD`, and its name alone and as the Term picker offers it. */
+export interface OwnTerm {
+  id: string;
+  name: string;
+  option: string;
+  firstDate: string;
+  lastDate: string;
+}
+
+/**
+ * A School Administrator signed in to the first seeded School, with an
+ * Academic Year of the spec's own over these dates, a year ahead unless the
+ * spec says otherwise, made one Term.
+ */
+export async function withOwnTerm(page: Page, dates = yearAhead()): Promise<{ schoolId: string; term: OwnTerm }> {
+  const { schoolAdministrator, schools } = seeded();
+  await signIn(page, schoolAdministrator);
+  await openSchool(page, schools[0]!);
+  const schoolId = await schoolIdOf(page, schools[0]!);
+  const yearName = `Year ${randomUUID().slice(0, 8)}`;
+  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
+    name: yearName,
+    ...dates,
+  });
+  const name = "Whole year";
+  const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
+    headers: { origin: new URL(page.url()).origin },
+    data: { terms: [{ name, ...dates }] },
+  });
+  if (!divided.ok()) {
+    throw new Error(`could not arrange the Terms of ${yearName}: ${divided.status()}`);
+  }
+  const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
+  return { schoolId, term: { id: year.terms[0]!.id, name, option: `${name}, ${yearName}`, ...dates } };
+}
+
+/** A Class Offering of the spec's own: see withOwnTerm. */
+export interface OwnOffering {
+  schoolId: string;
+  classOfferingId: string;
+  courseId: string;
+  /** The offering as its page is headed: its Course and label. */
+  offering: string;
+  term: OwnTerm;
+}
+
+/** A School Administrator in the first School, with a Class Offering of the spec's own in a Term of its own: see withOwnTerm. */
+export async function withOwnOffering(page: Page, dates = yearAhead()): Promise<OwnOffering> {
+  const { schoolId, term } = await withOwnTerm(page, dates);
+  const courseName = `Course ${randomUUID().slice(0, 8)}`;
+  const { course } = await arrange<{ course: { id: string } }>(page, schoolId, "/courses", { name: courseName });
+  const { classOffering } = await arrange<{ classOffering: { id: string } }>(page, schoolId, "/class-offerings", {
+    courseId: course.id,
+    termId: term.id,
+    label: "Section A",
+  });
+  return {
+    schoolId,
+    classOfferingId: classOffering.id,
+    courseId: course.id,
+    offering: `${courseName}, Section A`,
+    term,
+  };
 }
 
 /** The rows of a record, by the name it is listed under; the head row names nothing. */
