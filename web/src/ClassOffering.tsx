@@ -13,6 +13,7 @@ import {
   type TeachingAssignment,
 } from "./api.ts";
 import { ChangeDates } from "./ChangeDates.tsx";
+import { CourseName } from "./CourseChart.tsx";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
@@ -294,7 +295,9 @@ function OfferingSheet({
       <h1>{offeringName(offering)}</h1>
       <dl className="facts">
         <dt>Course</dt>
-        <dd>{courseTitle(course)}</dd>
+        <dd>
+          <CourseName course={course}>{courseTitle(course)}</CourseName>
+        </dd>
         <dt>Term</dt>
         <dd>
           {term.name}, {term.academicYear.name}

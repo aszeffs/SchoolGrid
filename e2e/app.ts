@@ -17,6 +17,19 @@ export async function signIn(page: Page, { username, password }: { username: str
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+/** Switches the page to the dark rendition, with motion reduced so nothing is audited mid-fade. */
+export async function darken(page: Page) {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  // Two frames painted in the dark rendition, so axe reads no text still drawn in the light one.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+}
+
+/** Closes the open dialog without doing what it asks, and waits for it to go. */
+export async function cancelDialog(page: Page) {
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+}
+
 export function schoolsList(page: Page) {
   return page.getByRole("list", { name: "Schools" }).getByRole("listitem");
 }

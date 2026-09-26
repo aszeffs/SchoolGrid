@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { MAX_NAME_LENGTH } from "../../src/validation/bounds.ts";
 import { api, readAll, type ApiResult, type ConflictDetail, type Course, type ReachedSchool } from "./api.ts";
+import { CourseName } from "./CourseChart.tsx";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
@@ -153,14 +154,17 @@ function CoursesSheet({
             : `No Course's name or code contains “${looking}”.`
         }
         columns={[
-          { head: "Course", cell: (course) => course.name },
-          { head: "Code", cell: (course) => course.code ?? <span className="muted">None</span> },
+          { head: "Course", cell: (course) => <CourseName course={course}>{course.name}</CourseName> },
+          {
+            head: "Code",
+            cell: (course) => (course.code === null ? <span className="muted">None</span> : <code>{course.code}</code>),
+          },
           { head: "Offerings", cell: (course) => offered.get(course.id) ?? 0 },
           {
             head: "Change or delete",
             actions: true,
             cell: (course) => (
-              <span className="actions">
+              <span className="actions record__buttons">
                 <ReturningButton
                   focus={returning === course.id}
                   disabled={busy || editing !== null}

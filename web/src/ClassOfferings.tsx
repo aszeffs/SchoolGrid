@@ -10,6 +10,7 @@ import {
   type ReachedSchool,
   type Term,
 } from "./api.ts";
+import { CourseChart, CourseName } from "./CourseChart.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts";
@@ -86,6 +87,8 @@ function ClassOfferingsSheet({
   const [problem, setProblem] = useState<string | null>(null);
   /** What the last change did, said once so a screen reader hears it land. */
   const [done, setDone] = useState("");
+  /** The Course the reader is pointing at on the wall chart, whose rows stay bright. */
+  const [pointed, setPointed] = useState<string | null>(null);
 
   const legend = (
     <>
@@ -170,21 +173,35 @@ function ClassOfferingsSheet({
         {done === "" ? `${formatSchoolDate(term.firstDate)} to ${formatSchoolDate(term.lastDate)}` : done}
       </p>
 
+      <CourseChart
+        label={`Wall chart of ${term.name}`}
+        schoolId={schoolId}
+        offerings={offered}
+        onPoint={setPointed}
+      />
+
       <RecordList
         label={`Class Offerings in ${term.name}`}
         rows={offered}
         keyOf={(offering) => offering.id}
+        dimmed={(offering) => pointed !== null && pointed !== offering.course.id}
         empty={`No Course is offered in ${term.name} yet.${courses.length > 0 ? " Offer one below." : ""}`}
         columns={[
           {
             head: "Course",
             cell: (offering) => (
-              <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>
-                {offeringName(offering)}
-              </Link>
+              <CourseName course={offering.course}>
+                <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>
+                  {offeringName(offering)}
+                </Link>
+              </CourseName>
             ),
           },
-          { head: "Code", cell: (offering) => offering.course.code ?? <span className="muted">None</span> },
+          {
+            head: "Code",
+            cell: (offering) =>
+              offering.course.code === null ? <span className="muted">None</span> : <code>{offering.course.code}</code>,
+          },
           {
             head: "Faculty",
             cell: ({ faculty }) =>

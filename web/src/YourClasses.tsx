@@ -1,4 +1,5 @@
 import { api, type ApiResult, type ReachedSchool, type RosteredTerm, type TaughtClassOffering } from "./api.ts";
+import { CourseName } from "./CourseChart.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { offeringName } from "./offerings.ts";
@@ -226,7 +227,9 @@ function Classes({
         {
           head: "Class Offering",
           cell: (offering) => (
-            <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>{offeringName(offering)}</Link>
+            <CourseName course={offering.course}>
+              <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>{offeringName(offering)}</Link>
+            </CourseName>
           ),
         },
         { head: "Term", cell: (offering) => `${offering.term.name}, ${offering.term.academicYear.name}` },
