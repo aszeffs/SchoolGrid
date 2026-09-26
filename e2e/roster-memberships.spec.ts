@@ -167,6 +167,21 @@ test("a School Administrator rosters several Students in one go from the keyboar
   await expect(page.getByRole("alert")).toHaveText(
     "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was in the class.",
   );
+
+  // The Term's list shows who teaches it and how many are on its roster,
+  // saying so when no one teaches it.
+  await openSection(page, "Class Offerings");
+  await page.getByLabel("Term").selectOption({ label: own.term.heading });
+  const listed = recordRows(page, "Class Offerings in Whole year").filter({ hasText: own.offering });
+  await expect(listed).toContainText("No one assigned");
+  await expect(listed).toContainText("1 Student");
+  const teacher = `Tatum ${token}`;
+  const personId = await arrangePerson(page, own.schoolId, teacher, ["faculty"]);
+  await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
+  await page.reload();
+  await page.getByLabel("Term").selectOption({ label: own.term.heading });
+  await expect(listed).toContainText(teacher);
+  await audit(page);
 });
 
 test("ending an Enrollment counts the Roster memberships it ends, and cancelling sends nothing", async ({

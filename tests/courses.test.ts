@@ -344,7 +344,8 @@ describe("Courses and Class Offerings", () => {
         course,
         term: { ...world.fall, academicYear: { id: expect.any(String), name: YEAR.name } },
       });
-      expect(await offeringsOf(world.alice)).toEqual([classOffering]);
+      // Listed, it names who teaches it and how many are on its roster: no one yet.
+      expect(await offeringsOf(world.alice)).toEqual([{ ...classOffering, faculty: [], rosterSize: 0 }]);
       // Read by itself, it names its Teaching assignments too: none yet.
       expect((await world.alice.get(`/class-offerings/${classOffering.id}`)).body).toEqual({
         classOffering: { ...classOffering, teachingAssignments: [], rosterMemberships: [] },

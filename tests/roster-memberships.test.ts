@@ -496,6 +496,50 @@ describe("Roster memberships", () => {
       expect((departed[0]!.body as { terms: OwnTerm[] }).terms).toHaveLength(2);
     });
 
+    it("lists each Class Offering with its Faculty and roster size on today, or the nearest day of its Term", async () => {
+      const world = await arrange();
+      const assign = async (offering: ClassOffering, bounds: { firstDate?: string; lastDate?: string }) => {
+        const response = await world.alice.post(`/class-offerings/${offering.id}/teaching-assignments`, {
+          personId: world.frankiePerson.id,
+          ...bounds,
+        });
+        expect(response.status).toBe(201);
+      };
+      // Today: Sam is on the roster, and Sky has left it.
+      await roster(world.alice, world.offering, { personIds: [world.samPerson.id] });
+      await roster(world.alice, world.offering, { personIds: [world.skyPerson.id], lastDate: shifted(world.today, -1) });
+      // Frankie stopped teaching it yesterday, and Sky joins it tomorrow.
+      await assign(world.otherOffering, { lastDate: shifted(world.today, -1) });
+      await roster(world.alice, world.otherOffering, { personIds: [world.skyPerson.id], firstDate: shifted(world.today, 1) });
+      // An ended Term counts who finished it; one to come, who starts it.
+      await assign(world.pastOffering, {});
+      await roster(world.alice, world.pastOffering, { personIds: [world.skyPerson.id] });
+      await roster(world.alice, world.pastOffering, {
+        personIds: [world.samPerson.id],
+        lastDate: shifted(world.past.lastDate, -3),
+      });
+      await roster(world.alice, world.nextOffering, { personIds: [world.skyPerson.id] });
+      await roster(world.alice, world.nextOffering, {
+        personIds: [world.samPerson.id],
+        firstDate: shifted(world.next.firstDate, 5),
+      });
+
+      const response = await world.alice.get("/class-offerings");
+
+      expect(response.status).toBe(200);
+      const listed = (response.body as { classOfferings: (ClassOffering & { faculty: unknown; rosterSize: number })[] })
+        .classOfferings;
+      const glance = (offering: ClassOffering) => {
+        const { faculty, rosterSize } = listed.find((each) => each.id === offering.id)!;
+        return { faculty, rosterSize };
+      };
+      const frankie = [{ id: world.frankiePerson.id, displayName: "Frankie" }];
+      expect(glance(world.offering)).toEqual({ faculty: frankie, rosterSize: 1 });
+      expect(glance(world.otherOffering)).toEqual({ faculty: [], rosterSize: 0 });
+      expect(glance(world.pastOffering)).toEqual({ faculty: frankie, rosterSize: 1 });
+      expect(glance(world.nextOffering)).toEqual({ faculty: [], rosterSize: 1 });
+    });
+
     it("lists no class for a Student never rostered", async () => {
       const world = await arrange();
 

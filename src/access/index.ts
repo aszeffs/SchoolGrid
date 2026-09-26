@@ -432,6 +432,57 @@ export async function teachingAssignmentsServedOn(
   return byOffering;
 }
 
+/** A Class Offering at a glance: who teaches it, by display name alone, and how many Students are on its roster. */
+export interface OfferingAtAGlance {
+  faculty: { id: string; displayName: string }[];
+  rosterSize: number;
+}
+
+/**
+ * Each of these Class Offerings at a glance, on one School date of its Term:
+ * today while the Term runs, its first date before it begins, and its last
+ * once it has ended. So an ended Term shows who finished it, and one to come
+ * who starts it. Only for offerings the caller has already been permitted to
+ * list.
+ */
+export async function offeringsAtAGlance(
+  database: Queryable,
+  actor: Actor,
+  offerings: readonly { id: string; term: { firstDate: string; lastDate: string } }[],
+): Promise<Map<string, OfferingAtAGlance>> {
+  const ids = offerings.map((offering) => offering.id);
+  const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
+  // `YYYY-MM-DD` sorts as the dates do.
+  const dayOf = new Map(
+    offerings.map(({ id, term }) => [
+      id,
+      today < term.firstDate ? term.firstDate : today > term.lastDate ? term.lastDate : today,
+    ]),
+  );
+  const runsOnItsDay = ({ classOfferingId, firstDate, lastDate }: TeachingAssignment | RosterMembership) => {
+    const day = dayOf.get(classOfferingId)!;
+    return firstDate <= day && (lastDate === null || day <= lastDate);
+  };
+  // No two of one Person's in one offering overlap, so each counts once.
+  const teaching = (await teachingAssignmentsOn(database, ids)).filter(runsOnItsDay);
+  const rostered = (await rosterMembershipsOn(database, ids)).filter(runsOnItsDay);
+  const persons = await findPersons(
+    database,
+    teaching.map((assignment) => assignment.personId),
+  );
+  const glances = new Map(ids.map((id) => [id, { faculty: [], rosterSize: 0 } as OfferingAtAGlance]));
+  for (const { classOfferingId, personId } of teaching) {
+    glances.get(classOfferingId)!.faculty.push({ id: personId, displayName: persons.get(personId)?.displayName ?? "" });
+  }
+  for (const { classOfferingId } of rostered) {
+    glances.get(classOfferingId)!.rosterSize += 1;
+  }
+  for (const { faculty } of glances.values()) {
+    faculty.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id));
+  }
+  return glances;
+}
+
 /**
  * The Class Offerings the actor was ever assigned to teach: those where an
  * assignment of theirs still runs today or later, and those where every one
