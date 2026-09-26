@@ -1414,7 +1414,7 @@ dialog.slip {
 }
 
 /* Only the footer: a row of actions within the slip's words, such as copying a link, stays in the flow. */
-dialog.slip > .actions:last-child {
+dialog.slip > .slip__foot {
   position: sticky;
   bottom: 0;
   margin: 0 calc(var(--step) * -3);

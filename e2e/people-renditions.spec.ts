@@ -1,22 +1,22 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { acknowledgeIssuedLink, arrangePerson, issueInvitationFor, revokeButtonFor, signIn } from "./app.ts";
+import { acknowledgeIssuedLink, arrangePerson, issueInvitationFor, revokeButtonFor, schoolIdOf, signIn } from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, test } from "./test.ts";
 
 /**
- * The School Administrator's people pages, each with the confirmations it
- * opens, held to the same bar in the dark rendition as the rest of the suite
- * holds them to in the light one (ADR-0010).
+ * The School Administrator's people pages, held to the same bar in the dark
+ * rendition as the rest of the suite holds them to in the light one
+ * (ADR-0010), with every confirmation they open.
  */
 const PAGES = [
-  { path: "account", heading: "Your account", confirms: [] },
-  { path: "persons", heading: "Persons", confirms: [] },
-  { path: "invitations", heading: "Invitations", confirms: [] },
-  { path: "memberships", heading: "School memberships", confirms: [/^Narrow /, /^Revoke /] },
-  { path: "enrollments", heading: "Enrollments", confirms: [/^End /] },
-  { path: "guardian-links", heading: "Guardian links", confirms: [/^End /] },
-];
+  { path: "account", heading: "Your account" },
+  { path: "persons", heading: "Persons" },
+  { path: "invitations", heading: "Invitations" },
+  { path: "memberships", heading: "School memberships" },
+  { path: "enrollments", heading: "Enrollments" },
+  { path: "guardian-links", heading: "Guardian links" },
+] as const;
 
 /** Switches the page to the dark rendition, with motion reduced so nothing is audited mid-fade. */
 async function darken(page: Page) {
@@ -25,47 +25,54 @@ async function darken(page: Page) {
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 }
 
-/** The School the seeded administrator reaches first, where the seeded Student and Guardian are. */
-async function firstSchool(page: Page): Promise<string> {
-  const { schools } = (await (await page.request.get("/api/session")).json()) as {
-    schools: { schoolId: string; name: string }[];
-  };
-  return schools.find((school) => school.name === seeded().schools[0])!.schoolId;
+async function cancel(page: Page) {
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
 }
 
 test("the people pages and their confirmations stay legible in the dark rendition", async ({ page, audit }) => {
-  await signIn(page, seeded().schoolAdministrator);
+  const { schoolAdministrator, schools, faculty } = seeded();
+  await signIn(page, schoolAdministrator);
   await expect(page).not.toHaveURL(/sign-in/);
-  const schoolId = await firstSchool(page);
+  const schoolId = await schoolIdOf(page, schools[0]!);
   const invited = `Rowan ${randomUUID().slice(0, 8)}`;
   await arrangePerson(page, schoolId, invited, []);
   await darken(page);
 
-  for (const { path, heading, confirms } of PAGES) {
+  for (const { path, heading } of PAGES) {
     await page.goto(`/schools/${schoolId}/${path}`);
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
     await audit(page);
+  }
 
-    for (const name of confirms) {
-      await page.getByRole("main").getByRole("button", { name }).first().click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await audit(page);
-      await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
-      await expect(page.getByRole("dialog")).toBeHidden();
-    }
+  // The Invitation's link, shown once as it is issued, and then its revoke.
+  await page.goto(`/schools/${schoolId}/persons`);
+  await issueInvitationFor(page, invited);
+  await expect(page.getByRole("dialog").getByLabel("Invitation link")).toBeVisible();
+  await audit(page);
+  await acknowledgeIssuedLink(page);
+  await page.goto(`/schools/${schoolId}/invitations`);
+  await revokeButtonFor(page, invited).click();
+  await audit(page);
+  await cancel(page);
 
-    // The Invitation's link, and then its revoke, which only exist once one is issued.
-    if (path === "persons") {
-      await issueInvitationFor(page, invited);
-      await expect(page.getByRole("dialog").getByLabel("Invitation link")).toBeVisible();
-      await audit(page);
-      await acknowledgeIssuedLink(page);
-    }
-    if (path === "invitations") {
-      await revokeButtonFor(page, invited).click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await audit(page);
-      await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
-    }
+  // A Faculty membership's, so each names the teaching it would end; Narrow only once it has a date.
+  const facultyMembership = `${faculty.displayName}’s Faculty membership`;
+  await page.goto(`/schools/${schoolId}/memberships`);
+  await page.getByRole("button", { name: `Narrow ${facultyMembership}` }).click();
+  await page.getByRole("dialog").getByLabel("Ends on").fill("2099-06-30");
+  await expect(page.getByRole("dialog").getByRole("list")).toBeVisible();
+  await audit(page);
+  await cancel(page);
+  await page.getByRole("button", { name: `Revoke ${facultyMembership}` }).click();
+  await expect(page.getByRole("dialog").getByRole("list")).toBeVisible();
+  await audit(page);
+  await cancel(page);
+
+  for (const path of ["enrollments", "guardian-links"]) {
+    await page.goto(`/schools/${schoolId}/${path}`);
+    await page.getByRole("main").getByRole("button", { name: /^End / }).first().click();
+    await audit(page);
+    await cancel(page);
   }
 });
