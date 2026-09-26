@@ -65,6 +65,7 @@
   --wash: color-mix(in srgb, var(--ink) 4%, transparent);
   --shadow: 0 1px 2px rgb(22 27 40 / 0.06), 0 4px 14px rgb(22 27 40 / 0.06);
   --shadow-lift: 0 2px 4px rgb(22 27 40 / 0.08), 0 14px 32px rgb(22 27 40 / 0.14);
+  --shadow-press: 0 1px 2px rgb(22 27 40 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.14);
   --veil: rgb(22 27 40 / 0.45);
 
   /*
@@ -130,6 +131,7 @@
     --wash: color-mix(in srgb, var(--ink) 5%, transparent);
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.3);
     --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.5), 0 14px 32px rgb(0 0 0 / 0.5);
+    --shadow-press: 0 1px 2px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.2);
     --veil: rgb(4 6 10 / 0.7);
 
     --course-indigo: #4f46e5;
@@ -792,8 +794,7 @@ strong {
   font-weight: 700;
 }
 
-.muted,
-.stamp-line {
+.muted {
   color: var(--ink-soft);
 }
 
@@ -922,7 +923,7 @@ button {
   background: var(--action);
   border: 1px solid var(--action);
   border-radius: var(--corner);
-  box-shadow: 0 1px 2px rgb(22 27 40 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.14);
+  box-shadow: var(--shadow-press);
   color: var(--on-action);
   cursor: pointer;
   font: inherit;
@@ -1089,13 +1090,6 @@ button:disabled {
   background: var(--rule);
 }
 
-.roster__state {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--step) * 1.5);
-  margin-left: auto;
-}
-
 /*
  * State prints itself into the record: a word, and a seal mark before it. A
  * filled mark is done or permitted, a ringed one is open or still to come, and
@@ -1154,11 +1148,6 @@ button:disabled {
     var(--ink-soft) calc(50% - 0.75px) calc(50% + 0.75px),
     transparent calc(50% + 0.75px)
   );
-}
-
-.stamp-line {
-  margin: 0;
-  font-size: var(--size-label);
 }
 
 /*
@@ -1430,6 +1419,16 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* A moment to the second: the day, and the time under it in the soft ink. */
+.moment > span {
+  display: block;
+}
+
+.moment > span + span {
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+}
+
 /* A record's last column of words is given room to say a short thing on one line. */
 .record td:last-child:not(.record__actions) {
   min-width: 8rem;
@@ -1613,20 +1612,25 @@ dialog.slip::backdrop {
 
 /* ---- Paging through a record ---------------------------------------- */
 
+/*
+ * Newer and Older at either end, with where the reader stands between them.
+ * On a phone, where it stands reads first and the two ways share the row
+ * under it.
+ */
 .pager {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--step) calc(var(--step) * 2);
   margin-bottom: calc(var(--step) * 2);
 }
 
 .pager p {
-  flex: 1 1 12rem;
   max-width: none;
   margin: 0;
   color: var(--ink-soft);
   font-size: var(--size-label);
+  text-align: center;
 }
 
 /*
@@ -1960,6 +1964,16 @@ td[aria-selected="true"] > .day {
   .record .record__buttons {
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .pager {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pager p {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    text-align: left;
   }
 
   /* Two blocks to a row on a phone, so a Term's wall chart still reads at a glance. */

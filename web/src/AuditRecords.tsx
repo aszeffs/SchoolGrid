@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 import { api, type AuditRecord, type ReachedSchool } from "./api.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
@@ -20,7 +20,8 @@ interface Reached {
 const listPersons = (schoolId: string) => api.persons(schoolId);
 
 /** A moment to the second: records written within one minute are told apart by it. */
-const TO_THE_SECOND = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" });
+const ON_THE_DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const TO_THE_SECOND = new Intl.DateTimeFormat(undefined, { timeStyle: "medium" });
 
 /** What each kind of target is called, in the glossary's words. A Person and the School are named instead. */
 const KINDS: Readonly<Record<string, string>> = {
@@ -155,7 +156,7 @@ function AuditSheet({
       case "school":
         return <Named name={id === school.schoolId ? school.name : "A School"} id={id} />;
       case "request":
-        return <code>{id}</code>;
+        return <Breakable text={id} />;
       default:
         return <Named name={KINDS[type] ?? type} id={id} />;
     }
@@ -185,15 +186,43 @@ function AuditSheet({
         columns={[
           {
             head: "When",
-            cell: (record) => <time dateTime={record.occurredAt}>{TO_THE_SECOND.format(new Date(record.occurredAt))}</time>,
+            cell: (record) => <Moment at={record.occurredAt} />,
           },
           { head: "Actor", cell: actorOf },
-          { head: "Action", cell: (record) => <code>{record.action}</code> },
+          { head: "Action", cell: (record) => <Breakable text={record.action} /> },
           { head: "Target", cell: targetOf },
           { head: "Reason", cell: (record) => record.reason ?? "None given" },
         ]}
       />
     </Sheet>
+  );
+}
+
+/** When a record was written: the day, and under it the time to the second, so the record's columns keep their room. */
+function Moment({ at }: { at: string }) {
+  const moment = new Date(at);
+  return (
+    <time className="moment" dateTime={at}>
+      <span>{ON_THE_DAY.format(moment)}</span> <span>{TO_THE_SECOND.format(moment)}</span>
+    </time>
+  );
+}
+
+/**
+ * A path or an action name, allowed to break after each `/` and `.` so a long
+ * one wraps at its own joints instead of pushing the record past its column.
+ * It still never breaks inside a word or a group of figures.
+ */
+function Breakable({ text }: { text: string }) {
+  return (
+    <code>
+      {text.split(/(?<=[/.])/).map((part, at) => (
+        <Fragment key={at}>
+          {at > 0 && <wbr />}
+          {part}
+        </Fragment>
+      ))}
+    </code>
   );
 }
 
