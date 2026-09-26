@@ -568,7 +568,7 @@ function assignmentConflictMessage(conflict: ConflictDetail): string {
       return "Those days fall outside the Term. A Teaching assignment runs between the Term’s first and last days.";
     case "dependent":
       return conflict.dependent === "roster_membership"
-        ? "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was in the class."
+        ? "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was on its roster."
         : "Faculty have been assigned to this offering, and it is not deleted once they have: the assignments are the record of who taught it.";
     default:
       return "That change could not be made.";

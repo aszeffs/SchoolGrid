@@ -175,7 +175,7 @@ test("a Faculty member finds their classes in the navigation and reads who teach
   await signIn(page, faculty);
   await openSection(page, "Your classes");
   await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
-  const current = recordRows(page, "Your current classes").filter({ hasText: own.offering });
+  const current = recordRows(page, "Your current Class Offerings").filter({ hasText: own.offering });
   await expect(current).toContainText(coTeacher);
   await audit(page);
 
@@ -199,7 +199,7 @@ test("a Faculty member with no class is told so, and other roles are not offered
   const { severalRoles, guardian, schools } = seeded();
   await signIn(page, severalRoles);
   await openSection(page, "Your classes");
-  await expect(page.getByRole("main")).toContainText("You have no classes yet.");
+  await expect(page.getByRole("main")).toContainText("You teach no Class Offering yet.");
   await audit(page);
   await page.getByRole("button", { name: "Sign out" }).click();
 
@@ -241,7 +241,7 @@ test.describe("on a phone", () => {
       await signIn(page, faculty);
       await expect(page.getByRole("heading", { level: 1, name: "Your account" })).toBeVisible();
       await page.goto(`/schools/${own.schoolId}/classes`);
-      await expect(recordRows(page, "Your current classes").filter({ hasText: own.offering })).toHaveCount(1);
+      await expect(recordRows(page, "Your current Class Offerings").filter({ hasText: own.offering })).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
     });

@@ -16,7 +16,7 @@ const SHEET: SheetKind = { name: "Your classes" };
  * teaches it and the days the Student is on its roster, and opens on its own
  * page. Nothing about any classmate appears.
  *
- * A Student whose Enrollment has ended keeps this page: the classes they took
+ * A Student whose Enrollment has ended keeps this page: the Class Offerings they took
  * part in stay theirs to read (CONTEXT.md: Enrollment). It reads, and never
  * writes: rostering is a School Administrator's.
  */
@@ -41,7 +41,7 @@ function ClassesSheet({ schoolId, terms }: { schoolId: string; terms: RosteredTe
       <dl>
         <Key term="Current">The Term running today, listed first.</Key>
         <Key term="Taught by">The Faculty assigned to teach it.</Key>
-        <Key term="On the roster">The days you are in the class, inside its Term.</Key>
+        <Key term="On the roster">The days you are on its roster, inside its Term.</Key>
       </dl>
     </>
   );
@@ -51,7 +51,7 @@ function ClassesSheet({ schoolId, terms }: { schoolId: string; terms: RosteredTe
       <Sheet {...SHEET} legend={legend}>
         <h1>Your classes</h1>
         <p className="empty">
-          You have no classes yet. Once a School Administrator puts you on a Class Offering&rsquo;s roster, it is listed
+          You are on no Class Offering&rsquo;s roster yet. Once a School Administrator puts you on one, it is listed
           here.
         </p>
       </Sheet>
@@ -72,13 +72,13 @@ function ClassesSheet({ schoolId, terms }: { schoolId: string; terms: RosteredTe
               {schoolDay(term.firstDate)} to {schoolDay(term.lastDate)}
             </p>
             <RecordList
-              label={`Your classes in ${name}`}
+              label={`Your Class Offerings in ${name}`}
               rows={classOfferings}
               keyOf={(offering) => offering.id}
-              empty="You have no class this Term."
+              empty="You are on no Class Offering’s roster this Term."
               columns={[
                 {
-                  head: "Class",
+                  head: "Class Offering",
                   cell: (offering) => (
                     <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>
                       {offeringName(offering)}

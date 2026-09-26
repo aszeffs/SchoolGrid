@@ -165,7 +165,7 @@ test("a School Administrator rosters several Students in one go from the keyboar
   await page.getByRole("button", { name: "Delete Class Offering" }).click();
   await dialog.getByRole("button", { name: "Delete the Class Offering" }).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was in the class.",
+    "Students have been rostered in this offering, and it is not deleted once they have: the memberships are the record of who was on its roster.",
   );
 
   // The Term's list shows who teaches it and how many are on its roster,
@@ -289,7 +289,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
     await page.goto(`/schools/${own.schoolId}/account`);
     await openSection(page, "Your classes");
     await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
-    const row = recordRows(page, `Your classes in ${own.term.heading}`).filter({ hasText: own.offering });
+    const row = recordRows(page, `Your Class Offerings in ${own.term.heading}`).filter({ hasText: own.offering });
     await expect(row).toContainText(teacher);
     return row;
   };
@@ -330,7 +330,7 @@ test("a Student with no class is told so", async ({ page, audit }) => {
   await giveAccount(page, own.schoolId, personId);
 
   await page.goto(`/schools/${own.schoolId}/classes`);
-  await expect(page.getByRole("main")).toContainText("You have no classes yet.");
+  await expect(page.getByRole("main")).toContainText("You are on no Class Offering’s roster yet.");
   await audit(page);
 });
 
@@ -372,7 +372,7 @@ test.describe("on a phone", () => {
 
       await giveAccount(page, own.schoolId, personId);
       await page.goto(`/schools/${own.schoolId}/classes`);
-      await expect(recordRows(page, `Your classes in ${own.term.heading}`)).toHaveCount(1);
+      await expect(recordRows(page, `Your Class Offerings in ${own.term.heading}`)).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
     });

@@ -59,7 +59,7 @@ function ClassesSheet({
       <Sheet {...SHEET} legend={legend}>
         <h1>Your classes</h1>
         <p className="empty">
-          You have no classes yet. Once a School Administrator assigns you to teach a Class Offering, it is listed
+          You teach no Class Offering yet. Once a School Administrator assigns you to teach one, it is listed
           here.
         </p>
       </Sheet>
@@ -72,21 +72,21 @@ function ClassesSheet({
       <section>
         <h2>Current</h2>
         <Classes
-          label="Your current classes"
+          label="Your current Class Offerings"
           schoolId={schoolId}
           personId={personId}
           rows={current}
-          empty="You teach no class now, and none is still to come."
+          empty="You teach no Class Offering now, and none is still to come."
         />
       </section>
       <section>
         <h2>Past</h2>
         <Classes
-          label="Your past classes"
+          label="Your past Class Offerings"
           schoolId={schoolId}
           personId={personId}
           rows={past}
-          empty="You have taught no class that has ended."
+          empty="You have taught no Class Offering that has ended."
         />
       </section>
     </Sheet>
@@ -114,7 +114,7 @@ function Classes({
       empty={empty}
       columns={[
         {
-          head: "Class",
+          head: "Class Offering",
           cell: (offering) => (
             <Link to={{ name: "classOffering", schoolId, classOfferingId: offering.id }}>{offeringName(offering)}</Link>
           ),
