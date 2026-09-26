@@ -43,6 +43,24 @@ export async function schoolDateAt(
 }
 
 /**
+ * The instant this School date begins: midnight on it in the School's
+ * timezone, or null when there is no such School. On a date whose midnight
+ * the clocks skip, it is the first moment the School's clocks show that day.
+ */
+export async function midnightOn(
+  database: Queryable,
+  { schoolId, date }: { schoolId: string; date: SchoolDate },
+): Promise<Date | null> {
+  const { rows } = await database.query<{ midnight: Date }>(
+    `SELECT ($2::date::timestamp AT TIME ZONE timezone) AS midnight
+     FROM app.school
+     WHERE id = $1`,
+    [schoolId, date],
+  );
+  return rows[0]?.midnight ?? null;
+}
+
+/**
  * Whether this School date is an Instructional day: one that falls in one of
  * the School's Academic Years, and is either on a weekday of that year's
  * pattern and not taken out, or put in (CONTEXT.md: Instructional day). A date

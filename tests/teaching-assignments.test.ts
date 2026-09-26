@@ -694,6 +694,56 @@ describe("Teaching assignments", () => {
       ).toEqual(["2040-03-06", "2040-03-07"]);
     });
 
+    it("takes an end named as a School date to be midnight on it in New York, and ends them on that date", async () => {
+      const world = await arrange();
+      // New York keeps Eastern Standard Time until 11 March 2040, and Eastern
+      // Daylight Time through July: midnight is 05:00 UTC, then 04:00.
+      const [later] = await divide(world.alice, [{ name: "2040", firstDate: "2040-01-01", lastDate: "2040-06-30" }]);
+      const laterOffering = await offer(world.alice, await createCourse(world.alice, "Biology"), later!);
+      const running = await assign(world.alice, laterOffering, { personId: world.frankiePerson.id });
+      const membership = await membershipOf(world.alice, world.frankiePerson, "faculty");
+
+      const counted = [
+        await world.alice.get(`/memberships/${membership.id}/consequences?endsOn=2040-03-07`),
+        await world.alice.get(`/memberships/${membership.id}/consequences?endsOn=2040-07-01`),
+      ];
+      const granted = await world.alice.post("/memberships", {
+        personId: world.frankiePerson.id,
+        role: "guardian",
+        endsOn: "2040-07-04",
+      });
+      const narrowed = await world.alice.patch(`/memberships/${membership.id}`, { endsOn: "2040-03-07" });
+
+      expect(counted.map((response) => response.body)).toEqual([
+        { consequences: { teachingAssignments: 1 } },
+        { consequences: { teachingAssignments: 0 } },
+      ]);
+      expect(granted.body).toMatchObject({ membership: { endsAt: "2040-07-04T04:00:00.000Z" } });
+      expect(narrowed.body).toEqual({ membership: { ...membership, endsAt: "2040-03-07T05:00:00.000Z" } });
+      expect(await assignmentsOn(world.alice, laterOffering)).toEqual([{ ...running, lastDate: "2040-03-07" }]);
+    });
+
+    it.each([
+      ["a date that is not one", { endsOn: "2040-02-30" }],
+      ["an instant for a date", { endsOn: "2040-03-07T05:00:00Z" }],
+      ["both an instant and a date", { endsAt: "2040-03-07T05:00:00Z", endsOn: "2040-03-07" }],
+    ])("refuses %s as an end, and changes nothing", async (_case, end) => {
+      const world = await arrange();
+      const membership = await membershipOf(world.alice, world.frankiePerson, "faculty");
+      const query = new URLSearchParams(end).toString();
+
+      const counted = await world.alice.get(`/memberships/${membership.id}/consequences?${query}`);
+      const granted = await world.alice.post("/memberships", {
+        personId: world.frankiePerson.id,
+        role: "guardian",
+        ...end,
+      });
+      const narrowed = await world.alice.patch(`/memberships/${membership.id}`, end);
+
+      expect([counted.status, granted.status, narrowed.status]).toEqual([400, 400, 400]);
+      expect(await membershipOf(world.alice, world.frankiePerson, "faculty")).toEqual(membership);
+    });
+
     it("counts nothing for a membership that is not Faculty, and refuses a malformed end", async () => {
       const world = await arrange();
       const alice = await membershipOf(world.alice, { id: world.aliceId } as Person, "school_administrator");
