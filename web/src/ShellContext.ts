@@ -8,6 +8,8 @@ import { createContext, useContext, type ReactNode } from "react";
 export interface ShellChrome {
   head: ReactNode;
   nav?: ReactNode;
+  /** At the foot of the header inside a School: who is acting, and the way out. */
+  foot?: ReactNode;
   /** Above the head, across the whole page: a Trial School's banner. */
   banner?: ReactNode;
   /**

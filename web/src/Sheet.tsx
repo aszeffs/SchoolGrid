@@ -7,17 +7,18 @@ export interface SheetKind {
 }
 
 /**
- * Every page is one sheet of the record: the head says which record system and,
- * inside a School, which School and who is acting; the key beside the record
- * stays level while the record scrolls.
+ * Every page is one sheet of the record. Inside a School the shell's header is a
+ * sidebar holding the School, its sections and who is acting, and the sheet runs
+ * beside it; anywhere else the header is a bar across the top. The key beside
+ * the record stays level while the record scrolls.
  *
  * The key explains the page's own marks and never names a record. A sheet
  * shown for a refusal carries no key at all, so nothing about what exists
  * can be read off it (ADR-0002).
  *
  * A sheet still being read is the same sheet with `busy` set: it names no
- * record. Inside the shell it keeps the shell's head and navigation, which the
- * session had already settled before the sheet was asked for.
+ * record. Inside the shell it keeps the shell's header and navigation, which
+ * the session had already settled before the sheet was asked for.
  */
 export function Sheet({
   name,
@@ -28,7 +29,7 @@ export function Sheet({
   children,
 }: SheetKind & {
   legend?: ReactNode;
-  /** In the head, after the shell's own. Left off while the sheet is still being read. */
+  /** In the header, after the shell's own. Left off while the sheet is still being read. */
   head?: ReactNode;
   /** The way off this page, ruled off below the record. */
   foot?: ReactNode;
@@ -37,25 +38,29 @@ export function Sheet({
 }) {
   const shell = useShell();
   const aside = busy ? undefined : legend;
+  const inSchool = shell?.nav !== undefined;
   return (
-    <div className="sheet">
-      {shell?.banner}
+    <div className={inSchool ? "sheet sheet--school" : "sheet"}>
       <header className="sheet__head">
         <div className="sheet__group">
           <p className="sheet__mark">SchoolGrid</p>
-          {/* Inside a School the lifted tab names the page; nowhere else does. */}
-          {shell?.nav === undefined && <p className="sheet__no">{name}</p>}
+          {/* Inside a School the current section names the page; nowhere else does. */}
+          {!inSchool && <p className="sheet__no">{name}</p>}
         </div>
         {shell?.head}
+        {shell?.nav}
         {!busy && head}
+        {shell?.foot}
       </header>
-      {shell?.nav}
-      <div className={aside === undefined ? "sheet__body sheet__body--single" : "sheet__body"}>
-        {aside !== undefined && <aside className="legend">{aside}</aside>}
-        <main className="run" aria-busy={busy || undefined}>
-          {!busy && children}
-          {!busy && foot !== undefined && <div className="foot">{foot}</div>}
-        </main>
+      <div className="sheet__main">
+        {shell?.banner}
+        <div className={aside === undefined ? "sheet__body sheet__body--single" : "sheet__body"}>
+          <main className="run" aria-busy={busy || undefined}>
+            {!busy && children}
+            {!busy && foot !== undefined && <div className="foot">{foot}</div>}
+          </main>
+          {aside !== undefined && <aside className="legend">{aside}</aside>}
+        </div>
       </div>
     </div>
   );
