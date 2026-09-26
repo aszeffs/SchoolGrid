@@ -24,7 +24,7 @@ import {
 } from "./index.ts";
 import { holdsRoleNowOrLater } from "./memberships.ts";
 import { endRosterWithEnrollment } from "./roster-membership-routes.ts";
-import { countRosterMembershipsRunningPast } from "./roster-memberships.ts";
+import { rosterMemberships } from "./roster-memberships.ts";
 
 /** An Enrollment as served. The School is the one addressed. */
 function present({ id, studentPersonId, startedAt, endedAt, endReason }: Enrollment) {
@@ -193,6 +193,6 @@ export function registerEnrollmentRoutes(scope: SchoolScope, database: Database)
       at: await transactionTime(database),
     }))!;
     const student = { id: enrollment.studentPersonId, schoolId: enrollment.schoolId };
-    return { consequences: { rosterMemberships: await countRosterMembershipsRunningPast(database, student, endsOn) } };
+    return { consequences: { rosterMemberships: await rosterMemberships.countRunningPast(database, student, endsOn) } };
   });
 }

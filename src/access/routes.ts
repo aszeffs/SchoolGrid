@@ -12,7 +12,7 @@ import { registerEnrollmentRoutes } from "./enrollment-routes.ts";
 import { registerGuardianLinkRoutes } from "./guardian-link-routes.ts";
 import { registerRosterMembershipRoutes } from "./roster-membership-routes.ts";
 import { endTeachingWithMembership, registerTeachingAssignmentRoutes } from "./teaching-assignment-routes.ts";
-import { countTeachingAssignmentsRunningPast } from "./teaching-assignments.ts";
+import { teachingAssignments } from "./teaching-assignments.ts";
 import {
   authorizeGrantMembershipTo,
   authorizeManageMembership,
@@ -260,7 +260,7 @@ export function registerAccessRoutes(
       const endsAt = at < membership.startsAt ? membership.startsAt : at;
       const endsOn = (await schoolDateAt(database, { schoolId: membership.schoolId, at: endsAt }))!;
       const person = { id: membership.personId, schoolId: membership.schoolId };
-      return { consequences: { teachingAssignments: await countTeachingAssignmentsRunningPast(database, person, endsOn) } };
+      return { consequences: { teachingAssignments: await teachingAssignments.countRunningPast(database, person, endsOn) } };
     });
 
     registerGuardianLinkRoutes(scope, database);

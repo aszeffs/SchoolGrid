@@ -22,20 +22,12 @@ import {
   type Membership,
   type Role,
 } from "./memberships.ts";
-import { schoolDateAt } from "../calendar/index.ts";
+import { schoolDateAt, type SchoolDate } from "../calendar/index.ts";
 import { transactionTime } from "../db/transaction.ts";
-import {
-  classOfferingIdsTaughtBy,
-  classOfferingsTaughtBy,
-  teachingAssignmentsOn,
-  type TeachingAssignment,
-} from "./teaching-assignments.ts";
-import {
-  classOfferingIdsRosteredIn,
-  rosterMembershipsOf,
-  rosterMembershipsOn,
-  type RosterMembership,
-} from "./roster-memberships.ts";
+import { findClassOffering, lockClassOffering, type DescribedClassOffering } from "../academic-structure/courses.ts";
+import type { Participation, Participations } from "./participation.ts";
+import { teachingAssignments, type TeachingAssignment } from "./teaching-assignments.ts";
+import { rosterMemberships, type RosterMembership } from "./roster-memberships.ts";
 
 /**
  * The Access module is the sole authority on whether an actor may do something
@@ -182,8 +174,8 @@ export async function resolveActor(
   // whatever else they still hold.
   const linkedStudents = roles.has("guardian") ? await linkedStudentIds(database, person) : new Set<string>();
   const enrolled = roles.has("student") && (await hasOpenEnrollment(database, person));
-  const taught = await classOfferingIdsTaughtBy(database, person);
-  const rostered = roles.has("student") ? await classOfferingIdsRosteredIn(database, person) : new Set<string>();
+  const taught = await teachingAssignments.classOfferingIdsOf(database, person);
+  const rostered = roles.has("student") ? await rosterMemberships.classOfferingIdsOf(database, person) : new Set<string>();
   const actor: Actor = Object.freeze({ person, schoolId: person.schoolId });
   standingOf.set(actor, {
     roles,
@@ -310,7 +302,7 @@ export async function actorInEachSchool(
       // In the order ROLES declares, so the response does not vary with what
       // the database happened to return first.
       roles: ROLES.filter((role) => held.has(role)),
-      classOfferingsTaught: (await classOfferingIdsTaughtBy(database, person)).size,
+      classOfferingsTaught: (await teachingAssignments.classOfferingIdsOf(database, person)).size,
       ...(trialExpiresAt === null ? {} : { trialExpiresAt: trialExpiresAt.toISOString() }),
       ...(viewingAs === null ? {} : { viewingAs }),
     });
@@ -387,12 +379,46 @@ export async function ownAccount(database: Queryable, actor: Actor): Promise<Own
   };
 }
 
-/** A Teaching assignment as served: whose it is, by display name alone, and its bounds. */
-export interface ServedTeachingAssignment {
+/** A Teaching assignment or Roster membership as served: whose it is, by display name alone, and its bounds. */
+export interface ServedParticipation {
   id: string;
   person: { id: string; displayName: string };
   firstDate: string;
   lastDate: string | null;
+}
+
+/** These participations as served, in no particular order. */
+async function serveParticipations(
+  database: Queryable,
+  participations: readonly Participation[],
+): Promise<ServedParticipation[]> {
+  // Read through the Identity module, as ownAccount reads linked Students.
+  const persons = await findPersons(
+    database,
+    participations.map((participation) => participation.personId),
+  );
+  return participations.map(({ id, personId, firstDate, lastDate }) => ({
+    id,
+    person: { id: personId, displayName: persons.get(personId)?.displayName ?? "" },
+    firstDate,
+    lastDate,
+  }));
+}
+
+/** Each of these Class Offerings' participations of one kind, as `serve` serves and orders them, by offering. */
+async function servedOn(
+  database: Queryable,
+  participations: Participations,
+  classOfferingIds: readonly string[],
+  serve: (database: Queryable, held: readonly Participation[]) => Promise<ServedParticipation[]>,
+): Promise<Map<string, ServedParticipation[]>> {
+  const held = await participations.on(database, classOfferingIds);
+  const offeringOf = new Map(held.map((participation) => [participation.id, participation.classOfferingId]));
+  const byOffering = new Map(classOfferingIds.map((id) => [id, [] as ServedParticipation[]]));
+  for (const served of await serve(database, held)) {
+    byOffering.get(offeringOf.get(served.id)!)?.push(served);
+  }
+  return byOffering;
 }
 
 /**
@@ -403,19 +429,8 @@ export interface ServedTeachingAssignment {
 export async function serveTeachingAssignments(
   database: Queryable,
   assignments: readonly TeachingAssignment[],
-): Promise<ServedTeachingAssignment[]> {
-  // Read through the Identity module, as ownAccount reads linked Students.
-  const persons = await findPersons(
-    database,
-    assignments.map((assignment) => assignment.personId),
-  );
-  const served = assignments.map(({ id, personId, firstDate, lastDate }) => ({
-    id,
-    person: { id: personId, displayName: persons.get(personId)?.displayName ?? "" },
-    firstDate,
-    lastDate,
-  }));
-  return served.sort(
+): Promise<ServedParticipation[]> {
+  return (await serveParticipations(database, assignments)).sort(
     (a, b) =>
       a.firstDate.localeCompare(b.firstDate) ||
       a.person.displayName.localeCompare(b.person.displayName) ||
@@ -430,14 +445,8 @@ export async function serveTeachingAssignments(
 export async function teachingAssignmentsServedOn(
   database: Queryable,
   classOfferingIds: readonly string[],
-): Promise<Map<string, ServedTeachingAssignment[]>> {
-  const assignments = await teachingAssignmentsOn(database, classOfferingIds);
-  const offeringOf = new Map(assignments.map((assignment) => [assignment.id, assignment.classOfferingId]));
-  const byOffering = new Map(classOfferingIds.map((id) => [id, [] as ServedTeachingAssignment[]]));
-  for (const served of await serveTeachingAssignments(database, assignments)) {
-    byOffering.get(offeringOf.get(served.id)!)?.push(served);
-  }
-  return byOffering;
+): Promise<Map<string, ServedParticipation[]>> {
+  return servedOn(database, teachingAssignments, classOfferingIds, serveTeachingAssignments);
 }
 
 /** A Class Offering at a glance: who teaches it, by display name alone, and how many Students are on its roster. */
@@ -467,13 +476,13 @@ export async function offeringsAtAGlance(
       today < term.firstDate ? term.firstDate : today > term.lastDate ? term.lastDate : today,
     ]),
   );
-  const runsOnItsDay = ({ classOfferingId, firstDate, lastDate }: TeachingAssignment | RosterMembership) => {
+  const runsOnItsDay = ({ classOfferingId, firstDate, lastDate }: Participation) => {
     const day = dayOf.get(classOfferingId)!;
     return firstDate <= day && (lastDate === null || day <= lastDate);
   };
   // No two of one Person's in one offering overlap, so each counts once.
-  const teaching = (await teachingAssignmentsOn(database, ids)).filter(runsOnItsDay);
-  const rostered = (await rosterMembershipsOn(database, ids)).filter(runsOnItsDay);
+  const teaching = (await teachingAssignments.on(database, ids)).filter(runsOnItsDay);
+  const rostered = (await rosterMemberships.on(database, ids)).filter(runsOnItsDay);
   const persons = await findPersons(
     database,
     teaching.map((assignment) => assignment.personId),
@@ -501,21 +510,13 @@ export async function ownClassOfferings(
   actor: Actor,
 ): Promise<{ current: Set<string>; past: Set<string> }> {
   const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
-  const taught = await classOfferingsTaughtBy(database, actor.person, today);
+  const taught = await teachingAssignments.classOfferingsOf(database, actor.person, today);
   const current = new Set<string>();
   const past = new Set<string>();
   for (const [id, { current: isCurrent }] of taught) {
     (isCurrent ? current : past).add(id);
   }
   return { current, past };
-}
-
-/** A Roster membership as served: whose it is, by display name alone, and its bounds. */
-export interface ServedRosterMembership {
-  id: string;
-  person: { id: string; displayName: string };
-  firstDate: string;
-  lastDate: string | null;
 }
 
 /**
@@ -526,19 +527,8 @@ export interface ServedRosterMembership {
 export async function serveRosterMemberships(
   database: Queryable,
   memberships: readonly RosterMembership[],
-): Promise<ServedRosterMembership[]> {
-  // Read through the Identity module, as ownAccount reads linked Students.
-  const persons = await findPersons(
-    database,
-    memberships.map((membership) => membership.personId),
-  );
-  const served = memberships.map(({ id, personId, firstDate, lastDate }) => ({
-    id,
-    person: { id: personId, displayName: persons.get(personId)?.displayName ?? "" },
-    firstDate,
-    lastDate,
-  }));
-  return served.sort(
+): Promise<ServedParticipation[]> {
+  return (await serveParticipations(database, memberships)).sort(
     (a, b) =>
       a.person.displayName.localeCompare(b.person.displayName) ||
       a.firstDate.localeCompare(b.firstDate) ||
@@ -554,14 +544,8 @@ export async function serveRosterMemberships(
 export async function rostersServedOn(
   database: Queryable,
   classOfferingIds: readonly string[],
-): Promise<Map<string, ServedRosterMembership[]>> {
-  const memberships = await rosterMembershipsOn(database, classOfferingIds);
-  const offeringOf = new Map(memberships.map((membership) => [membership.id, membership.classOfferingId]));
-  const byOffering = new Map(classOfferingIds.map((id) => [id, [] as ServedRosterMembership[]]));
-  for (const served of await serveRosterMemberships(database, memberships)) {
-    byOffering.get(offeringOf.get(served.id)!)?.push(served);
-  }
-  return byOffering;
+): Promise<Map<string, ServedParticipation[]>> {
+  return servedOn(database, rosterMemberships, classOfferingIds, serveRosterMemberships);
 }
 
 /** One of the actor's own Roster memberships, as they are served it: its bounds, and nothing of anyone else's. */
@@ -582,7 +566,7 @@ export async function ownRosterMemberships(
 ): Promise<{ today: string; byOffering: Map<string, OwnRosterMembership[]> }> {
   const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
   const byOffering = new Map<string, OwnRosterMembership[]>();
-  for (const { id, classOfferingId, firstDate, lastDate } of await rosterMembershipsOf(database, actor.person)) {
+  for (const { id, classOfferingId, firstDate, lastDate } of await rosterMemberships.of(database, actor.person)) {
     byOffering.set(classOfferingId, [...(byOffering.get(classOfferingId) ?? []), { id, firstDate, lastDate }]);
   }
   return { today, byOffering };
@@ -988,19 +972,6 @@ export function authorizeManageRosterMemberships(actor: Actor): string {
   return authorizeManageRelationships(actor);
 }
 
-/** Returns the Roster membership the actor may change or end, and refuses otherwise. */
-export function authorizeManageRosterMembership<M extends RosterMembership>(
-  actor: Actor,
-  rosterMembershipId: string,
-  target: M | null,
-): M {
-  const reason = decideManageRelationships(actor, target);
-  if (reason !== null) {
-    throw new Refused(reason, { type: "roster_membership", id: rosterMembershipId });
-  }
-  return target!;
-}
-
 /**
  * Returns the School whose Class Offerings the actor may list as the ones they
  * teach and taught, and refuses otherwise. A Faculty member lists theirs, none
@@ -1044,17 +1015,59 @@ export function authorizeManageTeachingAssignments(actor: Actor): string {
   return authorizeManageRelationships(actor);
 }
 
-/** Returns the Teaching assignment the actor may change or end, and refuses otherwise. */
-export function authorizeManageTeachingAssignment<A extends TeachingAssignment>(
+/** Returns the Teaching assignment or Roster membership the actor may change or end, and refuses otherwise. */
+function authorizeManageParticipation<P extends Participation>(
   actor: Actor,
-  teachingAssignmentId: string,
-  target: A | null,
-): A {
+  participations: Participations,
+  id: string,
+  target: P | null,
+): P {
   const reason = decideManageRelationships(actor, target);
   if (reason !== null) {
-    throw new Refused(reason, { type: "teaching_assignment", id: teachingAssignmentId });
+    throw new Refused(reason, { type: participations.kind, id });
   }
   return target!;
+}
+
+/*
+ * Each record the actor may act on is found, decided, and only then locked:
+ * see lockMembership. One deleted between the two is decided again as the
+ * absent record it now is, so the caller is refused as for any other.
+ */
+
+/** The Class Offering the actor may change or add participation to, locked for the rest of the transaction. */
+export async function lockPermittedOffering(
+  transaction: Queryable,
+  actor: Actor,
+  classOfferingId: string,
+): Promise<DescribedClassOffering> {
+  const permitted = authorizeManageClassOffering(
+    actor,
+    classOfferingId,
+    await findClassOffering(transaction, classOfferingId),
+  );
+  return (
+    (await lockClassOffering(transaction, permitted)) ??
+    authorizeManageClassOffering<DescribedClassOffering>(actor, classOfferingId, null)
+  );
+}
+
+/**
+ * The Teaching assignment or Roster membership the actor may change or end,
+ * locked for the rest of the transaction, with the last School date of its
+ * Term.
+ */
+export async function lockPermittedParticipation(
+  transaction: Queryable,
+  actor: Actor,
+  participations: Participations,
+  id: string,
+): Promise<Participation & { termLastDate: SchoolDate }> {
+  const permitted = authorizeManageParticipation(actor, participations, id, await participations.find(transaction, id));
+  return (
+    (await participations.lock(transaction, permitted)) ??
+    authorizeManageParticipation<Participation & { termLastDate: SchoolDate }>(actor, participations, id, null)
+  );
 }
 
 function authorizeManageRelationships(actor: Actor): string {
