@@ -178,6 +178,7 @@ test("a Faculty member finds their classes in the navigation and reads who teach
   await arrange(page, own.schoolId, path, { personId: await personIdOf(page, own.schoolId, faculty) });
   await arrange(page, own.schoolId, path, { personId: coTeacherId });
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
 
   await signIn(page, faculty);
   await openSection(page, "Your classes");
@@ -209,6 +210,7 @@ test("a Faculty member with no class is told so, and other roles are not offered
   await expect(page.getByRole("main")).toContainText("You teach no Class Offering yet.");
   await audit(page);
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
 
   await signIn(page, guardian);
   await expect(page.getByRole("navigation")).toBeVisible();
@@ -282,6 +284,7 @@ test.describe("on a phone", () => {
       await audit(page);
       await dialog.getByRole("button", { name: "Cancel" }).click();
       await page.getByRole("button", { name: "Sign out" }).click();
+      await expect(page).toHaveURL("/sign-in");
 
       await signIn(page, faculty);
       await expect(page.getByRole("heading", { level: 1, name: "Your account" })).toBeVisible();

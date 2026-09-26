@@ -307,6 +307,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
 
   // Departed, they keep the classes they took part in.
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
   await signIn(page, schoolAdministrator);
   await expect(schoolsList(page)).not.toHaveCount(0);
   const ended = await page.request.delete(`/api/schools/${own.schoolId}/enrollments/${enrollmentId}`, {
@@ -315,6 +316,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
   });
   expect(ended.ok()).toBe(true);
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/sign-in");
   await signIn(page, credentials);
   await expect(page.getByRole("navigation")).toBeVisible();
   // Kept, but only to the day they left.
