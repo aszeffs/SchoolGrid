@@ -82,7 +82,7 @@ export function SignIn() {
         One User account signs in here. It holds no role of its own: what it reaches is whichever Person
         it resolves to in each School, and the School memberships that Person holds.
       </p>
-      <form onSubmit={submit}>
+      <form className="panel" onSubmit={submit}>
         <label>
           Username
           <input name="username" autoComplete="username" required />

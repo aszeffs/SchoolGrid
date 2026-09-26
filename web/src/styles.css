@@ -1161,6 +1161,31 @@ button:disabled {
   font-size: var(--size-label);
 }
 
+/*
+ * A white block holding what the page asks of the reader: a form standing on
+ * its own, or a short message with the one way on from it.
+ */
+.panel {
+  display: grid;
+  gap: calc(var(--step) * 2.5);
+  justify-items: start;
+  max-width: 30rem;
+  margin: calc(var(--step) * 3) 0;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
+}
+
+.panel > p {
+  margin: 0;
+}
+
+.panel > .error {
+  justify-self: stretch;
+}
+
 /* An empty record says so plainly, in the place the record would be. */
 .empty {
   max-width: none;
