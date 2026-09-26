@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrange, arrangePerson, cancelDialog, darken, signIn, withOwnOffering, type OwnOffering } from "./app.ts";
-import { seeded, type Account } from "./seeded.ts";
+import { arrange, arrangePerson, cancelDialog, darken, personIdOf, signIn, withOwnOffering, type OwnOffering } from "./app.ts";
+import { seeded } from "./seeded.ts";
 import { expect, test } from "./test.ts";
 
 /**
@@ -10,12 +10,6 @@ import { expect, test } from "./test.ts";
  * every Dialog a Class Offering's page opens, and the wall chart of a Term's
  * Class Offerings leading to each one's page.
  */
-
-async function personIdOf(page: Page, schoolId: string, account: Account): Promise<string> {
-  const response = await page.request.get(`/api/schools/${schoolId}/persons`);
-  const { persons } = (await response.json()) as { persons: { id: string; displayName: string }[] };
-  return persons.find((person) => person.displayName === account.displayName)!.id;
-}
 
 /** The spec's own offering, taught by the seeded Faculty member with the seeded Student on its roster. */
 async function withTaughtOffering(page: Page): Promise<OwnOffering> {
@@ -31,7 +25,7 @@ async function withTaughtOffering(page: Page): Promise<OwnOffering> {
   return own;
 }
 
-async function opens(page: Page, button: string, audit: (page: Page) => Promise<void>) {
+async function auditDialog(page: Page, button: string, audit: (page: Page) => Promise<void>) {
   await page.getByRole("button", { name: button }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await audit(page);
@@ -75,12 +69,12 @@ test("a School Administrator's academic screens and their Dialogs stay legible i
   await expect(page.getByRole("heading", { level: 1, name: own.offering })).toBeVisible();
   await audit(page);
 
-  await opens(page, `Change the dates of ${faculty.displayName}’s Teaching assignment`, audit);
-  await opens(page, `End ${faculty.displayName}’s Teaching assignment`, audit);
-  await opens(page, `Change the dates of ${student.displayName}’s Roster membership`, audit);
-  await opens(page, `End ${student.displayName}’s Roster membership`, audit);
-  await opens(page, "Roster Students", audit);
-  await opens(page, "Delete Class Offering", audit);
+  await auditDialog(page, `Change the dates of ${faculty.displayName}’s Teaching assignment`, audit);
+  await auditDialog(page, `End ${faculty.displayName}’s Teaching assignment`, audit);
+  await auditDialog(page, `Change the dates of ${student.displayName}’s Roster membership`, audit);
+  await auditDialog(page, `End ${student.displayName}’s Roster membership`, audit);
+  await auditDialog(page, "Roster Students", audit);
+  await auditDialog(page, "Delete Class Offering", audit);
 });
 
 test("Your classes stays legible in the dark rendition, for the Faculty who teach and the Students on the roster", async ({

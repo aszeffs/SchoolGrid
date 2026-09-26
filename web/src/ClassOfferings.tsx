@@ -10,7 +10,7 @@ import {
   type ReachedSchool,
   type Term,
 } from "./api.ts";
-import { CourseChart, CourseName } from "./CourseChart.tsx";
+import { CourseChart, CourseName, isDimmed } from "./CourseChart.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts";
@@ -177,6 +177,7 @@ function ClassOfferingsSheet({
         label={`Wall chart of ${term.name}`}
         schoolId={schoolId}
         offerings={offered}
+        pointed={pointed}
         onPoint={setPointed}
       />
 
@@ -184,7 +185,7 @@ function ClassOfferingsSheet({
         label={`Class Offerings in ${term.name}`}
         rows={offered}
         keyOf={(offering) => offering.id}
-        dimmed={(offering) => pointed !== null && pointed !== offering.course.id}
+        dimmed={(offering) => isDimmed(pointed, offering.course)}
         empty={`No Course is offered in ${term.name} yet.${courses.length > 0 ? " Offer one below." : ""}`}
         columns={[
           {

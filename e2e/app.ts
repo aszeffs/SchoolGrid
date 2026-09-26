@@ -93,6 +93,13 @@ export async function schoolIdOf(page: Page, name: string): Promise<string> {
   return schools.find((school) => school.name === name)!.schoolId;
 }
 
+/** The Person a seeded account resolves to in this School. */
+export async function personIdOf(page: Page, schoolId: string, account: { displayName: string }): Promise<string> {
+  const response = await page.request.get(`/api/schools/${schoolId}/persons`);
+  const { persons } = (await response.json()) as { persons: { id: string; displayName: string }[] };
+  return persons.find((person) => person.displayName === account.displayName)!.id;
+}
+
 /**
  * Sends one change to the API as the signed-in account, for a spec to arrange
  * what the sheet under test is not itself for: the Persons, roles and
