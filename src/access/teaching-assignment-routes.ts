@@ -1,65 +1,34 @@
-import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
 import { schoolDateAt, type SchoolDate } from "../calendar/index.ts";
 import type { Database } from "../db/pool.ts";
-import { transactionTime, withTransaction, type Queryable } from "../db/transaction.ts";
+import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { fieldsOf, reasonFrom, reasonOnly } from "../http/request-body.ts";
 import type { SchoolScope } from "../http/school-scope.ts";
 import { findPerson, type Person } from "../identity/index.ts";
 import {
   authorizeAssignTeaching,
-  authorizeManageTeachingAssignment,
   authorizeManageTeachingAssignments,
+  lockPermittedOffering,
+  lockPermittedParticipation,
   serveTeachingAssignments,
   type Actor,
 } from "./index.ts";
 import { holdActiveMembership, type Membership } from "./memberships.ts";
 import {
+  boundsFrom,
   checkInOrder,
   checkNotExtended,
+  endEachWith,
+  endToday,
   firstDateFrom,
   lastDateFrom,
-  lockPermittedOffering,
+  recordChange,
   type Bounds,
 } from "./participation.ts";
-import {
-  assignTeaching,
-  deleteTeachingAssignment,
-  endTeachingAssignmentsOf,
-  findTeachingAssignment,
-  lockTeachingAssignment,
-  setTeachingAssignmentBounds,
-  type ChangedAssignment,
-  type TeachingAssignment,
-} from "./teaching-assignments.ts";
-
-/** A Teaching assignment as written to the Audit record, naming the offering and Person it joins. */
-function valuesOf({ classOfferingId, personId, firstDate, lastDate }: TeachingAssignment): AuditValues {
-  return { classOfferingId, personId, firstDate, lastDate };
-}
+import { teachingAssignments, type TeachingAssignment } from "./teaching-assignments.ts";
 
 async function served(database: Queryable, assignment: TeachingAssignment) {
   return { teachingAssignment: (await serveTeachingAssignments(database, [assignment]))[0]! };
-}
-
-type Action = "created" | "changed" | "ended" | "deleted";
-
-async function recordChange(
-  transaction: Queryable,
-  actor: Actor,
-  action: Action,
-  { before, after }: ChangedAssignment,
-  reason: string | null,
-): Promise<void> {
-  await appendAuditRecord(transaction, {
-    schoolId: actor.schoolId,
-    actorPersonId: actor.person.id,
-    action: `teaching_assignment.${action}`,
-    target: { type: "teaching_assignment", id: (after ?? before)!.id },
-    reason,
-    before: before === null ? null : valuesOf(before),
-    after: after === null ? null : valuesOf(after),
-  });
 }
 
 // Validation below runs only once the Access decision has permitted the
@@ -75,17 +44,6 @@ function parseAssignment(body: unknown) {
     personId,
     firstDate: firstDateFrom(fields),
     lastDate: lastDateFrom(fields),
-    reason: reasonFrom(fields["reason"]),
-  };
-}
-
-/** A change of bounds: whatever it states of them, over what the assignment already holds. */
-function parseBounds(body: unknown, assignment: TeachingAssignment) {
-  const fields = fieldsOf(body, ["firstDate", "lastDate", "reason"]);
-  const lastDate = lastDateFrom(fields);
-  return {
-    firstDate: firstDateFrom(fields) ?? assignment.firstDate,
-    lastDate: lastDate === undefined ? assignment.lastDate : lastDate,
     reason: reasonFrom(fields["reason"]),
   };
 }
@@ -118,19 +76,6 @@ function checkBounds(bounds: Bounds, termLastDate: SchoolDate, until: SchoolDate
   }
 }
 
-// Found, decided, and only then locked, as lockPermittedOffering is.
-async function lockPermittedAssignment(transaction: Queryable, actor: Actor, teachingAssignmentId: string) {
-  const permitted = authorizeManageTeachingAssignment(
-    actor,
-    teachingAssignmentId,
-    await findTeachingAssignment(transaction, teachingAssignmentId),
-  );
-  return (
-    (await lockTeachingAssignment(transaction, permitted)) ??
-    authorizeManageTeachingAssignment<TeachingAssignment & { termLastDate: SchoolDate }>(actor, teachingAssignmentId, null)
-  );
-}
-
 /**
  * Ends the Teaching assignments of the Person whose membership this is, if it
  * is a Faculty membership and now has an end: each still running after the
@@ -139,8 +84,8 @@ async function lockPermittedAssignment(transaction: Queryable, actor: Actor, tea
  * the membership, with its reason.
  *
  * Called by the transaction that revoked or narrowed the membership, once it
- * has, so the membership and its assignments end together (CONTEXT.md:
- * Teaching assignment).
+ * has, so the membership and its assignments end together: what ending a
+ * Faculty membership does (CONTEXT.md: Teaching assignment).
  */
 export async function endTeachingWithMembership(
   transaction: Queryable,
@@ -153,9 +98,7 @@ export async function endTeachingWithMembership(
   }
   const endsOn = (await schoolDateAt(transaction, { schoolId: membership.schoolId, at: membership.endsAt }))!;
   const person = { id: membership.personId, schoolId: membership.schoolId };
-  for (const changed of await endTeachingAssignmentsOf(transaction, person, endsOn)) {
-    await recordChange(transaction, actor, changed.after === null ? "deleted" : "ended", changed, reason);
-  }
+  await endEachWith(transaction, actor, teachingAssignments, person, endsOn, reason);
 }
 
 /**
@@ -184,62 +127,51 @@ export function registerTeachingAssignmentRoutes(scope: SchoolScope, database: D
       // Unstated, it runs to the end of the Term, or to the end of the Faculty membership if that comes first.
       const lastDate = request.lastDate !== undefined ? request.lastDate : until !== null && until < term.lastDate ? until : null;
       checkBounds({ firstDate, lastDate }, term.lastDate, until);
-      const created = await assignTeaching(transaction, {
+      const created = await teachingAssignments.create(transaction, {
         schoolId: offering.schoolId,
         classOfferingId: offering.id,
         personId: person.id,
         firstDate,
         lastDate,
       });
-      await recordChange(transaction, actor, "created", { before: null, after: created }, request.reason);
+      await recordChange(transaction, actor, teachingAssignments, "created", { before: null, after: created }, request.reason);
       return served(transaction, created);
     });
   });
 
   scope.patch("/teaching-assignments/:teachingAssignmentId", async (actor, { params, body }) => {
     return withTransaction(database, async (transaction) => {
-      const { termLastDate, ...assignment } = await lockPermittedAssignment(
+      const { termLastDate, ...assignment } = await lockPermittedParticipation(
         transaction,
         actor,
+        teachingAssignments,
         params["teachingAssignmentId"]!,
       );
-      const { reason, ...bounds } = parseBounds(body, assignment);
+      const { reason, ...bounds } = boundsFrom(body, assignment);
       const until = await teachesUntil(transaction, (await findPerson(transaction, assignment.personId))!);
       if (until === undefined) {
         checkNotExtended(bounds, assignment, termLastDate, "the Person no longer holds a Faculty membership");
       }
       checkBounds(bounds, termLastDate, until ?? null);
-      const changed = await setTeachingAssignmentBounds(transaction, assignment, bounds);
+      const changed = await teachingAssignments.setBounds(transaction, assignment, bounds);
       if (changed === null) {
         return served(transaction, assignment);
       }
-      await recordChange(transaction, actor, "changed", changed, reason);
+      await recordChange(transaction, actor, teachingAssignments, "changed", changed, reason);
       return served(transaction, changed.after!);
     });
   });
 
   scope.delete("/teaching-assignments/:teachingAssignmentId", async (actor, { params, body }) => {
     return withTransaction(database, async (transaction) => {
-      const { termLastDate, ...assignment } = await lockPermittedAssignment(
+      const assignment = await lockPermittedParticipation(
         transaction,
         actor,
+        teachingAssignments,
         params["teachingAssignmentId"]!,
       );
       const reason = reasonOnly(body);
-      const at = await transactionTime(transaction);
-      const today = (await schoolDateAt(transaction, { schoolId: assignment.schoolId, at }))!;
-      if (assignment.firstDate > today) {
-        await deleteTeachingAssignment(transaction, assignment);
-        await recordChange(transaction, actor, "deleted", { before: assignment, after: null }, reason);
-        return served(transaction, assignment);
-      }
-      // Already over by today: nothing is ended, so nothing is recorded.
-      if ((assignment.lastDate ?? termLastDate) <= today) {
-        return served(transaction, assignment);
-      }
-      const ended = (await setTeachingAssignmentBounds(transaction, assignment, { ...assignment, lastDate: today }))!;
-      await recordChange(transaction, actor, "ended", ended, reason);
-      return served(transaction, ended.after!);
+      return served(transaction, await endToday(transaction, actor, teachingAssignments, assignment, reason));
     });
   });
 }

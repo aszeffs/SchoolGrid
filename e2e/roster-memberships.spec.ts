@@ -4,12 +4,11 @@ import {
   arrange,
   arrangePerson,
   changesSent,
-  openSchool,
   openSection,
   recordRows,
-  schoolIdOf,
   schoolsList,
   signIn,
+  withOwnOffering,
 } from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
@@ -28,21 +27,6 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * membership that has begun, so theirs is in a year around today.
  */
 
-interface Own {
-  schoolId: string;
-  classOfferingId: string;
-  /** The offering as its page is headed: its Course and label. */
-  offering: string;
-  /** The Term it runs in, as `YYYY-MM-DD`, and its name as a Student's page heads it. */
-  term: { firstDate: string; lastDate: string; heading: string };
-}
-
-/** A year far enough ahead that no other spec's can overlap it. */
-function yearAhead(): { firstDate: string; lastDate: string } {
-  const starts = 2100 + Math.floor(Math.random() * 7000);
-  return { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
-}
-
 /**
  * A year running from a month ago to a month ahead, so a membership of it has
  * begun and outlasts a departure today. No other spec arranges a year near
@@ -51,38 +35,6 @@ function yearAhead(): { firstDate: string; lastDate: string } {
 function yearAroundToday(): { firstDate: string; lastDate: string } {
   const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
   return { firstDate: day(-30), lastDate: day(30) };
-}
-
-/** A School Administrator in the first School, with a Class Offering of the test's own in a year of its own. */
-async function withOwnOffering(page: Page, term = yearAhead()): Promise<Own> {
-  const { schoolAdministrator, schools } = seeded();
-  await signIn(page, schoolAdministrator);
-  await openSchool(page, schools[0]!);
-  const schoolId = await schoolIdOf(page, schools[0]!);
-  const yearName = `Year ${randomUUID().slice(0, 8)}`;
-  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
-    name: yearName,
-    ...term,
-  });
-  const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
-    headers: { origin: new URL(page.url()).origin },
-    data: { terms: [{ name: "Whole year", ...term }] },
-  });
-  expect(divided.ok()).toBe(true);
-  const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
-  const courseName = `Course ${randomUUID().slice(0, 8)}`;
-  const { course } = await arrange<{ course: { id: string } }>(page, schoolId, "/courses", { name: courseName });
-  const { classOffering } = await arrange<{ classOffering: { id: string } }>(page, schoolId, "/class-offerings", {
-    courseId: course.id,
-    termId: year.terms[0]!.id,
-    label: "Section A",
-  });
-  return {
-    schoolId,
-    classOfferingId: classOffering.id,
-    offering: `${courseName}, Section A`,
-    term: { ...term, heading: `Whole year, ${yearName}` },
-  };
 }
 
 /** A Student of the spec's own, holding an open Enrollment, and returns their Person. */
@@ -171,7 +123,7 @@ test("a School Administrator rosters several Students in one go from the keyboar
   // The Term's list shows who teaches it and how many are on its roster,
   // saying so when no one teaches it.
   await openSection(page, "Class Offerings");
-  await page.getByLabel("Term").selectOption({ label: own.term.heading });
+  await page.getByLabel("Term").selectOption({ label: own.term.option });
   const listed = recordRows(page, "Class Offerings in Whole year").filter({ hasText: own.offering });
   await expect(listed).toContainText("No one assigned");
   await expect(listed).toContainText("1 Student");
@@ -179,7 +131,7 @@ test("a School Administrator rosters several Students in one go from the keyboar
   const personId = await arrangePerson(page, own.schoolId, facultyName, ["faculty"]);
   await arrange(page, own.schoolId, `/class-offerings/${own.classOfferingId}/teaching-assignments`, { personId });
   await page.reload();
-  await page.getByLabel("Term").selectOption({ label: own.term.heading });
+  await page.getByLabel("Term").selectOption({ label: own.term.option });
   await expect(listed).toContainText(facultyName);
   await audit(page);
 });
@@ -289,7 +241,7 @@ test("a Student finds their classes by Term with who teaches each, and keeps the
     await page.goto(`/schools/${own.schoolId}/account`);
     await openSection(page, "Your classes");
     await expect(page.getByRole("heading", { level: 1, name: "Your classes" })).toBeVisible();
-    const row = recordRows(page, `Your Class Offerings in ${own.term.heading}`).filter({ hasText: own.offering });
+    const row = recordRows(page, `Your Class Offerings in ${own.term.option}`).filter({ hasText: own.offering });
     await expect(row).toContainText(teacher);
     return row;
   };
@@ -374,7 +326,7 @@ test.describe("on a phone", () => {
 
       await giveAccount(page, own.schoolId, personId);
       await page.goto(`/schools/${own.schoolId}/classes`);
-      await expect(recordRows(page, `Your Class Offerings in ${own.term.heading}`)).toHaveCount(1);
+      await expect(recordRows(page, `Your Class Offerings in ${own.term.option}`)).toHaveCount(1);
       await expectNoSidewaysScroll(page);
       await audit(page);
     });

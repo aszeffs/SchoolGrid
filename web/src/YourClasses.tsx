@@ -6,7 +6,7 @@ import { RecordList } from "./RecordList.tsx";
 import { teaches } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { schoolDay } from "./standing.ts";
+import { formatSchoolDate } from "./standing.ts";
 import { RosteredClasses, RosteredKeys } from "./RosteredClasses.tsx";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
@@ -255,7 +255,7 @@ function teaching(offering: TaughtClassOffering, personId: string): string {
     .filter((assignment) => assignment.person.id === personId)
     .map(
       (assignment) =>
-        `${schoolDay(assignment.firstDate)} to ${schoolDay(assignment.lastDate ?? offering.term.lastDate)}`,
+        `${formatSchoolDate(assignment.firstDate)} to ${formatSchoolDate(assignment.lastDate ?? offering.term.lastDate)}`,
     )
     .join("; ");
 }

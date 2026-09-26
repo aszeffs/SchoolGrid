@@ -5,7 +5,7 @@ import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { offeringName, runsTo } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
-import { dayOf, schoolDateAfter, schoolDay } from "./standing.ts";
+import { dayOf, schoolDateAfter, formatSchoolDate } from "./standing.ts";
 
 /** What is waiting on a confirmation: which membership, and which of the two changes to it. */
 type Confirming = { kind: "dates" | "end"; membership: RosterMembership };
@@ -78,10 +78,10 @@ export function Roster({
             cell: (membership) =>
               membership.firstDate > today ? (
                 <>
-                  <span className="mark mark--open">Starts later</span> {schoolDay(membership.firstDate)}
+                  <span className="mark mark--open">Starts later</span> {formatSchoolDate(membership.firstDate)}
                 </>
               ) : (
-                schoolDay(membership.firstDate)
+                formatSchoolDate(membership.firstDate)
               ),
           },
           {
@@ -89,12 +89,12 @@ export function Roster({
             cell: (membership) =>
               runsTo(membership, term) < today ? (
                 <>
-                  <span className="mark mark--struck">Ended</span> {schoolDay(runsTo(membership, term))}
+                  <span className="mark mark--struck">Ended</span> {formatSchoolDate(runsTo(membership, term))}
                 </>
               ) : membership.lastDate === null ? (
                 <span className="mark">End of Term</span>
               ) : (
-                schoolDay(membership.lastDate)
+                formatSchoolDate(membership.lastDate)
               ),
           },
           ...(administers
@@ -330,7 +330,7 @@ function RosterStudents({
               />
               {person.displayName}
               {heldUntil.has(person.id) && (
-                <span className="muted"> on this roster until {schoolDay(heldUntil.get(person.id)!)}</span>
+                <span className="muted"> on this roster until {formatSchoolDate(heldUntil.get(person.id)!)}</span>
               )}
             </label>
           ))
@@ -367,7 +367,7 @@ function RosterStudents({
           These dates overlap a membership of this roster, so no one can be rostered with them.
           {overlapping.map((person) => {
             const held = heldUntil.get(person.id)!;
-            return ` ${person.displayName} was on it until ${schoolDay(held)}: choose From ${schoolDay(schoolDateAfter(held))} or later, or untick them.`;
+            return ` ${person.displayName} was on it until ${formatSchoolDate(held)}: choose From ${formatSchoolDate(schoolDateAfter(held))} or later, or untick them.`;
           })}
         </p>
       )}

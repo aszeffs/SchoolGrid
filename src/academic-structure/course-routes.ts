@@ -1,11 +1,11 @@
 import {
   authorizeManageAcademicStructure,
-  authorizeManageClassOffering,
   authorizeManageCourse,
   authorizeManageTerm,
   authorizeReadClassOffering,
   authorizeReadOwnClassOfferings,
   authorizeReadOwnRosterMemberships,
+  lockPermittedOffering,
   mayReadRosterOf,
   offeringsAtAGlance,
   ownClassOfferings,
@@ -31,7 +31,6 @@ import {
   deleteCourse,
   findClassOffering,
   findCourse,
-  lockClassOffering,
   lockCourse,
   relabelClassOffering,
   type ClassOffering,
@@ -128,22 +127,6 @@ async function lockPermittedCourse(transaction: Queryable, actor: Actor, courseI
 async function holdPermittedTerm(transaction: Queryable, actor: Actor, termId: string): Promise<Term> {
   const permitted = authorizeManageTerm(actor, termId, await findTerm(transaction, termId));
   return (await holdTerm(transaction, permitted)) ?? authorizeManageTerm<Term>(actor, termId, null);
-}
-
-async function lockPermittedOffering(
-  transaction: Queryable,
-  actor: Actor,
-  classOfferingId: string,
-): Promise<DescribedClassOffering> {
-  const permitted = authorizeManageClassOffering(
-    actor,
-    classOfferingId,
-    await findClassOffering(transaction, classOfferingId),
-  );
-  return (
-    (await lockClassOffering(transaction, permitted)) ??
-    authorizeManageClassOffering<DescribedClassOffering>(actor, classOfferingId, null)
-  );
 }
 
 /**

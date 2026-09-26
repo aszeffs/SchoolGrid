@@ -16,7 +16,7 @@ import { courseTitle, labelConflictMessage, offeringName } from "./offerings.ts"
 import { RecordList } from "./RecordList.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { dayAfter, schoolDay } from "./standing.ts";
+import { dayAfter, formatSchoolDate } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Class Offerings" };
@@ -167,7 +167,7 @@ function ClassOfferingsSheet({
         </select>
       </label>
       <p className="muted" role="status">
-        {done === "" ? `${schoolDay(term.firstDate)} to ${schoolDay(term.lastDate)}` : done}
+        {done === "" ? `${formatSchoolDate(term.firstDate)} to ${formatSchoolDate(term.lastDate)}` : done}
       </p>
 
       <RecordList
