@@ -156,7 +156,8 @@ function dateAfter(date: string): string {
 }
 
 // The first School keeps New York's time. Kiritimati is a day ahead of it from
-// New York's 06:00 or so, and Pago Pago a day behind it until its 07:00, so
+// New York's 05:00 or 06:00, and Pago Pago a day behind it until its 06:00 or
+// 07:00, as daylight saving has it, so
 // whenever the suite runs one browser or the other is on a different date.
 for (const timezoneId of ["Pacific/Kiritimati", "Pacific/Pago_Pago"]) {
   test.describe(`with the browser in ${timezoneId}`, () => {

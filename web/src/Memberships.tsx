@@ -241,7 +241,7 @@ function MembershipsSheet({
         <Narrow
           schoolId={schoolId}
           membership={confirming.membership}
-          earliest={earliest}
+          schoolTomorrow={earliest}
           whose={whose(confirming.membership)}
           name={nameOf(confirming.membership.personId)}
           busy={busy}
@@ -287,7 +287,7 @@ function MembershipsSheet({
 function Narrow({
   schoolId,
   membership,
-  earliest: fromToday,
+  schoolTomorrow,
   whose,
   name,
   busy,
@@ -297,7 +297,7 @@ function Narrow({
   schoolId: string;
   membership: Membership;
   /** The School's tomorrow, the earliest end for a membership already in force. */
-  earliest: string;
+  schoolTomorrow: string;
   whose: string;
   name: string;
   busy: boolean;
@@ -323,7 +323,8 @@ function Narrow({
       current = false;
     };
   }, [startsLater, schoolId, membership.startsAt]);
-  const earliest = !startsLater ? fromToday : fromStart === null ? null : [fromToday, fromStart].sort().at(-1)!;
+  // Until the server has named it, nothing is offered.
+  const earliest = !startsLater ? schoolTomorrow : fromStart && [schoolTomorrow, fromStart].sort().at(-1)!;
   const allowed = earliest !== null && endsOn !== "" && endsOn >= earliest;
   return (
     <ConfirmDialog
