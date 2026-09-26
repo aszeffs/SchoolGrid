@@ -3,7 +3,7 @@ import { Link } from "./Link.tsx";
 import { offeringName } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
 import { Key } from "./Sheet.tsx";
-import { schoolDay } from "./standing.ts";
+import { formatSchoolDate } from "./standing.ts";
 
 /** What a Student's own marks mean, for the key of the page listing them. */
 export function RosteredKeys() {
@@ -53,7 +53,7 @@ export function RosteredClasses({
           {name} {current && <span className="mark mark--open">Current</span>}
         </Heading>
         <p className="muted">
-          {schoolDay(term.firstDate)} to {schoolDay(term.lastDate)}
+          {formatSchoolDate(term.firstDate)} to {formatSchoolDate(term.lastDate)}
         </p>
         <RecordList
           label={`Your Class Offerings in ${name}`}
@@ -94,5 +94,5 @@ function onRoster(offering: RosteredClassOffering): string {
   if (spans.length === 1 && spans[0]!.firstDate === term.firstDate && spans[0]!.lastDate === term.lastDate) {
     return "The whole Term";
   }
-  return spans.map((span) => `${schoolDay(span.firstDate)} to ${schoolDay(span.lastDate)}`).join("; ");
+  return spans.map((span) => `${formatSchoolDate(span.firstDate)} to ${formatSchoolDate(span.lastDate)}`).join("; ");
 }

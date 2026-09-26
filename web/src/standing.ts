@@ -68,7 +68,7 @@ export function dayOf(moment: Date): string {
  * day the School saw, so it is read as that day wherever the reader is,
  * rather than as a moment their own timezone could move.
  */
-export function schoolDay(date: string): string {
+export function formatSchoolDate(date: string): string {
   return DAY.format(localDay(date));
 }
 

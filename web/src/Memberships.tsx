@@ -6,7 +6,7 @@ import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES, ROLES } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { byName, dayAfter, hasEnded, MOMENT, namesOf, schoolDay } from "./standing.ts";
+import { byName, dayAfter, hasEnded, MOMENT, namesOf, formatSchoolDate } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "School memberships" };
@@ -372,7 +372,7 @@ function EndsTeaching({
   if (!faculty) {
     return null;
   }
-  const day = on === "today" ? "today" : schoolDay(on);
+  const day = on === "today" ? "today" : formatSchoolDate(on);
   const after = on === "today" ? "today" : "that day";
   return (
     <ul className="consequences" aria-live="polite">

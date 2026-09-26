@@ -18,7 +18,7 @@ import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { schoolDateAfter, schoolDay } from "./standing.ts";
+import { schoolDateAfter, formatSchoolDate } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Academic Years" };
@@ -253,7 +253,7 @@ function AcademicYearsSheet({
             </p>
           ) : (
             <p>
-              {deleting.name}, from {schoolDay(deleting.firstDate)} to {schoolDay(deleting.lastDate)}, is removed.
+              {deleting.name}, from {formatSchoolDate(deleting.firstDate)} to {formatSchoolDate(deleting.lastDate)}, is removed.
               Nothing else refers to it yet.
             </p>
           )}
@@ -302,7 +302,7 @@ function YearRecord({
     <section aria-labelledby={headingId}>
       <h2 id={headingId}>{year.name}</h2>
       <p>
-        {schoolDay(year.firstDate)} to {schoolDay(year.lastDate)}
+        {formatSchoolDate(year.firstDate)} to {formatSchoolDate(year.lastDate)}
       </p>
       <RecordList
         label={`Terms of ${year.name}`}
@@ -315,8 +315,8 @@ function YearRecord({
         }
         columns={[
           { head: "Term", cell: (term) => term.name },
-          { head: "First day", cell: (term) => schoolDay(term.firstDate) },
-          { head: "Last day", cell: (term) => schoolDay(term.lastDate) },
+          { head: "First day", cell: (term) => formatSchoolDate(term.firstDate) },
+          { head: "Last day", cell: (term) => formatSchoolDate(term.lastDate) },
           {
             head: "Instructional days",
             // The server's list, counted within the Term's bounds: `YYYY-MM-DD` sorts as the dates do.

@@ -22,7 +22,7 @@ import { RecordList } from "./RecordList.tsx";
 import { Roster } from "./Roster.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { byName, dayOf, hasEnded, schoolDay } from "./standing.ts";
+import { byName, dayOf, hasEnded, formatSchoolDate } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Class Offering" };
@@ -301,7 +301,7 @@ function OfferingSheet({
         </dd>
         <dt>Runs</dt>
         <dd>
-          {schoolDay(term.firstDate)} to {schoolDay(term.lastDate)}
+          {formatSchoolDate(term.firstDate)} to {formatSchoolDate(term.lastDate)}
         </dd>
         <dt>Label</dt>
         <dd>{offering.label ?? <span className="muted">None</span>}</dd>
@@ -324,10 +324,10 @@ function OfferingSheet({
               cell: (assignment) =>
                 assignment.firstDate > today ? (
                   <>
-                    <span className="mark mark--open">Starts later</span> {schoolDay(assignment.firstDate)}
+                    <span className="mark mark--open">Starts later</span> {formatSchoolDate(assignment.firstDate)}
                   </>
                 ) : (
-                  schoolDay(assignment.firstDate)
+                  formatSchoolDate(assignment.firstDate)
                 ),
             },
             {
@@ -335,12 +335,12 @@ function OfferingSheet({
               cell: (assignment) =>
                 runsTo(assignment) < today ? (
                   <>
-                    <span className="mark mark--struck">Ended</span> {schoolDay(runsTo(assignment))}
+                    <span className="mark mark--struck">Ended</span> {formatSchoolDate(runsTo(assignment))}
                   </>
                 ) : assignment.lastDate === null ? (
                   <span className="mark">End of Term</span>
                 ) : (
-                  schoolDay(assignment.lastDate)
+                  formatSchoolDate(assignment.lastDate)
                 ),
             },
             ...(administers
@@ -423,7 +423,7 @@ function OfferingSheet({
                 <p className="muted">
                   Left blank, the assignment runs with the Term, from its first day to its last.
                   {leaving !== null &&
-                    ` This Faculty membership ends on ${schoolDay(dayOf(new Date(leaving)))}, so the assignment ends by then.`}
+                    ` This Faculty membership ends on ${formatSchoolDate(dayOf(new Date(leaving)))}, so the assignment ends by then.`}
                 </p>
                 {assignProblem !== null && (
                   <p role="alert" className="error">
