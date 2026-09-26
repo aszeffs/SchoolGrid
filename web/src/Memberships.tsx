@@ -6,7 +6,7 @@ import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES, ROLES } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
-import { byName, dayAfter, hasEnded, MOMENT, namesOf, schoolDay, startOfDay } from "./standing.ts";
+import { byName, dayAfter, hasEnded, MOMENT, namesOf, schoolDay } from "./standing.ts";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "School memberships" };
@@ -48,7 +48,7 @@ export function Memberships({ school }: { school: ReachedSchool }) {
           {...showing.records}
           busy={busy}
           onGrant={(grant) => change(() => api.grantMembership(schoolId, grant))}
-          onNarrow={(membership, endsAt) => change(() => api.narrowMembership(schoolId, membership.id, endsAt))}
+          onNarrow={(membership, endsOn) => change(() => api.narrowMembership(schoolId, membership.id, endsOn))}
           onRevoke={(membership) => change(() => api.revokeMembership(schoolId, membership.id))}
         />
       );
@@ -68,8 +68,8 @@ function MembershipsSheet({
   memberships: Membership[];
   persons: ListedPerson[];
   busy: boolean;
-  onGrant: (grant: { personId: string; role: Role; endsAt?: string }) => Promise<{ ok: boolean }>;
-  onNarrow: (membership: Membership, endsAt: string) => void;
+  onGrant: (grant: { personId: string; role: Role; endsOn?: string }) => Promise<{ ok: boolean }>;
+  onNarrow: (membership: Membership, endsOn: string) => void;
   onRevoke: (membership: Membership) => void;
 }) {
   const [confirming, setConfirming] = useState<Confirming | null>(null);
@@ -91,7 +91,7 @@ function MembershipsSheet({
     if (personId === "" || !ROLES.includes(role)) {
       return;
     }
-    const sent = await onGrant({ personId, role, ...(endsOn === "" ? {} : { endsAt: startOfDay(endsOn) }) });
+    const sent = await onGrant({ personId, role, ...(endsOn === "" ? {} : { endsOn }) });
     if (sent.ok) {
       form.reset();
     }
@@ -234,9 +234,9 @@ function MembershipsSheet({
           name={nameOf(confirming.membership.personId)}
           busy={busy}
           onCancel={() => setConfirming(null)}
-          onNarrow={(endsAt) => {
+          onNarrow={(endsOn) => {
             setConfirming(null);
-            onNarrow(confirming.membership, endsAt);
+            onNarrow(confirming.membership, endsOn);
           }}
         />
       )}
@@ -287,7 +287,7 @@ function Narrow({
   name: string;
   busy: boolean;
   onCancel: () => void;
-  onNarrow: (endsAt: string) => void;
+  onNarrow: (endsOn: string) => void;
 }) {
   const [endsOn, setEndsOn] = useState("");
   // Not before tomorrow, and not before it starts: the server refuses an end
@@ -299,7 +299,7 @@ function Narrow({
       confirm="Set the end"
       busy={busy || endsOn === "" || endsOn < earliest}
       onCancel={onCancel}
-      onConfirm={() => onNarrow(startOfDay(endsOn))}
+      onConfirm={() => onNarrow(endsOn)}
     >
       <p>
         Sets when {whose} ends. {name} holds the role until the start of that day and loses whatever it reaches then.
@@ -322,7 +322,6 @@ function Narrow({
           membership={membership}
           name={name}
           on={endsOn}
-          endsAt={startOfDay(endsOn)}
         />
       )}
     </ConfirmDialog>
@@ -344,15 +343,12 @@ function EndsTeaching({
   membership,
   name,
   on,
-  endsAt,
 }: {
   schoolId: string;
   membership: Membership;
   name: string;
-  /** The day it ends, as a date field writes it, or "today" for a revocation. */
+  /** The School date it ends, at its midnight, as a date field writes it; or "today" for a revocation, which ends it now. */
   on: string;
-  /** When it ends; now when absent. */
-  endsAt?: string;
 }) {
   const [count, setCount] = useState<number | null>(null);
   const faculty = membership.role === "faculty";
@@ -363,7 +359,7 @@ function EndsTeaching({
     }
     let current = true;
     setCount(null);
-    void api.membershipConsequences(schoolId, membership.id, endsAt).then((answered) => {
+    void api.membershipConsequences(schoolId, membership.id, on === "today" ? undefined : on).then((answered) => {
       if (current && answered.ok) {
         setCount(answered.body.consequences.teachingAssignments);
       }
@@ -371,7 +367,7 @@ function EndsTeaching({
     return () => {
       current = false;
     };
-  }, [faculty, schoolId, membership.id, endsAt]);
+  }, [faculty, schoolId, membership.id, on]);
 
   if (!faculty) {
     return null;
