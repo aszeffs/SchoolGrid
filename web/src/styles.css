@@ -1,9 +1,8 @@
 /*
- * SchoolGrid is set like an official school record: whom a page concerns, who
- * is acting, and what was recorded, in that order. The reading field stays calm
- * and nearly colourless; one seal blue marks what can be acted on and what is
- * current, and state is always a word with a mark beside it, never a colour on
- * its own.
+ * SchoolGrid is read like the timetable pinned in a staff room: every Course
+ * owns a colour, blocks sit on a quiet ground, and indigo marks what can be
+ * acted on and where you are. State is always a word with a mark beside it,
+ * never a colour on its own.
  *
  * There are two renditions, light and dark, and the browser's own setting picks
  * between them (ADR-0010). Every colour below is a token defined for both, so a
@@ -46,41 +45,57 @@
 
 :root {
   /*
-   * Light: a cool near-white page under classroom strip lights, never cream and
-   * never pure white, which glares. The band that carries the School's heading
-   * and its sections is one step cooler than the page it sits over.
+   * Light: the staff room's wall chart. A cool grey ground, white blocks with
+   * one soft shadow step lifting them off it, and indigo for whatever can be
+   * acted on and wherever you are.
    */
-  --page: #f7f8fa;
-  --band: #eceff4;
-  --field: #ffffff;
-  --ink: #18202e;
-  --ink-soft: #4a5467;
-  --seal: #234aa6;
-  --seal-strong: #1a3a88;
-  --on-seal: #ffffff;
-  --alarm: #a3262d;
+  --ground: #f4f5f8;
+  --surface: #ffffff;
+  --rail: #eef0f5;
+  --ink: #161b28;
+  --ink-soft: #505a6e;
+  --action: #4338ca;
+  --action-strong: #3730a3;
+  --on-action: #ffffff;
+  --action-wash: #e8e7fb;
+  --alarm: #b42318;
 
-  --rule: color-mix(in srgb, var(--ink) 22%, transparent);
-  --rule-faint: color-mix(in srgb, var(--ink) 11%, transparent);
-  --wash: color-mix(in srgb, var(--ink) 5%, transparent);
-  --wash-seal: color-mix(in srgb, var(--seal) 8%, transparent);
+  --rule: #dfe2ea;
+  --rule-strong: #c7ccd8;
+  --wash: color-mix(in srgb, var(--ink) 4%, transparent);
+  --shadow: 0 1px 2px rgb(22 27 40 / 0.06), 0 4px 14px rgb(22 27 40 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(22 27 40 / 0.08), 0 14px 32px rgb(22 27 40 / 0.14);
+  --veil: rgb(22 27 40 / 0.45);
+
+  /*
+   * The wall chart's colours: one per Course, so a Class Offering keeps its
+   * colour wherever it is shown. Each carries white words at 4.5:1 or better.
+   */
+  --course-indigo: #4338ca;
+  --course-rose: #be123c;
+  --course-teal: #0f766e;
+  --course-amber: #b45309;
+  --course-violet: #6d28d9;
+  --course-sky: #0369a1;
+  --on-course: #ffffff;
 
   --type-text: "Atkinson Hyperlegible Next", system-ui, sans-serif;
   --type-figures: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
 
-  /* One fixed scale, a fifth apart: a product's type does not grow with the window. */
+  /* One fixed scale: a product's type does not grow with the window; it follows the reader's zoom. */
   --size-small: 0.8125rem;
   --size-label: 0.875rem;
   --size-body: 1rem;
   --size-lead: 1.125rem;
   --size-section: 1.375rem;
-  --size-title: 1.75rem;
+  --size-title: 1.875rem;
 
   --step: 0.5rem;
-  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --gutter: clamp(1rem, 2.5vw, 2.5rem);
   --measure: 68ch;
-  --frame: 78rem;
-  --corner: 4px;
+  --rail-width: clamp(14rem, 18vw, 17rem);
+  --corner: 10px;
+  --corner-block: 12px;
 
   /* Things settle quickly and do not bounce: a school day has no time for it. */
   --settle: 200ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -93,25 +108,32 @@
 }
 
 /*
- * Dark: deep slate rather than black, for a projector-dimmed room or a late
- * evening of marking. The seal lightens so it still clears 4.5:1 as text.
+ * Dark: deep ink rather than black, for a projector-dimmed room or a late
+ * evening of marking. Indigo lightens so it still clears 4.5:1 as text; the
+ * Course colours keep their depth so their white words still read.
  */
 @media (prefers-color-scheme: dark) {
   :root {
-    --page: #12161d;
-    --band: #1a1f28;
-    --field: #0d1016;
-    --ink: #e5e8ee;
-    --ink-soft: #a4adbb;
-    --seal: #8eaefc;
-    --seal-strong: #b3c8ff;
-    --on-seal: #0d1321;
-    --alarm: #ff9d97;
+    --ground: #0e1118;
+    --surface: #171b25;
+    --rail: #12151d;
+    --ink: #e8ebf2;
+    --ink-soft: #a3acbd;
+    --action: #a5b4fc;
+    --action-strong: #c7d0ff;
+    --on-action: #11142a;
+    --action-wash: #232846;
+    --alarm: #ff9b8f;
 
-    --rule: color-mix(in srgb, var(--ink) 20%, transparent);
-    --rule-faint: color-mix(in srgb, var(--ink) 10%, transparent);
-    --wash: color-mix(in srgb, var(--ink) 6%, transparent);
-    --wash-seal: color-mix(in srgb, var(--seal) 12%, transparent);
+    --rule: #262c3a;
+    --rule-strong: #394155;
+    --wash: color-mix(in srgb, var(--ink) 5%, transparent);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.3);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.5), 0 14px 32px rgb(0 0 0 / 0.5);
+    --veil: rgb(4 6 10 / 0.7);
+
+    --course-indigo: #4f46e5;
+    --course-violet: #7c3aed;
   }
 }
 
@@ -128,143 +150,138 @@ body {
 
 body {
   margin: 0;
-  background: var(--page);
+  background: var(--ground);
   color: var(--ink);
-  caret-color: var(--seal);
-  scrollbar-color: var(--rule) var(--page);
+  caret-color: var(--action);
+  scrollbar-color: var(--rule-strong) var(--ground);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--seal) 28%, transparent);
-  color: var(--ink);
+  background: var(--action);
+  color: var(--on-action);
 }
 
 /* ---- The page -------------------------------------------------------- */
 
+/*
+ * Outside a School: a bar across the top naming the product and the page, and
+ * the sheet under it. Inside one: the header becomes a sidebar holding the
+ * School, its sections and who is acting, and the sheet runs beside it,
+ * filling whatever width the window has.
+ */
 .sheet {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--page);
+  background: var(--ground);
   color: var(--ink);
 }
 
-.sheet:has(> .trial-banner) {
-  grid-template-rows: auto auto auto 1fr;
+.sheet--school {
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  grid-template-rows: none;
 }
 
-/*
- * A Trial School's strip over the head: a slim seal-washed band saying what
- * this School is and how long it has left, with the way to a fresh one at its
- * right. Kept to one line where it fits, and to the same frame as the head.
- */
-.trial-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(var(--step) * 0.75) calc(var(--step) * 2);
-  padding: calc(var(--step) * 0.75) max(var(--gutter), (100% - var(--frame)) / 2);
-  background: var(--wash-seal);
-  border-bottom: 1px solid color-mix(in srgb, var(--seal) 25%, transparent);
-  font-size: var(--size-label);
+.sheet__main {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-content: start;
+  min-width: 0;
 }
 
-.trial-banner p {
-  margin: 0;
-  max-width: none;
+.sheet__main:not(:has(> .trial-banner)) {
+  grid-template-rows: 1fr;
 }
 
-.trial-banner strong {
-  color: var(--seal);
-  font-weight: 700;
-}
-
-.trial-banner time {
-  font-family: var(--type-figures);
-  font-variant-numeric: tabular-nums;
-}
-
-.trial-banner .error {
-  flex-basis: 100%;
-  order: 1;
-}
-
-.trial-banner .button-quiet {
-  background: var(--field);
-}
-
-/*
- * The report's head: which record system this is and, inside a School, which
- * School, who is signed in and what they hold there. It runs the full width,
- * and its contents keep to the same frame as the page below.
- */
 .sheet__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: calc(var(--step) * 1.5) calc(var(--step) * 4);
-  padding: calc(var(--step) * 2.5) max(var(--gutter), (100% - var(--frame)) / 2) calc(var(--step) * 2);
-  background: var(--band);
+  align-items: center;
+  gap: calc(var(--step) * 1.5) calc(var(--step) * 3);
+  padding: calc(var(--step) * 1.5) var(--gutter);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
 }
 
-/* Outside a School the head closes over a hairline; inside one, the tabs close it. */
-.sheet__head:last-child,
-.sheet__head:not(:has(+ .shell-nav)) {
-  border-bottom: 1px solid var(--rule);
+.sheet--school .sheet__head {
+  position: sticky;
+  top: 0;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: calc(var(--step) * 2.5);
+  height: 100vh;
+  height: 100dvh;
+  padding: calc(var(--step) * 2) calc(var(--step) * 1.5);
+  overflow-y: auto;
+  background: var(--rail);
+  border-bottom: 0;
+  border-right: 1px solid var(--rule);
+}
+
+.sheet--school .sheet__head > * {
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .sheet__group {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: calc(var(--step) * 1.5);
   min-width: 0;
 }
 
-/*
- * Inside a School the wordmark takes a line of its own, so the School's name
- * below it starts at the frame's edge, level with the tabs and the key.
- */
-.sheet__group:has(+ .shell-head) {
-  flex-basis: 100%;
+.sheet--school .sheet__group {
+  padding: 0 var(--step);
+}
+
+.sheet__head > .actions {
+  margin-left: auto;
+}
+
+.sheet__head .actions button {
+  white-space: nowrap;
 }
 
 /*
- * The wordmark. The grid in its name is the seal: a small ruled square set
- * before it, drawn from a border so it needs no image.
+ * The wordmark: four squares of the wall chart's colours, a timetable in
+ * miniature, drawn from gradients so it needs no image.
  */
 .sheet__mark {
   display: inline-flex;
   align-items: center;
-  gap: calc(var(--step) * 0.875);
+  gap: calc(var(--step) * 1.25);
   margin: 0;
-  font-size: var(--size-label);
+  font-size: var(--size-lead);
   font-weight: 750;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
 .sheet__mark::before {
   content: "";
-  width: 0.875rem;
-  height: 0.875rem;
-  border: 2px solid var(--seal);
-  border-radius: 2px;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
   background:
-    linear-gradient(var(--seal), var(--seal)) center / 2px 100% no-repeat,
-    linear-gradient(var(--seal), var(--seal)) center / 100% 2px no-repeat;
+    linear-gradient(var(--course-indigo), var(--course-indigo)) 0 0 / calc(50% - 1px) calc(50% - 1px) no-repeat,
+    linear-gradient(var(--course-amber), var(--course-amber)) 100% 0 / calc(50% - 1px) calc(50% - 1px) no-repeat,
+    linear-gradient(var(--course-teal), var(--course-teal)) 0 100% / calc(50% - 1px) calc(50% - 1px) no-repeat,
+    linear-gradient(var(--course-rose), var(--course-rose)) 100% 100% / calc(50% - 1px) calc(50% - 1px) no-repeat;
+  border-radius: 4px;
 }
 
-/* Which page this is, beside the wordmark, where no tab is there to say it. */
+/* Which page this is, beside the wordmark, where no section is there to say it. */
 .sheet__no {
   margin: 0;
   padding-left: calc(var(--step) * 1.5);
-  border-left: 1px solid var(--rule);
+  border-left: 1px solid var(--rule-strong);
   color: var(--ink-soft);
   font-size: var(--size-label);
+  font-weight: 600;
 }
 
 .sheet__who {
@@ -273,55 +290,67 @@ body {
 }
 
 /*
- * The shell's part of the head. Inside a School it takes the rest of the line:
- * the School named large, and under it who is signed in; the way to another
- * School and the way out sit at the right.
+ * The School, at the top of the sidebar: its name on a raised block beside its
+ * initials, and under it the ways to another School or another role.
  */
 .shell-head {
-  display: flex;
-  flex: 1 1 24rem;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(var(--step) * 1.5) calc(var(--step) * 3);
-  min-width: 0;
-}
-
-.sheet__head > .actions {
-  margin-left: auto;
-}
-
-.sheet__head .actions button,
-.switcher summary {
-  white-space: nowrap;
-}
-
-.shell-head__who {
   display: grid;
-  gap: calc(var(--step) * 0.5);
-  min-width: 0;
+  gap: var(--step);
 }
 
-/* Whom the page concerns comes first, so the School's name is the largest type on it. */
 .shell-head__school {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--step) * 1.25);
   margin: 0;
-  font-size: 2rem;
+  padding: calc(var(--step) * 1.25);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner);
+  box-shadow: var(--shadow);
   font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
-.shell-head__actor {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(var(--step) * 0.5) calc(var(--step) * 1.25);
-  margin: 0;
-  max-width: none;
+.shell-head__badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: var(--action);
+  color: var(--on-action);
+  font-size: var(--size-label);
+  font-weight: 750;
 }
 
-/* The roles held in this School, each a small seal-edged label. */
+.shell-head__ways {
+  display: grid;
+  gap: var(--step);
+}
+
+/* Who is acting, and the way out, at the sidebar's foot. */
+.shell-foot {
+  display: grid;
+  gap: calc(var(--step) * 1.25);
+  margin-top: auto;
+  padding: calc(var(--step) * 2) var(--step) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.shell-foot__actor {
+  display: grid;
+  gap: calc(var(--step) * 0.75);
+}
+
+.shell-foot .button-quiet {
+  justify-self: start;
+  white-space: nowrap;
+}
+
+/* The roles held in this School, each a small tinted label. */
 .held {
   display: flex;
   flex-wrap: wrap;
@@ -332,31 +361,37 @@ body {
 }
 
 .held li {
-  padding: 0.0625rem calc(var(--step) * 0.875);
-  border: 1px solid color-mix(in srgb, var(--seal) 45%, transparent);
-  border-radius: 2px;
-  color: var(--seal);
+  padding: 0.125rem var(--step);
+  background: var(--action-wash);
+  border-radius: 6px;
+  color: var(--action-strong);
   font-size: var(--size-small);
   font-weight: 650;
   white-space: nowrap;
 }
 
 /*
- * The School's sections, as the pages of a report. The one being read is lifted
- * onto the page: it takes the page's ground, the seal runs along its top edge,
- * and the band's closing rule stops under it. Its neighbours stay in view.
+ * The School's sections, grouped. The one being read sits on an indigo-washed
+ * row; there is only ever one, named for the view transition, so moving to
+ * another section slides it to the new row while the page swaps in place.
  */
 .shell-nav {
-  padding: 0 max(var(--gutter), (100% - var(--frame)) / 2);
-  background: var(--band);
-  border-bottom: 1px solid var(--rule);
+  display: grid;
+  gap: calc(var(--step) * 2);
+}
+
+.shell-nav__heading {
+  margin: 0 0 calc(var(--step) * 0.5);
+  padding: 0 calc(var(--step) * 1.25);
+  color: var(--ink-soft);
+  font-size: var(--size-small);
+  font-weight: 650;
 }
 
 .shell-nav ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 calc(var(--step) * 0.25);
-  margin: 0 0 -1px;
+  display: grid;
+  gap: 2px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -366,14 +401,14 @@ body {
 }
 
 .shell-nav a {
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  min-height: 2.75rem;
-  padding: 0 calc(var(--step) * 2);
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: var(--corner) var(--corner) 0 0;
-  color: var(--ink-soft);
+  gap: calc(var(--step) * 1.25);
+  min-height: 2.5rem;
+  padding: 0 calc(var(--step) * 1.25);
+  border-radius: 8px;
+  color: var(--ink);
   font-size: var(--size-label);
   font-weight: 600;
   text-decoration: none;
@@ -382,25 +417,24 @@ body {
     background-color var(--settle);
 }
 
-.shell-nav a[aria-current] {
-  background: var(--page);
-  border-color: var(--rule);
-  color: var(--ink);
+.shell-nav .icon {
+  color: var(--ink-soft);
+  transition: color var(--settle);
 }
 
-/*
- * The seal along the lifted tab's top edge. There is only ever one, and it is
- * named for the view transition, so moving to another section slides it across
- * to the new tab while the rest of the page stays where it is.
- */
+.shell-nav a[aria-current] {
+  color: var(--action-strong);
+}
+
+.shell-nav a[aria-current] .icon {
+  color: var(--action);
+}
+
 .shell-nav__seal {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: var(--corner) var(--corner) 0 0;
-  background: var(--seal);
+  inset: 0;
+  border-radius: 8px;
+  background: var(--action-wash);
   pointer-events: none;
   view-transition-name: seal;
 }
@@ -416,19 +450,32 @@ body {
   animation: none;
 }
 
-/* The other Schools, opened under the button that offers them. */
+/* A drawn glyph beside a word: one stroke weight everywhere. */
+.icon {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The other Schools, or the other roles of a Trial School, opened under the button that offers them. */
 .switcher {
   position: relative;
 }
 
 .switcher summary {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: calc(var(--step) * 0.75);
   min-height: 2.5rem;
-  padding: 0 calc(var(--step) * 1.75);
-  background: var(--field);
-  border: 1px solid var(--rule);
+  padding: 0 calc(var(--step) * 1.5);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--corner);
   cursor: pointer;
   font-size: var(--size-label);
@@ -446,8 +493,8 @@ body {
   content: "";
   width: 0.4375rem;
   height: 0.4375rem;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
+  border-right: 2px solid var(--ink-soft);
+  border-bottom: 2px solid var(--ink-soft);
   transform: translateY(-0.125rem) rotate(45deg);
   transition: transform var(--settle);
 }
@@ -456,25 +503,24 @@ body {
   transform: translateY(0.125rem) rotate(-135deg);
 }
 
+/*
+ * Open, the list takes its place under the button that offers it and pushes
+ * what follows down: held over the sections, it would cover them.
+ */
 .switcher ul {
-  position: absolute;
-  z-index: 3;
-  top: calc(100% + var(--step) * 0.75);
-  right: 0;
-  width: max-content;
-  min-width: 14rem;
-  max-width: min(22rem, calc(100vw - var(--gutter) * 2));
-  margin: 0;
-  padding: calc(var(--step) * 0.5) 0;
-  background: var(--field);
+  margin: calc(var(--step) * 0.75) 0 0;
+  padding: calc(var(--step) * 0.5);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--corner);
+  box-shadow: var(--shadow);
   list-style: none;
 }
 
 .switcher li a {
   display: block;
-  padding: var(--step) calc(var(--step) * 2);
+  padding: var(--step) calc(var(--step) * 1.25);
+  border-radius: 6px;
   overflow-wrap: anywhere;
   text-decoration: none;
 }
@@ -482,7 +528,7 @@ body {
 .switcher li:last-child {
   margin-top: calc(var(--step) * 0.5);
   padding-top: calc(var(--step) * 0.5);
-  border-top: 1px solid var(--rule-faint);
+  border-top: 1px solid var(--rule);
 }
 
 /* The roles a Trial School can be viewed as: each a row of the list, as a School is, though a button. */
@@ -496,48 +542,75 @@ body {
   width: 100%;
   min-height: 2.5rem;
   justify-content: flex-start;
-  padding: var(--step) calc(var(--step) * 2);
+  padding: var(--step) calc(var(--step) * 1.25);
   background: transparent;
   border: 0;
-  border-radius: 0;
-  color: var(--seal);
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--action);
   font-weight: 600;
   text-align: left;
 }
 
 /*
- * Open, the list takes its place in the head, under the button that offers
- * it, and pushes the sections down: held over them, it would cover the last
- * of a School Administrator's. On a phone it takes the head's whole width
- * instead (below).
+ * A Trial School's strip across the top of the sheet: what this School is and
+ * how long it has left, with the way to a fresh one at its right.
  */
-.switcher[open] {
-  text-align: right;
+.trial-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--step) * 0.75) calc(var(--step) * 2);
+  min-height: 3.75rem;
+  padding: calc(var(--step) * 0.75) var(--gutter);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--size-label);
 }
 
-.switcher[open] ul {
-  position: static;
-  margin: calc(var(--step) * 0.75) 0 0 auto;
-  text-align: left;
+.trial-banner p {
+  margin: 0;
+  max-width: none;
 }
 
-.shell-head:has(.switcher[open]) > .actions {
-  align-items: flex-start;
+.trial-banner strong {
+  color: var(--action);
+  font-weight: 700;
 }
 
+.trial-banner time {
+  font-family: var(--type-figures);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.trial-banner .error {
+  flex-basis: 100%;
+  order: 1;
+}
+
+/*
+ * The sheet's body: the record across the width the window gives it, and the
+ * key beside it at the right once there is room for both.
+ */
 .sheet__body {
   display: grid;
-  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
-  gap: 0 calc(var(--step) * 6);
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, 17rem);
+  gap: calc(var(--step) * 3) calc(var(--step) * 5);
   align-items: start;
   width: 100%;
-  max-width: calc(var(--frame) + var(--gutter) * 2);
-  margin: 0 auto;
-  padding: calc(var(--step) * 5) var(--gutter) calc(var(--step) * 8);
+  padding: calc(var(--step) * 4) var(--gutter) calc(var(--step) * 8);
 }
 
 .sheet__body--single {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* Outside a School, the page is a column held to a readable width. */
+.sheet:not(.sheet--school) .sheet__body {
+  max-width: calc(80rem + var(--gutter) * 2);
+  margin: 0 auto;
 }
 
 /*
@@ -547,7 +620,11 @@ body {
 .legend {
   position: sticky;
   top: calc(var(--step) * 3);
-  padding-top: calc(var(--step) * 0.5);
+  padding: calc(var(--step) * 2);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
   color: var(--ink-soft);
   font-size: var(--size-label);
   line-height: 1.5;
@@ -574,19 +651,23 @@ body {
   margin: calc(var(--step) * 0.25) 0 calc(var(--step) * 2);
 }
 
+.legend dd:last-child,
+.legend p:last-child {
+  margin-bottom: 0;
+}
+
 .legend p {
   margin: 0 0 calc(var(--step) * 1.5);
 }
 
 .run {
   min-width: 0;
-  max-width: 62rem;
 }
 
 /*
  * A page still being read from the server holds its place with the shape of a
- * record: a title and a few ruled rows, which pulse faintly. It names nothing,
- * so there is nothing in it to announce; `aria-busy` says the rest.
+ * record: a title and a few rows, which pulse faintly. It names nothing, so
+ * there is nothing in it to announce; `aria-busy` says the rest.
  */
 .run[aria-busy="true"]::before {
   content: "";
@@ -597,7 +678,7 @@ body {
     repeating-linear-gradient(
       to bottom,
       transparent 0 3.5rem,
-      var(--rule-faint) 3.5rem calc(3.5rem + 1px),
+      var(--rule) 3.5rem calc(3.5rem + 1px),
       transparent calc(3.5rem + 1px) 4rem
     ) 0 4.5rem / 100% 11.5rem no-repeat;
   animation: holding 1.6s ease-in-out infinite alternate;
@@ -617,9 +698,9 @@ body {
 h1 {
   margin: 0 0 calc(var(--step) * 3);
   font-size: var(--size-title);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   text-wrap: balance;
 }
 
@@ -644,16 +725,16 @@ p {
 }
 
 a {
-  color: var(--seal);
+  color: var(--action);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
-  text-decoration-color: color-mix(in srgb, var(--seal) 50%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--action) 50%, transparent);
   transition: text-decoration-color var(--settle), color var(--settle);
 }
 
 @media (hover: hover) {
   a:hover {
-    color: var(--seal-strong);
+    color: var(--action-strong);
     text-decoration-color: currentColor;
   }
 }
@@ -700,8 +781,8 @@ pre {
   margin: calc(var(--step) * 2) 0;
   padding: calc(var(--step) * 2);
   overflow-x: auto;
-  background: var(--band);
-  border: 1px solid var(--rule-faint);
+  background: var(--rail);
+  border: 1px solid var(--rule);
   border-radius: var(--corner);
   font-size: var(--size-label);
   line-height: 1.7;
@@ -730,7 +811,7 @@ strong {
 /* ---- Controls -------------------------------------------------------- */
 
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 3px solid var(--seal);
+  outline: 3px solid var(--action);
   outline-offset: 2px;
 }
 
@@ -759,8 +840,8 @@ select,
 textarea {
   min-height: 2.75rem;
   padding: calc(var(--step) * 1.125) calc(var(--step) * 1.5);
-  background: var(--field);
-  border: 1px solid var(--rule);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--corner);
   color: var(--ink);
   font: inherit;
@@ -772,7 +853,7 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--seal);
+  border-color: var(--action);
   outline-offset: 1px;
 }
 
@@ -787,7 +868,7 @@ input[type="checkbox"] {
   min-height: 0;
   margin: 0;
   padding: 0;
-  accent-color: var(--seal);
+  accent-color: var(--action);
   flex: none;
 }
 
@@ -811,7 +892,7 @@ fieldset {
   margin: 0;
   padding: calc(var(--step) * 1.5) 0 0;
   border: 0;
-  border-top: 1px solid var(--rule-faint);
+  border-top: 1px solid var(--rule);
 }
 
 fieldset legend {
@@ -838,10 +919,11 @@ button {
   gap: var(--step);
   min-height: 2.75rem;
   padding: 0 calc(var(--step) * 2.5);
-  background: var(--seal);
-  border: 1px solid var(--seal);
+  background: var(--action);
+  border: 1px solid var(--action);
   border-radius: var(--corner);
-  color: var(--on-seal);
+  box-shadow: 0 1px 2px rgb(22 27 40 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.14);
+  color: var(--on-action);
   cursor: pointer;
   font: inherit;
   font-size: var(--size-body);
@@ -855,8 +937,8 @@ button {
 
 @media (hover: hover) {
   button:hover:not(:disabled) {
-    background: var(--seal-strong);
-    border-color: var(--seal-strong);
+    background: var(--action-strong);
+    border-color: var(--action-strong);
   }
 
   input:hover:not(:focus),
@@ -865,15 +947,18 @@ button {
     border-color: color-mix(in srgb, var(--ink) 40%, transparent);
   }
 
-  .button-ghost:hover:not(:disabled),
+  .button-ghost:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+    border-color: var(--ink-soft);
+  }
+
   .button-quiet:hover:not(:disabled) {
-    background: var(--wash-seal);
-    border-color: color-mix(in srgb, var(--seal) 55%, transparent);
-    color: var(--seal-strong);
+    background: var(--wash);
+    color: var(--ink);
   }
 
   .button-stamp:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--alarm) 10%, transparent);
+    background: color-mix(in srgb, var(--alarm) 10%, var(--surface));
     border-color: var(--alarm);
   }
 
@@ -889,7 +974,7 @@ button {
 
   .switcher li a:hover,
   .switcher--roles li button:hover:not(:disabled) {
-    background: var(--wash-seal);
+    background: var(--action-wash);
     border-color: transparent;
   }
 }
@@ -898,26 +983,32 @@ button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-/* Held: a dashed outline and softened words, so it never reads as a quiet button that works. */
+/*
+ * Held: hatched across, the way a planner strikes out what is not open, with
+ * softened words, so it never reads as a quiet button that works.
+ */
 button:disabled {
-  background: transparent;
+  background: repeating-linear-gradient(135deg, transparent 0 6px, var(--wash) 6px 12px);
   border-style: dashed;
-  border-color: var(--rule);
-  color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
+  border-color: var(--rule-strong);
+  box-shadow: none;
+  color: var(--ink-soft);
   cursor: not-allowed;
 }
 
-/* The second action beside a first: outlined, not filled. */
+/* The second action beside a first: a raised white block, not filled. */
 .button-ghost {
-  background: transparent;
-  border-color: var(--rule);
-  color: var(--seal);
+  background: var(--surface);
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow);
+  color: var(--ink);
 }
 
 /* An action that takes something away. Named in the alarm colour, never filled with it. */
 .button-stamp {
-  background: transparent;
+  background: var(--surface);
   border-color: color-mix(in srgb, var(--alarm) 55%, transparent);
+  box-shadow: var(--shadow);
   color: var(--alarm);
   font-size: var(--size-label);
   padding-inline: calc(var(--step) * 1.75);
@@ -927,12 +1018,14 @@ button:disabled {
   outline-color: var(--alarm);
 }
 
+/* The way around the page itself, such as signing out: words on nothing until pointed at. */
 .button-quiet {
   min-height: 2.5rem;
-  padding: 0 calc(var(--step) * 1.75);
+  padding: 0 calc(var(--step) * 1.5);
   background: transparent;
-  border-color: var(--rule);
-  color: var(--ink);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
   font-size: var(--size-label);
   font-weight: 600;
 }
@@ -956,8 +1049,12 @@ button:disabled {
 .roster {
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--rule);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
   list-style: none;
+  overflow: hidden;
 }
 
 .roster > li {
@@ -966,9 +1063,13 @@ button:disabled {
   align-items: center;
   gap: calc(var(--step) * 0.75) calc(var(--step) * 2);
   min-height: 3.5rem;
-  padding: calc(var(--step) * 1.25) calc(var(--step) * 1);
-  border-bottom: 1px solid var(--rule-faint);
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 2.5);
+  border-bottom: 1px solid var(--rule);
   transition: background-color var(--settle);
+}
+
+.roster > li:last-child {
+  border-bottom: 0;
 }
 
 .roster__name {
@@ -985,7 +1086,7 @@ button:disabled {
   flex: 1 1 4rem;
   min-width: 2rem;
   height: 1px;
-  background: var(--rule-faint);
+  background: var(--rule);
 }
 
 .roster__state {
@@ -1020,27 +1121,27 @@ button:disabled {
   flex: none;
   width: 0.625rem;
   height: 0.625rem;
-  border: 1.5px solid var(--rule);
+  border: 1.5px solid var(--rule-strong);
   border-radius: 50%;
 }
 
 /* Filled: done, claimed, permitted. The seal laid down solid. */
 .mark--filled {
-  color: var(--seal);
+  color: var(--action);
 }
 
 .mark--filled:not(:empty)::before {
-  background: var(--seal);
-  border-color: var(--seal);
+  background: var(--action);
+  border-color: var(--action);
 }
 
 /* Ringed: open, or still to come. */
 .mark--open {
-  color: var(--seal);
+  color: var(--action);
 }
 
 .mark--open:not(:empty)::before {
-  border-color: var(--seal);
+  border-color: var(--action);
   border-width: 2px;
 }
 
@@ -1064,8 +1165,9 @@ button:disabled {
 .empty {
   max-width: none;
   padding: calc(var(--step) * 4) calc(var(--step) * 2);
-  border: 1px dashed var(--rule);
-  border-radius: var(--corner);
+  background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--corner-block);
   color: var(--ink-soft);
   text-align: center;
 }
@@ -1074,9 +1176,10 @@ button:disabled {
 .notice {
   max-width: var(--measure);
   padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
-  background: var(--wash-seal);
-  border: 1px solid color-mix(in srgb, var(--seal) 25%, transparent);
+  background: var(--action-wash);
+  border: 1px solid color-mix(in srgb, var(--action) 30%, transparent);
   border-radius: var(--corner);
+  color: var(--ink);
 }
 
 .consequences {
@@ -1099,7 +1202,7 @@ button:disabled {
   gap: calc(var(--step) * 1.5) calc(var(--step) * 4);
   margin: calc(var(--step) * 2) 0;
   padding: calc(var(--step) * 2) 0 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--rule-strong);
 }
 
 .facts dt {
@@ -1124,13 +1227,20 @@ button:disabled {
 .record {
   width: 100%;
   margin: calc(var(--step) * 2) 0 calc(var(--step) * 4);
-  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  border-collapse: separate;
+  border-spacing: 0;
+  box-shadow: var(--shadow);
+  overflow: hidden;
   text-align: left;
   font-variant-numeric: tabular-nums;
 }
 
 .record th {
-  padding: 0 calc(var(--step) * 1.5) var(--step) var(--step);
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.5) calc(var(--step) * 1.25) calc(var(--step) * 2.5);
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
   border-bottom: 1px solid var(--rule);
   color: var(--ink-soft);
   font-size: var(--size-label);
@@ -1139,8 +1249,9 @@ button:disabled {
 }
 
 .record td {
-  padding: calc(var(--step) * 1.5) calc(var(--step) * 1.5) calc(var(--step) * 1.5) var(--step);
-  border-bottom: 1px solid var(--rule-faint);
+  height: 3.5rem;
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.5) calc(var(--step) * 1.25) calc(var(--step) * 2.5);
+  border-bottom: 1px solid var(--rule);
   vertical-align: middle;
   overflow-wrap: anywhere;
   transition: background-color var(--settle);
@@ -1148,7 +1259,11 @@ button:disabled {
 
 .record th:last-child,
 .record td:last-child {
-  padding-right: calc(var(--step) * 1);
+  padding-right: calc(var(--step) * 2.5);
+}
+
+.record tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .record .record__actions {
@@ -1200,9 +1315,10 @@ button:disabled {
   gap: calc(var(--step) * 1.5);
   margin: calc(var(--step) * 4) 0;
   padding: calc(var(--step) * 3);
-  background: var(--field);
+  background: var(--surface);
   border: 1px solid var(--rule);
-  border-top: 3px solid var(--seal);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
 }
 
 .slip h2 {
@@ -1241,7 +1357,21 @@ dialog.slip {
   max-height: calc(100dvh - var(--gutter) * 2);
   margin: auto;
   overflow: auto;
+  box-shadow: var(--shadow-lift);
   color: var(--ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog.slip[open] {
+    animation: rise 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0.4;
+    transform: translateY(0.5rem) scale(0.98);
+  }
 }
 
 dialog.slip[open] {
@@ -1252,16 +1382,23 @@ dialog.slip[open] {
  * A slip taller than the screen scrolls, but its actions stay pinned to its
  * foot: a long list of Students to roster never pushes Cancel out of reach.
  */
+dialog.slip {
+  padding-bottom: 0;
+}
+
 dialog.slip > .actions {
   position: sticky;
   bottom: 0;
-  margin: 0 calc(var(--step) * -3) calc(var(--step) * -3);
-  padding: calc(var(--step) * 1.5) calc(var(--step) * 3) calc(var(--step) * 3);
-  background: var(--field);
+  margin: 0 calc(var(--step) * -3);
+  padding: calc(var(--step) * 2) calc(var(--step) * 3);
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--ink) 2%, var(--surface));
+  border-top: 1px solid var(--rule);
 }
 
 dialog.slip::backdrop {
-  background: color-mix(in srgb, #0b0f17 55%, transparent);
+  background: var(--veil);
+  backdrop-filter: blur(3px);
 }
 
 /* ---- Landing --------------------------------------------------------- */
@@ -1280,7 +1417,7 @@ dialog.slip::backdrop {
 .landing__trust {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 3);
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--rule-strong);
 }
 
 .landing__trust h2 {
@@ -1309,7 +1446,7 @@ dialog.slip::backdrop {
 .not-built {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 2);
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--rule-strong);
 }
 
 .not-built h2 {
@@ -1358,7 +1495,7 @@ dialog.slip::backdrop {
 .instructional-days button[aria-disabled="true"]:active {
   background: transparent;
   border-style: dashed;
-  border-color: var(--rule);
+  border-color: var(--rule-strong);
   color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
   cursor: not-allowed;
   transform: none;
@@ -1375,7 +1512,7 @@ dialog.slip::backdrop {
  */
 .instructional-days {
   margin-top: calc(var(--step) * 3);
-  border-top: 1px solid var(--rule-faint);
+  border-top: 1px solid var(--rule);
 }
 
 .pattern {
@@ -1460,8 +1597,8 @@ dialog.slip::backdrop {
 
 .day--instructional .day__mark,
 .day--make-up .day__mark {
-  background: var(--seal);
-  border-color: var(--seal);
+  background: var(--action);
+  border-color: var(--action);
 }
 
 .day--not-instructional {
@@ -1484,14 +1621,14 @@ dialog.slip::backdrop {
 
 .day--holiday,
 .day--make-up {
-  border-color: var(--rule);
+  border-color: var(--rule-strong);
   border-style: dashed;
 }
 
 /* The day chosen: the one the change below it is about. */
 td[aria-selected="true"] > .day {
-  background: var(--wash-seal);
-  border: 2px solid var(--seal);
+  background: var(--action-wash);
+  border: 2px solid var(--action);
   font-weight: 700;
 }
 
@@ -1508,8 +1645,8 @@ td[aria-selected="true"] > .day {
 
 @media (hover: hover) {
   .day:hover:not(:disabled) {
-    background: var(--wash-seal);
-    border-color: color-mix(in srgb, var(--seal) 55%, transparent);
+    background: var(--action-wash);
+    border-color: color-mix(in srgb, var(--action) 55%, transparent);
     color: var(--ink);
   }
 }
@@ -1519,7 +1656,7 @@ td[aria-selected="true"] > .day {
 .foot {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 2);
-  border-top: 1px solid var(--rule-faint);
+  border-top: 1px solid var(--rule);
   font-size: var(--size-label);
 }
 
@@ -1530,112 +1667,92 @@ td[aria-selected="true"] > .day {
 /* ---- Narrow pages ---------------------------------------------------- */
 
 @media (max-width: 52rem) {
-  .sheet__head {
-    padding-top: calc(var(--step) * 2);
-  }
-
-  /* The School's name keeps its line, with the way out held at its right. */
-  .shell-head {
-    flex-basis: 100%;
-    flex-wrap: nowrap;
-    align-items: flex-start;
-  }
-
-  .shell-head__who {
-    flex: 1 1 auto;
-  }
-
-  .shell-head > .actions {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--step);
-  }
-
-  .shell-head__school {
-    font-size: var(--size-section);
-  }
-
   /*
-   * The other Schools open inside the head rather than over it: the list takes
-   * the head's full width and pushes the sections down, so it covers nothing
-   * and the page never scrolls sideways.
+   * On a phone, or a window zoomed until it is one, the sidebar folds into a
+   * header across the top: the wordmark with the way out at its right, the
+   * School, and every section as a grid of rows, three to a row, all in reach
+   * and the page title still in the first screen.
    */
-  .shell-head:has(.switcher[open]) {
-    flex-wrap: wrap;
+  .sheet--school {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .shell-head:has(.switcher[open]) > .actions {
-    flex-basis: 100%;
-    align-items: stretch;
+  .sheet--school .sheet__head {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: calc(var(--step) * 1.5);
+    height: auto;
+    padding: calc(var(--step) * 1.5) var(--gutter);
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
   }
 
-  .switcher[open] {
-    text-align: left;
-  }
-
-  .switcher[open] ul {
-    width: auto;
-    max-width: none;
-    margin: var(--step) 0 0;
-  }
-
-  /*
-   * On a phone the sections stop being tabs and become ruled rows of pages,
-   * three to a row and running edge to edge, every one in reach and the page
-   * title still in the first screen. The page being read keeps its seal.
-   */
-  .shell-nav {
+  .sheet--school .sheet__group {
     padding: 0;
   }
 
-  .shell-nav ul {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
-    margin: 0;
-    background: var(--rule-faint);
-    border-top: 1px solid var(--rule-faint);
-  }
-
-  .shell-nav a {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    padding: 0 var(--step);
-    border: 0;
-    border-radius: 0;
-    background: var(--band);
-    text-align: center;
-  }
-
-  .shell-nav a[aria-current] {
-    background: var(--page);
-  }
-
-  /* A short last row stretches to the edge rather than leaving a hole. */
-  .shell-nav li:last-child:nth-child(3n + 1) {
+  .sheet--school .shell-head,
+  .sheet--school .shell-nav {
     grid-column: 1 / -1;
   }
 
-  .shell-nav li:last-child:nth-child(3n + 2) {
-    grid-column: span 2;
+  .sheet--school .shell-foot {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--step);
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
 
-  .shell-nav__seal {
-    border-radius: 0;
+  .shell-foot__actor {
+    display: none;
+  }
+
+  .shell-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .shell-nav__group,
+  .shell-nav ul {
+    display: contents;
+  }
+
+  .shell-nav__heading {
+    display: none;
+  }
+
+  .shell-nav a {
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0 calc(var(--step) * 0.5);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    text-align: center;
+    font-size: var(--size-small);
+  }
+
+  .shell-nav .icon {
+    display: none;
+  }
+
+  .shell-nav a[aria-current] {
+    background: transparent;
+    border-color: var(--action);
   }
 
   .sheet__body {
     grid-template-columns: minmax(0, 1fr);
-    gap: calc(var(--step) * 4) 0;
-    padding-top: calc(var(--step) * 4);
+    padding-top: calc(var(--step) * 3);
   }
 
   .legend {
     position: static;
-    order: 2;
-    padding-top: calc(var(--step) * 3);
-    border-top: 1px solid var(--rule);
   }
 
   form {
@@ -1662,15 +1779,16 @@ td[aria-selected="true"] > .day {
   }
 
   .record tr {
-    padding: calc(var(--step) * 1.75) calc(var(--step) * 0.5);
-    border-bottom: 1px solid var(--rule-faint);
+    padding: calc(var(--step) * 1.75) calc(var(--step) * 2);
+    border-bottom: 1px solid var(--rule);
   }
 
-  .record tbody tr:first-child {
-    border-top: 1px solid var(--rule);
+  .record tbody tr:last-child {
+    border-bottom: 0;
   }
 
   .record td {
+    height: auto;
     padding: 0;
     border: 0;
   }
