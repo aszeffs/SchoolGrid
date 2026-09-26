@@ -1,7 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { arrange, arrangePerson, changesSent, openSection, recordRows, schoolIdOf, signIn, withOwnOffering } from "./app.ts";
-import { seeded, type Account } from "./seeded.ts";
+import {
+  arrange,
+  arrangePerson,
+  changesSent,
+  openSection,
+  personIdOf,
+  recordRows,
+  schoolIdOf,
+  signIn,
+  withOwnOffering,
+} from "./app.ts";
+import { seeded } from "./seeded.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
@@ -15,13 +25,6 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * ahead that no other spec's can overlap it. Every assignment there is still
  * to begin, so ending one removes it.
  */
-
-/** The Person a seeded account resolves to in the first School, as its School Administrator lists it. */
-async function personIdOf(page: Page, schoolId: string, account: Account): Promise<string> {
-  const response = await page.request.get(`/api/schools/${schoolId}/persons`);
-  const { persons } = (await response.json()) as { persons: { id: string; displayName: string }[] };
-  return persons.find((person) => person.displayName === account.displayName)!.id;
-}
 
 const assignments = (page: Page) => recordRows(page, "Teaching assignments");
 

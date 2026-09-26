@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
-import type { Page } from "@playwright/test";
-import { acknowledgeIssuedLink, arrangePerson, issueInvitationFor, revokeButtonFor, schoolIdOf, signIn } from "./app.ts";
+import {
+  acknowledgeIssuedLink,
+  arrangePerson,
+  cancelDialog,
+  darken,
+  issueInvitationFor,
+  revokeButtonFor,
+  schoolIdOf,
+  signIn,
+} from "./app.ts";
 import { seeded } from "./seeded.ts";
 import { expect, test } from "./test.ts";
 
@@ -17,18 +25,6 @@ const PAGES = [
   { path: "enrollments", heading: "Enrollments" },
   { path: "guardian-links", heading: "Guardian links" },
 ] as const;
-
-/** Switches the page to the dark rendition, with motion reduced so nothing is audited mid-fade. */
-async function darken(page: Page) {
-  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  // Two frames painted in the dark rendition, so axe reads no text still drawn in the light one.
-  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-}
-
-async function cancel(page: Page) {
-  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByRole("dialog")).toBeHidden();
-}
 
 test("the people pages and their confirmations stay legible in the dark rendition", async ({ page, audit }) => {
   const { schoolAdministrator, schools, faculty } = seeded();
@@ -54,7 +50,7 @@ test("the people pages and their confirmations stay legible in the dark renditio
   await page.goto(`/schools/${schoolId}/invitations`);
   await revokeButtonFor(page, invited).click();
   await audit(page);
-  await cancel(page);
+  await cancelDialog(page);
 
   // A Faculty membership's, so each names the teaching it would end; Narrow only once it has a date.
   const facultyMembership = `${faculty.displayName}’s Faculty membership`;
@@ -63,16 +59,16 @@ test("the people pages and their confirmations stay legible in the dark renditio
   await page.getByRole("dialog").getByLabel("Ends on").fill("2099-06-30");
   await expect(page.getByRole("dialog").getByRole("list")).toBeVisible();
   await audit(page);
-  await cancel(page);
+  await cancelDialog(page);
   await page.getByRole("button", { name: `Revoke ${facultyMembership}` }).click();
   await expect(page.getByRole("dialog").getByRole("list")).toBeVisible();
   await audit(page);
-  await cancel(page);
+  await cancelDialog(page);
 
   for (const path of ["enrollments", "guardian-links"]) {
     await page.goto(`/schools/${schoolId}/${path}`);
     await page.getByRole("main").getByRole("button", { name: /^End / }).first().click();
     await audit(page);
-    await cancel(page);
+    await cancelDialog(page);
   }
 });

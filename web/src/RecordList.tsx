@@ -36,6 +36,7 @@ export function RecordList<Row>({
   rows,
   keyOf,
   empty,
+  dimmed,
 }: {
   /** What this record lists, named for a screen reader. */
   label: string;
@@ -44,6 +45,8 @@ export function RecordList<Row>({
   keyOf: (row: Row) => string;
   /** What the sheet says where the record has no rows. */
   empty: ReactNode;
+  /** Rows stepped back while the reader points at something else, such as another Course's block. */
+  dimmed?: (row: Row) => boolean;
 }) {
   if (rows.length === 0) {
     return <p className="empty">{empty}</p>;
@@ -61,7 +64,7 @@ export function RecordList<Row>({
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={keyOf(row)}>
+          <tr key={keyOf(row)} data-dimmed={dimmed?.(row) === true ? "" : undefined}>
             {columns.map((column) => (
               <td
                 key={column.head}
