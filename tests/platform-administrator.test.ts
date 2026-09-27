@@ -358,6 +358,7 @@ describe("Platform Administrator", () => {
           { method: "DELETE", url: "/api/schools/:schoolId/roster-memberships/:rosterMembershipId" },
           { method: "GET", url: "/api/schools/:schoolId/enrollments/:enrollmentId/consequences" },
           { method: "GET", url: "/api/schools/:schoolId/account/roster-memberships" },
+          { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance" },
           { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
           { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
           { method: "PATCH", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },

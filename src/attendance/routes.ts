@@ -33,6 +33,7 @@ import {
   type MarkRefusal,
   type ReadOnlyBecause,
 } from "./sessions.ts";
+import { classOfferingAttendance } from "./totals.ts";
 
 /**
  * The most marks one save carries. A class of any real size fits well inside
@@ -164,10 +165,13 @@ async function serveSession(database: Queryable, actor: Actor, offering: Describ
           attendance: mark === undefined ? null : serveAttendance(mark, named),
         };
       })
-      .sort(
-        (a, b) => a.person.displayName.localeCompare(b.person.displayName) || a.person.id.localeCompare(b.person.id),
-      ),
+      .sort(byName),
   };
+}
+
+/** By the Student's display name, and by identifier between two of one name. */
+function byName(a: { person: Named }, b: { person: Named }): number {
+  return a.person.displayName.localeCompare(b.person.displayName) || a.person.id.localeCompare(b.person.id);
 }
 
 function serveAttendance(mark: Attendance, named: (id: string) => Named): ServedAttendance {
@@ -197,7 +201,9 @@ async function recordChange(transaction: Queryable, actor: Actor, before: Attend
  * Attendance sessions: one per Class Offering and School date, shared by
  * every Faculty member who may record it (CONTEXT.md: Attendance session).
  *
- * Reading one is for anyone who may read the offering's Attendance. Opening
+ * Reading one, or the offering's Attendance as a whole with each Student's
+ * Attendance totals, is for anyone who may read the offering's Attendance: a
+ * School Administrator, or Faculty ever assigned to it. Opening
  * it, refreshing its Roster snapshot, and saving marks are for a Faculty
  * member whose Teaching assignment covers the date and is active now, on an
  * Instructional day of the Term up to the School's today, inside its
@@ -209,6 +215,36 @@ export function registerAttendanceRoutes(app: FastifyInstance, database: Databas
     /** The offering the actor may read the Attendance of, named in the path. */
     const readableOffering = async (actor: Actor, classOfferingId: string) =>
       authorizeReadAttendanceOf(actor, classOfferingId, await findClassOffering(database, classOfferingId));
+
+    // Every mark by date, and each Student's Attendance totals, for the
+    // offering's Term up to the School's today, computed as it is read.
+    scope.get("/class-offerings/:classOfferingId/attendance", async (actor, { params }) => {
+      const offering = await readableOffering(actor, params["classOfferingId"]!);
+      const today = (await schoolDateAt(database, { schoolId: offering.schoolId, at: await transactionTime(database) }))!;
+      const { dates, students } = await classOfferingAttendance(database, { offering, today });
+      const persons = await findPersons(database, [
+        ...students.flatMap((student) => [
+          student.studentPersonId,
+          ...student.attendance.map((mark) => mark.recordedByPersonId),
+        ]),
+      ]);
+      const named = (id: string): Named => ({ id, displayName: persons.get(id)?.displayName ?? "" });
+      return {
+        classOfferingAttendance: {
+          classOfferingId: offering.id,
+          today,
+          dates,
+          students: students
+            .map(({ studentPersonId, rosterMemberships, attendance, totals }) => ({
+              person: named(studentPersonId),
+              rosterMemberships,
+              attendance: attendance.map((mark) => ({ date: mark.date, ...serveAttendance(mark, named) })),
+              totals,
+            }))
+            .sort(byName),
+        },
+      };
+    });
 
     // The session on `date`, or on the School's today when none is named. One
     // nobody has opened is served with no one captured.

@@ -240,6 +240,20 @@ export async function attendanceOn(
   return rows;
 }
 
+/** Every Attendance recorded for a Class Offering, on whichever School date, by date. */
+export async function attendanceIn(
+  database: Queryable,
+  { schoolId, classOfferingId }: { schoolId: string; classOfferingId: string },
+): Promise<Attendance[]> {
+  const { rows } = await database.query<Attendance>(
+    `SELECT ${ATTENDANCE_COLUMNS} FROM app.attendance
+     WHERE school_id = $1 AND class_offering_id = $2
+     ORDER BY date, id`,
+    [schoolId, classOfferingId],
+  );
+  return rows;
+}
+
 /** Records a Student's first Attendance for a Class Offering on a School date. */
 export async function recordAttendance(
   transaction: Queryable,

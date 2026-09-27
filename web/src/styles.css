@@ -1443,6 +1443,107 @@ button:disabled {
   overflow-wrap: normal;
 }
 
+/* ---- The Attendance grid: Students down the side, School dates across ------ */
+
+/*
+ * A Term of dates is wider than any screen, so the grid scrolls across
+ * inside its own frame, never the page. The frame takes the keyboard's focus
+ * so it can be scrolled without a pointer, and the Students' names stay put
+ * at its edge while the dates pass under them.
+ */
+.attendance-grid {
+  max-width: 100%;
+  margin: calc(var(--step) * 2) 0 var(--step);
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
+}
+
+.attendance-grid:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.attendance-grid__grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.attendance-grid__grid th,
+.attendance-grid__grid td {
+  min-width: 3.25rem;
+  padding: var(--step) calc(var(--step) * 1.25);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.attendance-grid__grid tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.attendance-grid__grid thead th {
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 650;
+  vertical-align: bottom;
+}
+
+.attendance-grid__grid thead th a {
+  display: block;
+}
+
+.attendance-grid__grid th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--surface);
+  border-right: 1px solid var(--rule);
+  text-align: left;
+}
+
+.attendance-grid__grid thead th:first-child {
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+}
+
+.attendance-grid__grid tbody th {
+  font-weight: 600;
+}
+
+/* Held in place, so a cell's unprinted words sit inside the frame and never widen the page past it. */
+.attendance-grid__grid td {
+  position: relative;
+  font-weight: 650;
+}
+
+/* An absence reads apart from a day present, in the ink the sheet keeps for what needs looking at. */
+.attendance-grid__grid td[data-status="unexcused_absence"],
+.attendance-grid__grid td[data-status="absent_pending_review"] {
+  color: var(--alarm);
+}
+
+.attendance-grid__grid td[data-status="excused_absence"],
+.attendance-grid__grid td[data-status="tardy"] {
+  color: var(--action);
+}
+
+.attendance-grid__uncounted {
+  display: block;
+  font-size: var(--size-small);
+  font-weight: 500;
+}
+
+.attendance-grid__key {
+  font-size: var(--size-label);
+}
+
 .unprinted {
   position: absolute;
   width: 1px;

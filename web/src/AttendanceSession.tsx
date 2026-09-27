@@ -12,6 +12,7 @@ import {
   type RefusedMark,
   type TaughtClassOffering as Offering,
 } from "./api.ts";
+import { STATUS_NAMES, STATUSES } from "./attendance.ts";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
@@ -24,16 +25,6 @@ import { formatSchoolDate, MOMENT } from "./standing.ts";
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Attendance session" };
 
-/** Every status, in the order the control offers them, as a reader says it. */
-const STATUS_NAMES: Record<AttendanceStatus, string> = {
-  present: "Present",
-  tardy: "Tardy",
-  excused_absence: "Excused absence",
-  unexcused_absence: "Unexcused absence",
-  absent_pending_review: "Absent, pending review",
-};
-
-const STATUSES = Object.keys(STATUS_NAMES) as AttendanceStatus[];
 
 /**
  * One Class Offering's Attendance session on one School date: the School's
