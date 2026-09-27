@@ -4,6 +4,7 @@ import {
   api,
   readAll,
   type ApiResult,
+  type ClassOfferingAttendance,
   type ConflictDetail,
   type Enrollment,
   type ListedPerson,
@@ -18,6 +19,7 @@ import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { OfferingAttendance } from "./OfferingAttendance.tsx";
 import { courseTitle, labelConflictMessage, offeringName, runsTo } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
 import { Roster } from "./Roster.tsx";
@@ -41,7 +43,8 @@ interface Assignable {
  *
  * A School Administrator reads it with the ways to assign Faculty, roster
  * Students, change or end either, relabel the offering and delete it. A
- * Faculty member ever assigned to it reads it and changes nothing. A Student
+ * Faculty member ever assigned to it reads it and changes nothing. Both read
+ * its Attendance by date and each Student's Attendance totals. A Student
  * ever rostered in it reads it without the roster, which the server does not
  * send them. Anyone else, and an offering that does not exist or is another
  * School's, is the one "not available" state, as any refusal is (ADR-0002).
@@ -54,10 +57,28 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
     async (schoolId: string) => {
       if (!administers) {
         const answered = await api.classOffering(schoolId, classOfferingId);
-        return answered.ok ? { ok: true as const, body: { ...answered.body, assignable: [], rosterable: [] } } : answered;
+        if (!answered.ok) {
+          return answered;
+        }
+        const { classOffering } = answered.body;
+        const body = {
+          classOffering,
+          attendance: null as ClassOfferingAttendance | null,
+          assignable: [] as Assignable[],
+          rosterable: [] as ListedPerson[],
+        };
+        // Sent the roster, the actor has taught it, and reads its Attendance too.
+        if (classOffering.rosterMemberships === undefined) {
+          return { ok: true as const, body };
+        }
+        const attended = await api.classOfferingAttendance(schoolId, classOfferingId);
+        return attended.ok
+          ? { ok: true as const, body: { ...body, attendance: attended.body.classOfferingAttendance } }
+          : attended;
       }
       const answered = await readAll([
         api.classOffering(schoolId, classOfferingId),
+        api.classOfferingAttendance(schoolId, classOfferingId),
         api.memberships(schoolId),
         api.persons(schoolId),
         api.enrollments(schoolId),
@@ -65,11 +86,13 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
       if (!answered.ok) {
         return answered;
       }
-      const [{ classOffering }, { memberships }, { persons }, { enrollments }] = answered.body;
+      const [{ classOffering }, { classOfferingAttendance }, { memberships }, { persons }, { enrollments }] =
+        answered.body;
       return {
         ok: true as const,
         body: {
           classOffering,
+          attendance: classOfferingAttendance,
           assignable: assignableFaculty(memberships, persons),
           rosterable: rosterableStudents(classOffering, enrollments, persons),
         },
@@ -92,6 +115,7 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
           schoolId={schoolId}
           administers={administers}
           offering={showing.records.classOffering}
+          attendance={showing.records.attendance}
           assignable={showing.records.assignable}
           rosterable={showing.records.rosterable}
           busy={busy || deleting}
@@ -165,6 +189,7 @@ function OfferingSheet({
   schoolId,
   administers,
   offering,
+  attendance,
   assignable,
   rosterable,
   busy,
@@ -180,6 +205,7 @@ function OfferingSheet({
   schoolId: string;
   administers: boolean;
   offering: Offering;
+  attendance: ClassOfferingAttendance | null;
   assignable: Assignable[];
   rosterable: ListedPerson[];
   busy: boolean;
@@ -274,6 +300,20 @@ function OfferingSheet({
           </Key>
         )}
         <Key term="End of Term">Still open: it runs until the Term&rsquo;s last day.</Key>
+        {attendance !== null && (
+          <>
+            <Key term="Attendance totals">
+              Each Student&rsquo;s count of each status over the Term&rsquo;s Instructional days so far.
+            </Key>
+            <Key term="Not recorded">
+              An Instructional day up to today, while the Student was on the roster, with no mark. It is a gap in the
+              record, not an absence.
+            </Key>
+            <Key term="Not counted">
+              A date that is no longer an Instructional day. Its marks are kept and shown, but left out of the totals.
+            </Key>
+          </>
+        )}
       </dl>
     </>
   );
@@ -440,6 +480,15 @@ function OfferingSheet({
             )}
           </form>
         </>
+      )}
+
+      {attendance !== null && (
+        <OfferingAttendance
+          schoolId={schoolId}
+          classOfferingId={offering.id}
+          termLastDate={term.lastDate}
+          attendance={attendance}
+        />
       )}
 
       {offering.rosterMemberships !== undefined && (

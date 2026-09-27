@@ -47,7 +47,7 @@ describe("Platform Administrator", () => {
         persons: [{ ...schoolAdministrator, claimed: true }],
       });
       expect((await alice.inSchool(school.id).get("/settings")).body).toEqual(
-        expect.objectContaining({ settings: { timezone: "America/New_York", timezoneFixed: false } }),
+        expect.objectContaining({ settings: { timezone: "America/New_York", timezoneFixed: false, attendanceWindow: 7 } }),
       );
     });
 
@@ -225,6 +225,15 @@ describe("Platform Administrator", () => {
     const rostered = await world.alice.post(`/class-offerings/${classOfferingId}/roster-memberships`, {
       personIds: [student.id],
     });
+      // Whether a School date is one the Student could have Attendance on turns on today's date, so the
+      // request is written as it would stand, not raised.
+      const { rows: corrections } = await server().ownerDatabase.query<{ id: string }>(
+        `INSERT INTO app.correction_request
+           (school_id, target_kind, student_person_id, class_offering_id, date, after_value, reason, requested_by_person_id)
+         VALUES ($1, 'attendance', $2, $3, '2026-09-01', 'present', 'Seen in the office', $4)
+         RETURNING id`,
+        [world.schoolId, student.id, classOfferingId, faculty.id],
+      );
       expect([
         enrolled.status,
         linked.status,
@@ -250,6 +259,7 @@ describe("Platform Administrator", () => {
         classOfferingId,
         teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
         rosterMembershipId: (rostered.body as { rosterMemberships: { id: string }[] }).rosterMemberships[0]!.id,
+        correctionRequestId: corrections[0]!.id,
       } as Record<string, string>;
     }
 
@@ -328,6 +338,7 @@ describe("Platform Administrator", () => {
           { method: "DELETE", url: "/api/schools/:schoolId/invitations/:invitationId" },
           { method: "GET", url: "/api/schools/:schoolId/settings" },
           { method: "PATCH", url: "/api/schools/:schoolId/settings" },
+          { method: "GET", url: "/api/schools/:schoolId/settings/attendance-window-preview" },
           { method: "GET", url: "/api/schools/:schoolId/school-date" },
           { method: "GET", url: "/api/schools/:schoolId/academic-years" },
           { method: "POST", url: "/api/schools/:schoolId/academic-years" },
@@ -357,6 +368,14 @@ describe("Platform Administrator", () => {
           { method: "DELETE", url: "/api/schools/:schoolId/roster-memberships/:rosterMembershipId" },
           { method: "GET", url: "/api/schools/:schoolId/enrollments/:enrollmentId/consequences" },
           { method: "GET", url: "/api/schools/:schoolId/account/roster-memberships" },
+          { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance" },
+          { method: "GET", url: "/api/schools/:schoolId/persons/:personId/attendance" },
+          { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
+          { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
+          { method: "PATCH", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
+          { method: "GET", url: "/api/schools/:schoolId/correction-requests" },
+          { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/correction-requests" },
+          { method: "PATCH", url: "/api/schools/:schoolId/correction-requests/:correctionRequestId" },
         ]),
       );
 

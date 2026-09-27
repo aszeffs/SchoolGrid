@@ -48,6 +48,54 @@ function todayIn(timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
 }
 
+interface ServedRequest {
+  id: string;
+  state: string;
+  student: { id: string; displayName: string };
+  classOffering: { id: string };
+  date: string;
+  before: string | null;
+  after: string;
+  requestedBy: { displayName: string };
+  selfApproved: boolean;
+}
+
+interface ServedSession {
+  opened: { by: { displayName: string } } | null;
+  students: { unmarkableBecause: string | null }[];
+}
+
+/** The Class Offerings of the Term running on the School's today, as a School Administrator reads them. */
+async function currentOfferingsOf(school: TestClient): Promise<{ id: string }[]> {
+  const { classOfferings } = (await school.get("/class-offerings")).body as {
+    classOfferings: { id: string; term: { firstDate: string; lastDate: string } }[];
+  };
+  const { today } = await attendanceOf(school, classOfferings[0]!.id);
+  return classOfferings.filter(({ term }) => term.firstDate <= today && today <= term.lastDate);
+}
+
+/** A Class Offering's Attendance: the School's today, the dates it is shown on, and every Student's marks and totals. */
+async function attendanceOf(school: TestClient, classOfferingId: string) {
+  const response = await school.get(`/class-offerings/${classOfferingId}/attendance`);
+  expect(response.status).toBe(200);
+  return (response.body as {
+    classOfferingAttendance: {
+      today: string;
+      dates: { date: string }[];
+      students: { attendance: { date: string; recordedBy: { displayName: string } }[]; totals: Record<string, number> }[];
+    };
+  }).classOfferingAttendance;
+}
+
+/** The session on a date, or on the School's today given none. */
+async function attendanceSessionOf(school: TestClient, classOfferingId: string, date?: string): Promise<ServedSession> {
+  const response = await school.get(
+    `/class-offerings/${classOfferingId}/attendance-session${date === undefined ? "" : `?date=${date}`}`,
+  );
+  expect(response.status).toBe(200);
+  return (response.body as { attendanceSession: ServedSession }).attendanceSession;
+}
+
 describe("Trial Schools", () => {
   describe("with trials on", () => {
     const server = useTestServer({ trials: { enabled: true, perClientPerHour: 1000 } });
@@ -82,8 +130,8 @@ describe("Trial Schools", () => {
       ]);
 
       const school = client.inSchool(schoolId);
-      const settings = (await school.get("/settings")).body as { settings: { timezone: string } };
-      expect(settings.settings.timezone).toBe("Pacific/Kiritimati");
+      const settings = (await school.get("/settings")).body as { settings: { timezone: string; attendanceWindow: number } };
+      expect(settings.settings).toEqual(expect.objectContaining({ timezone: "Pacific/Kiritimati", attendanceWindow: 7 }));
 
       const persons = (await school.get("/persons")).body as { persons: { displayName: string }[] };
       expect(persons.persons.map((person) => person.displayName)).toEqual(INVENTED_PERSONS);
@@ -150,6 +198,89 @@ describe("Trial Schools", () => {
           expect(account.linkedStudents.map((link) => link.student.displayName)).toEqual(["Jamie Lindqvist"]);
         }
       }
+    });
+
+    it("starts with its Term's Attendance up to yesterday, gaps and all, and a Pending Correction request by its Faculty, auditing none of it", async (context) => {
+      const { client, schoolId } = await server().startTrial();
+      const school = client.inSchool(schoolId);
+      const current = await currentOfferingsOf(school);
+      const taken = await Promise.all(current.map(async (offering) => ({ offering, ...(await attendanceOf(school, offering.id)) })));
+      const today = taken[0]!.today;
+      const pastDays = taken[0]!.dates.map(({ date }) => date).filter((date) => date < today);
+      // A Term's first day has no day behind it to have been taken.
+      if (pastDays.length === 0) {
+        return context.skip();
+      }
+
+      const marks = taken.flatMap(({ students }) => students.flatMap((student) => student.attendance));
+      const totals = taken.flatMap(({ students }) => students.map((student) => student.totals));
+      const sum = (tally: string) => totals.reduce((count, total) => count + total[tally]!, 0);
+      expect(marks.every((mark) => pastDays.includes(mark.date))).toBe(true);
+      expect(sum("present") / marks.length).toBeGreaterThan(0.8);
+      expect(sum("not_recorded")).toBeGreaterThan(0);
+      expect(sum("absent_pending_review")).toBe(1);
+      // Recorded by whoever teaches each offering.
+      const taughtBy = new Set(marks.map((mark) => mark.recordedBy.displayName));
+      expect([...taughtBy].sort()).toEqual(["Priya Okonkwo", "Sam Achterberg"]);
+
+      const { correctionRequests } = (await school.get("/correction-requests")).body as { correctionRequests: ServedRequest[] };
+      expect(correctionRequests).toEqual([
+        expect.objectContaining({
+          state: "pending",
+          requestedBy: expect.objectContaining({ displayName: "Sam Achterberg" }),
+          before: "unexcused_absence",
+          after: "excused_absence",
+        }),
+      ]);
+      const { auditRecords } = (await school.get("/audit-records")).body as { auditRecords: { action: string }[] };
+      expect(auditRecords.map((record) => record.action)).toEqual(["trial.started"]);
+
+      // Its Faculty member finds a past session taken, and today's waiting.
+      const faculty = (await switchRole(client, "faculty")).inSchool(schoolId);
+      const { current: taught } = (await faculty.get("/account/class-offerings")).body as { current: { id: string }[] };
+      const takenTaught = taught.filter((offering) => current.some((candidate) => candidate.id === offering.id));
+      expect(takenTaught.length).toBeGreaterThan(0);
+      for (const { id } of takenTaught) {
+        const past = await attendanceSessionOf(faculty, id, pastDays.at(-1));
+        expect(past.opened?.by.displayName).toBe("Sam Achterberg");
+        expect(past.students.length).toBeGreaterThan(0);
+        expect(past.students.every((student) => student.unmarkableBecause === null)).toBe(true);
+        const todays = await attendanceSessionOf(faculty, id);
+        expect(todays.opened).toBeNull();
+        expect(todays.students).toEqual([]);
+      }
+      const own = (await faculty.get("/correction-requests")).body as { correctionRequests: ServedRequest[] };
+      expect(own.correctionRequests).toHaveLength(1);
+    });
+
+    it("lets its only School Administrator approve its Faculty's request, and approve their own as a marked self-approval", async (context) => {
+      const { client, schoolId } = await server().startTrial();
+      const school = client.inSchool(schoolId);
+      const { correctionRequests } = (await school.get("/correction-requests")).body as { correctionRequests: ServedRequest[] };
+      if (correctionRequests.length === 0) {
+        return context.skip();
+      }
+      const [waiting] = correctionRequests;
+
+      const approved = await school.patch(`/correction-requests/${waiting!.id}`, { state: "approved" });
+      expect(approved.status).toBe(200);
+      expect((approved.body as { correctionRequest: ServedRequest }).correctionRequest).toEqual(
+        expect.objectContaining({ state: "approved", selfApproved: false }),
+      );
+
+      const raised = await school.post(`/class-offerings/${waiting!.classOffering.id}/correction-requests`, {
+        kind: "attendance",
+        studentPersonId: waiting!.student.id,
+        date: waiting!.date,
+        after: "tardy",
+        reason: "The register was read wrong.",
+      });
+      expect(raised.status).toBe(201);
+      const own = (raised.body as { correctionRequest: ServedRequest }).correctionRequest;
+      const selfApproved = await school.patch(`/correction-requests/${own.id}`, { state: "approved" });
+      expect((selfApproved.body as { correctionRequest: ServedRequest }).correctionRequest).toEqual(
+        expect.objectContaining({ state: "approved", selfApproved: true }),
+      );
     });
 
     it("starts over in a fresh Trial School, ending the Session the browser held in the last", async () => {
@@ -277,7 +408,8 @@ describe("Trial Schools", () => {
       const tables = [
         "person", "school_membership", "enrollment", "guardian_link", "invitation", "audit_record",
         "academic_year", "term", "instructional_day_exception", "course", "class_offering",
-        "teaching_assignment", "roster_membership",
+        "teaching_assignment", "roster_membership", "attendance_session", "roster_snapshot_member", "attendance",
+        "correction_request",
       ];
       const counts: Record<string, number> = {};
       for (const table of tables) {

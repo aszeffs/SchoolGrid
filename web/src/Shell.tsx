@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { AcademicYears } from "./AcademicYears.tsx";
 import { Account } from "./Account.tsx";
+import { AttendanceSession } from "./AttendanceSession.tsx";
 import { ClassOffering } from "./ClassOffering.tsx";
 import { ClassOfferings } from "./ClassOfferings.tsx";
+import { CorrectionRequests } from "./CorrectionRequests.tsx";
 import { Courses } from "./Courses.tsx";
 import { api, type ReachedSchool, type Role, type Session } from "./api.ts";
 import { AuditRecords } from "./AuditRecords.tsx";
@@ -21,6 +23,7 @@ import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
 import { rememberTrial, START_FAILED, timeLeft, trialHasEnded, useNow, useStartTrial } from "./trial.ts";
+import { YourAttendance } from "./YourAttendance.tsx";
 import { YourClasses } from "./YourClasses.tsx";
 
 type State =
@@ -257,6 +260,7 @@ const GROUPS = ["You", "People", "Academic", "School"] as const;
 const SECTION_GROUP: Record<ReturnType<typeof sectionsFor>[number]["name"], (typeof GROUPS)[number]> = {
   account: "You",
   classes: "You",
+  yourAttendance: "You",
   persons: "People",
   invitations: "People",
   memberships: "People",
@@ -265,6 +269,7 @@ const SECTION_GROUP: Record<ReturnType<typeof sectionsFor>[number]["name"], (typ
   academicYears: "Academic",
   courses: "Academic",
   classOfferings: "Academic",
+  correctionRequests: "Academic",
   auditRecords: "School",
   settings: "School",
 };
@@ -273,6 +278,7 @@ const SECTION_GROUP: Record<ReturnType<typeof sectionsFor>[number]["name"], (typ
 const SECTION_ICONS: Record<keyof typeof SECTION_GROUP, string> = {
   account: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
   classes: "M4 19.5V5a2 2 0 0 1 2-2h14v14H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 21h14M9 7h7",
+  yourAttendance: "M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8.5 13.5l2.5 2.5 4.5-5",
   persons: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5",
   invitations: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm0 0 9 6 9-6",
   memberships: "M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z",
@@ -281,6 +287,7 @@ const SECTION_ICONS: Record<keyof typeof SECTION_GROUP, string> = {
   academicYears: "M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 9h18M8 2v4M16 2v4",
   courses: "M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2zM4 21V5",
   classOfferings: "M3 5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM13 5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2zM3 15a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM13 15a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z",
+  correctionRequests: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4M14 20h6",
   auditRecords: "M9 3h10v18H5V7zM9 3v4H5M9 12h6M9 16h6",
   settings: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M16 4v4M10 10v4M18 16v4",
 };
@@ -320,6 +327,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <Account school={school} />;
     case "classes":
       return <YourClasses school={school} />;
+    case "yourAttendance":
+      return <YourAttendance school={school} />;
     case "persons":
       return <Persons school={school} />;
     case "invitations":
@@ -340,6 +349,12 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <ClassOfferings school={school} />;
     case "classOffering":
       return <ClassOffering school={school} classOfferingId={route.classOfferingId} />;
+    case "attendance":
+      return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={null} />;
+    case "attendanceOn":
+      return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={route.date} />;
+    case "correctionRequests":
+      return <CorrectionRequests school={school} />;
     case "settings":
       return <SchoolSettings school={school} />;
   }

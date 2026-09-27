@@ -5,7 +5,8 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
  * School settings: where a School Administrator reads and corrects the
- * School's timezone. Which School date an instant falls on is the HTTP
+ * School's timezone and its Attendance window. Which School date an instant
+ * falls on, and which dates a window change opens or closes, are the HTTP
  * suite's to assert; this is about the page.
  *
  * The second seeded School is used throughout, so changing its timezone
@@ -17,7 +18,7 @@ function timezoneShown(page: Page) {
   return page.getByRole("main").locator(".facts dd").first();
 }
 
-/** A School Administrator on the second School's settings, with its timezone put back to the seeded one. */
+/** A School Administrator on the second School's settings, with its timezone and window put back to the seeded ones. */
 async function onSettings(page: Page): Promise<{ schoolId: string }> {
   const { schoolAdministrator, schools } = seeded();
   await signIn(page, schoolAdministrator);
@@ -25,7 +26,7 @@ async function onSettings(page: Page): Promise<{ schoolId: string }> {
   const schoolId = await schoolIdOf(page, schools[1]!);
   const restored = await page.request.patch(`/api/schools/${schoolId}/settings`, {
     headers: { origin: new URL(page.url()).origin },
-    data: { timezone: "Europe/London" },
+    data: { timezone: "Europe/London", attendanceWindow: 7 },
   });
   expect(restored.ok()).toBe(true);
   await openSection(page, "Settings");
@@ -73,6 +74,45 @@ test("the timezone is changed from the keyboard alone, with focus in sight", asy
   await expect(timezoneShown(page)).toHaveText(chosen);
 });
 
+test("the Attendance window changes only once its confirmation names what it closes", async ({ page, audit }) => {
+  await onSettings(page);
+  const windowShown = page.getByRole("main").locator(".facts dd").nth(1);
+  await expect(windowShown).toHaveText("7 days");
+  // Which dates close depends on the day the suite runs, so the count is the server's to be trusted with.
+  await page.route("**/settings/attendance-window-preview?*", (route) =>
+    route.fulfill({ status: 200, json: { opens: 0, closes: 4 } }),
+  );
+  const form = page.getByRole("form", { name: "Change the Attendance window" });
+  const patches: unknown[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "PATCH") {
+      patches.push(request.postDataJSON());
+    }
+  });
+
+  await form.getByLabel("Days after a School date").fill("3");
+  await form.getByRole("button", { name: "Review change" }).click();
+  const dialog = page.getByRole("dialog", { name: "Change the Attendance window?" });
+  await expect(dialog).toContainText("up to 3 days after its School date, instead of up to 7 days");
+  await expect(dialog).toContainText("This closes 4 past Instructional days.");
+  await audit(page);
+
+  // Escape cancels, and sends nothing.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(windowShown).toHaveText("7 days");
+  expect(patches).toEqual([]);
+
+  await form.getByRole("button", { name: "Review change" }).click();
+  await dialog.getByRole("button", { name: "Change the window" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(windowShown).toHaveText("3 days");
+  await expect(page.getByRole("status")).toHaveText(
+    "Attendance can now be recorded up to 3 days after its School date.",
+  );
+  expect(patches).toEqual([{ attendanceWindow: 3 }]);
+});
+
 test("navigation offers Settings only to a School Administrator", async ({ page }) => {
   const { faculty, schools } = seeded();
   await signIn(page, faculty);
@@ -92,9 +132,11 @@ test.describe("on a phone", () => {
     test(`the sheet holds 360px in the ${colorScheme} rendition`, async ({ page, audit }) => {
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
       await onSettings(page);
-      const button = page.getByRole("button", { name: "Change timezone" });
-      await button.scrollIntoViewIfNeeded();
-      await expect(button).toBeInViewport();
+      for (const name of ["Change timezone", "Review change"]) {
+        const button = page.getByRole("button", { name });
+        await button.scrollIntoViewIfNeeded();
+        await expect(button).toBeInViewport();
+      }
       await expectNoSidewaysScroll(page);
       await audit(page);
     });

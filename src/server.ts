@@ -10,6 +10,8 @@ import {
 } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAcademicStructureRoutes } from "./academic-structure/routes.ts";
+import { registerCorrectionRequestRoutes } from "./attendance/correction-request-routes.ts";
+import { registerAttendanceRoutes } from "./attendance/routes.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { createAuthenticator, registerAuthenticationRoutes } from "./authentication/index.ts";
@@ -162,6 +164,8 @@ export function buildServer({
       registerAuditRoutes(api, database, authenticator);
       registerCalendarRoutes(api, database, authenticator);
       registerAcademicStructureRoutes(api, database, authenticator);
+      registerAttendanceRoutes(api, database, authenticator);
+      registerCorrectionRequestRoutes(api, database, authenticator);
       registerPlatformRoutes(api, database, authenticator);
       registerTrialRoutes(api, { database, authenticator, publicOrigin, settings: trials });
     },

@@ -17,6 +17,7 @@ const PATHS = {
   trialEnded: "/trial-ended",
   account: "/schools/:schoolId/account",
   classes: "/schools/:schoolId/classes",
+  yourAttendance: "/schools/:schoolId/attendance",
   persons: "/schools/:schoolId/persons",
   invitations: "/schools/:schoolId/invitations",
   memberships: "/schools/:schoolId/memberships",
@@ -27,6 +28,9 @@ const PATHS = {
   courses: "/schools/:schoolId/courses",
   classOfferings: "/schools/:schoolId/class-offerings",
   classOffering: "/schools/:schoolId/class-offerings/:classOfferingId",
+  attendance: "/schools/:schoolId/class-offerings/:classOfferingId/attendance",
+  attendanceOn: "/schools/:schoolId/class-offerings/:classOfferingId/attendance/:date",
+  correctionRequests: "/schools/:schoolId/correction-requests",
   settings: "/schools/:schoolId/settings",
 } as const;
 
@@ -101,6 +105,8 @@ function decoded(segment: string): string | null {
  */
 const WITHIN = {
   classOffering: "classOfferings",
+  attendance: "classOfferings",
+  attendanceOn: "classOfferings",
 } as const satisfies Partial<Record<SchoolRouteName, SchoolRouteName>>;
 
 /** A page within a School that is a section of its own, reached from the navigation with the School alone. */
@@ -129,6 +135,7 @@ export interface Section {
 export const SECTIONS: readonly Section[] = [
   { name: "account", label: "Your account", reachedBy: null },
   { name: "classes", label: "Your classes", reachedBy: ["faculty", "student"], reachedByTaught: true },
+  { name: "yourAttendance", label: "Your attendance", reachedBy: ["student"] },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
   { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },
@@ -137,6 +144,12 @@ export const SECTIONS: readonly Section[] = [
   { name: "academicYears", label: "Academic Years", reachedBy: ["school_administrator"] },
   { name: "courses", label: "Courses", reachedBy: ["school_administrator"] },
   { name: "classOfferings", label: "Class Offerings", reachedBy: ["school_administrator"] },
+  {
+    name: "correctionRequests",
+    label: "Correction requests",
+    reachedBy: ["school_administrator", "faculty"],
+    reachedByTaught: true,
+  },
   { name: "auditRecords", label: "Audit", reachedBy: ["school_administrator"] },
   { name: "settings", label: "Settings", reachedBy: ["school_administrator"] },
 ];

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { seeded } from "./seeded.ts";
 
 /**
@@ -136,6 +136,20 @@ export async function arrangePerson(
   return person.id;
 }
 
+/** Issues an Invitation to a Person of the spec's own, and returns what redeeming it sends. */
+export async function invitationFor(page: Page, schoolId: string, personId: string, username: string) {
+  const { link } = await arrange<{ link: string }>(page, schoolId, "/invitations", { personId });
+  return { secret: new URL(link).hash.slice(1), username, password: "a Person's own staple, long enough" };
+}
+
+/** Redeems an Invitation through this client, which is left signed in as the new account. */
+export async function redeem(client: APIRequestContext, origin: string, redemption: Record<string, string>) {
+  const redeemed = await client.post("/api/invitations/redeem", { headers: { origin }, data: redemption });
+  if (redeemed.status() !== 201) {
+    throw new Error(`could not redeem the Invitation for ${redemption["username"]}: ${redeemed.status()}`);
+  }
+}
+
 /** A year far enough ahead that no other spec's can overlap it. */
 export function yearAhead(): { firstDate: string; lastDate: string } {
   const starts = 2100 + Math.floor(Math.random() * 7000);
@@ -176,6 +190,60 @@ export async function withOwnTerm(page: Page, dates = yearAhead()): Promise<{ sc
   }
   const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
   return { schoolId, term: { id: year.terms[0]!.id, name, option: `${name}, ${yearName}`, ...dates } };
+}
+
+/**
+ * The Attendance specs' Class Offering: a School Administrator signed in to
+ * the third seeded School, the Attendance specs' own, with a Course of the
+ * spec's own offered in the Term around today there. That Term is made by
+ * whichever spec asks first and shared by the rest, since years cannot
+ * overlap: its year has every day of the week an Instructional day, so today
+ * can be taken whatever day the suite runs.
+ */
+export async function withAttendanceOffering(
+  page: Page,
+): Promise<{ schoolId: string; classOfferingId: string; courseName: string; token: string; term: { firstDate: string; lastDate: string } }> {
+  const { schoolAdministrator, schools } = seeded();
+  await signIn(page, schoolAdministrator);
+  await openSchool(page, schools[2]!);
+  const schoolId = await schoolIdOf(page, schools[2]!);
+  const token = randomUUID().slice(0, 8);
+  const term = await termAroundToday(page, schoolId);
+  const courseName = `Algebra ${token}`;
+  const { course } = await arrange<{ course: { id: string } }>(page, schoolId, "/courses", { name: courseName });
+  const { classOffering } = await arrange<{ classOffering: { id: string } }>(page, schoolId, "/class-offerings", {
+    courseId: course.id,
+    termId: term.id,
+  });
+  return { schoolId, classOfferingId: classOffering.id, courseName, token, term };
+}
+
+/** The Term running today in this School, made with its year from thirty days ago to thirty on when there is none. */
+async function termAroundToday(page: Page, schoolId: string): Promise<{ id: string; firstDate: string; lastDate: string }> {
+  type Term = { id: string; firstDate: string; lastDate: string };
+  const listed = await page.request.get(`/api/schools/${schoolId}/academic-years`);
+  const { academicYears } = (await listed.json()) as { academicYears: { terms: Term[] }[] };
+  const today = new Date().toISOString().slice(0, 10);
+  const held = academicYears.flatMap((year) => year.terms).find((term) => term.firstDate <= today && today <= term.lastDate);
+  if (held !== undefined) {
+    return held;
+  }
+  const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const dates = { firstDate: day(-30), lastDate: day(30) };
+  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
+    name: `Year ${randomUUID().slice(0, 8)}`,
+    ...dates,
+    weekdays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+  });
+  const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
+    headers: { origin: new URL(page.url()).origin },
+    data: { terms: [{ name: "Whole year", ...dates }] },
+  });
+  if (!divided.ok()) {
+    throw new Error(`could not arrange the Term around today: ${divided.status()}`);
+  }
+  const { academicYear: year } = (await divided.json()) as { academicYear: { terms: Term[] } };
+  return year.terms[0]!;
 }
 
 /** A Class Offering of the spec's own: see withOwnTerm. */

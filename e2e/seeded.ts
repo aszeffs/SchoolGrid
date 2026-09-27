@@ -25,7 +25,10 @@ export interface Seeded {
   severalRoles: Account;
   /** What the Guardian's one link lets them read of the Student's. */
   guardianAccessProfile: { attendanceRead: boolean; resultsRead: boolean };
-  /** The names of the Schools that account reaches. */
+  /**
+   * The names of the Schools that account reaches. The third is left to the
+   * Attendance specs, which need a year around today of their own.
+   */
   schools: string[];
 }
 

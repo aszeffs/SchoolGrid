@@ -1,4 +1,12 @@
 import type { Role } from "../../src/access/roles.ts";
+import type { AttendanceWindowChange } from "../../src/attendance/index.ts";
+import type { AttendanceTotals, Tally } from "../../src/attendance/totals.ts";
+import type {
+  AttendanceStatus,
+  MarkRefusal,
+  ReadOnlyBecause,
+  UnmarkableBecause,
+} from "../../src/attendance/sessions.ts";
 import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 
@@ -228,7 +236,11 @@ export interface SchoolSettings {
   timezone: string;
   /** Whether the timezone can no longer change, as it cannot once the School has an Academic Year. */
   timezoneFixed: boolean;
+  /** How many days after a School date its Attendance may still be recorded or corrected normally; 0 is the same day only. */
+  attendanceWindow: number;
 }
+
+export type { AttendanceWindowChange };
 
 /** One Term of an Academic Year, bounded by School dates written `YYYY-MM-DD`, both inclusive. */
 export interface Term {
@@ -331,6 +343,122 @@ export interface RosteredClassOffering extends ClassOffering {
   teachingAssignments: TeachingAssignment[];
   rosterMemberships: { id: string; firstDate: string; lastDate: string | null }[];
 }
+
+export type { AttendanceStatus, AttendanceTotals, MarkRefusal, ReadOnlyBecause, Tally, UnmarkableBecause };
+
+/** One Student's Attendance as a session shows it: the status, and who last recorded it when. */
+export interface Attendance {
+  status: AttendanceStatus;
+  recordedBy: { id: string; displayName: string };
+  recordedAt: string;
+}
+
+/**
+ * The one Attendance session for a Class Offering on a School date, as the
+ * actor is served it. `readOnlyBecause` is null when they may record it.
+ */
+export interface AttendanceSession {
+  classOfferingId: string;
+  date: string;
+  /** The School's today, in its own timezone. */
+  today: string;
+  /** The last School date the window lets this date's Attendance be recorded on. */
+  lastRecordableDate: string;
+  readOnlyBecause: ReadOnlyBecause | null;
+  /** Null while nobody has opened it, when no one is captured yet. */
+  opened: { by: { id: string; displayName: string }; at: string } | null;
+  students: {
+    person: { id: string; displayName: string };
+    /** Null for a Student who can be marked on this date. */
+    unmarkableBecause: UnmarkableBecause | null;
+    attendance: Attendance | null;
+  }[];
+}
+
+/**
+ * A Class Offering's Attendance for its Term up to the School's today: the
+ * dates it is shown on, and each Student ever rostered or marked in it, with
+ * their marks and Attendance totals.
+ */
+export interface ClassOfferingAttendance {
+  classOfferingId: string;
+  /** The School's today, in its own timezone. */
+  today: string;
+  /** The Term's Instructional days so far, and any other date holding a mark, which is not counted. */
+  dates: { date: string; instructional: boolean }[];
+  students: {
+    person: { id: string; displayName: string };
+    /** A null last date is open: it runs to the end of the Term. */
+    rosterMemberships: { firstDate: string; lastDate: string | null }[];
+    attendance: (Attendance & { date: string })[];
+    totals: AttendanceTotals;
+  }[];
+}
+
+/**
+ * One Student's own Attendance and totals in each Class Offering they were
+ * rostered or marked in, the latest Term first. Nothing of any classmate's,
+ * nor who recorded each mark.
+ */
+export interface StudentAttendance {
+  student: { id: string; displayName: string };
+  /** The School's today, in its own timezone. */
+  today: string;
+  classOfferings: (ClassOffering & {
+    /** A null last date is open: it runs to the end of the Term. */
+    rosterMemberships: { firstDate: string; lastDate: string | null }[];
+    /** By date. One on a date no longer an Instructional day is shown, and not counted. */
+    attendance: { date: string; status: AttendanceStatus; counted: boolean }[];
+    totals: AttendanceTotals;
+  })[];
+}
+
+/** One mark a save refused while the rest applied, with the Attendance as it now stands. */
+export interface RefusedMark {
+  studentPersonId: string;
+  because: MarkRefusal;
+  attendance: Attendance | null;
+}
+
+/** One mark in a save: the status, and the value the caller loaded, null for unmarked. */
+export interface Mark {
+  studentPersonId: string;
+  loaded: AttendanceStatus | null;
+  status: AttendanceStatus;
+}
+
+export type CorrectionRequestState = "pending" | "approved" | "rejected" | "withdrawn";
+
+/**
+ * A proposed change to one Student's Attendance in one Class Offering on one
+ * School date, as a School Administrator or its requester reads it. `before`
+ * is null when none was recorded when it was raised.
+ */
+export interface CorrectionRequest {
+  id: string;
+  kind: "attendance";
+  state: CorrectionRequestState;
+  student: { id: string; displayName: string };
+  classOffering: ClassOffering;
+  date: string;
+  before: AttendanceStatus | null;
+  after: AttendanceStatus;
+  reason: string;
+  requestedBy: { id: string; displayName: string };
+  raisedAt: string;
+  /** Who approved or rejected it, or withdrew it; null while it is Pending. */
+  decidedBy: { id: string; displayName: string } | null;
+  decidedAt: string | null;
+  rejectionReason: string | null;
+  /** Approved by its requester as the School's only School Administrator. */
+  selfApproved: boolean;
+}
+
+/** Where a Pending Correction request is taken: rejecting needs a reason. */
+export type CorrectionDecision =
+  | { state: "approved" }
+  | { state: "withdrawn" }
+  | { state: "rejected"; reason: string };
 
 /** One Term a Student has Class Offerings in, and whether it is the one running today. */
 export interface RosteredTerm {
@@ -525,6 +653,14 @@ export const api = {
     request<{ settings: SchoolSettings; timezones: string[] }>("GET", inSchool(schoolId, "/settings")),
   setTimezone: (schoolId: string, timezone: string) =>
     request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { timezone }),
+  /** What changing the Attendance window to this many days would open or close, changing nothing. */
+  previewAttendanceWindow: (schoolId: string, attendanceWindow: number) =>
+    request<AttendanceWindowChange>(
+      "GET",
+      inSchool(schoolId, `/settings/attendance-window-preview?attendanceWindow=${attendanceWindow}`),
+    ),
+  setAttendanceWindow: (schoolId: string, attendanceWindow: number) =>
+    request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { attendanceWindow }),
   academicYears: (schoolId: string) =>
     request<{ academicYears: AcademicYear[] }>("GET", inSchool(schoolId, "/academic-years")),
   createAcademicYear: (schoolId: string, year: { name: string; firstDate: string; lastDate: string }) =>
@@ -586,6 +722,71 @@ export const api = {
     request<{ course: Course }>("DELETE", inSchool(schoolId, `/courses/${encodeURIComponent(courseId)}`)),
   classOfferings: (schoolId: string) =>
     request<{ classOfferings: ListedClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
+  /** Every mark by date, and each Student's Attendance totals, for the offering's Term so far. */
+  classOfferingAttendance: (schoolId: string, classOfferingId: string) =>
+    request<{ classOfferingAttendance: ClassOfferingAttendance }>(
+      "GET",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance`),
+    ),
+  /** One Student's own Attendance and totals: their own, a linked Student's, or any to a School Administrator. */
+  studentAttendance: (schoolId: string, personId: string) =>
+    request<{ studentAttendance: StudentAttendance }>(
+      "GET",
+      inSchool(schoolId, `/persons/${encodeURIComponent(personId)}/attendance`),
+    ),
+  /** The session on this date, or on the School's today when none is named. */
+  attendanceSession: (schoolId: string, classOfferingId: string, date: string | null) =>
+    request<{ attendanceSession: AttendanceSession }>(
+      "GET",
+      inSchool(
+        schoolId,
+        `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session${date === null ? "" : `?date=${encodeURIComponent(date)}`}`,
+      ),
+    ),
+  /** Opens the session, capturing its roster, or refreshes one already open. */
+  openAttendanceSession: (schoolId: string, classOfferingId: string, date: string) =>
+    request<{ attendanceSession: AttendanceSession }>(
+      "POST",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session`),
+      { date },
+    ),
+  /** Saves these marks, then marks every Student still unmarked Present when asked to. */
+  saveAttendance: (
+    schoolId: string,
+    classOfferingId: string,
+    save: { date: string; marks: Mark[]; markAllPresent?: boolean },
+  ) =>
+    request<{ attendanceSession: AttendanceSession; refusedMarks: RefusedMark[] }>(
+      "PATCH",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session`),
+      save,
+    ),
+  /** A School Administrator's queue, every request; anyone else's, their own. Pending first, oldest first. */
+  correctionRequests: (schoolId: string) =>
+    request<{ correctionRequests: CorrectionRequest[] }>("GET", inSchool(schoolId, "/correction-requests")),
+  /** Proposes a change to one Student's Attendance, with a reason, whatever the date. */
+  raiseCorrectionRequest: (
+    schoolId: string,
+    { classOfferingId, ...raising }: {
+      classOfferingId: string;
+      studentPersonId: string;
+      date: string;
+      after: AttendanceStatus;
+      reason: string;
+    },
+  ) =>
+    request<{ correctionRequest: CorrectionRequest }>(
+      "POST",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/correction-requests`),
+      { kind: "attendance", ...raising },
+    ),
+  /** Approves, rejects, or withdraws a Pending request. Approval applies its change at once. */
+  decideCorrectionRequest: (schoolId: string, correctionRequestId: string, decision: CorrectionDecision) =>
+    request<{ correctionRequest: CorrectionRequest }>(
+      "PATCH",
+      inSchool(schoolId, `/correction-requests/${encodeURIComponent(correctionRequestId)}`),
+      decision,
+    ),
   classOffering: (schoolId: string, classOfferingId: string) =>
     request<{ classOffering: TaughtClassOffering }>(
       "GET",

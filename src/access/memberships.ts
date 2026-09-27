@@ -221,6 +221,16 @@ export async function activeRoles(database: Queryable, person: Person): Promise<
   return new Set(rows.map((row) => row.role));
 }
 
+/** How many Persons hold this role in the School at this moment. */
+export async function countActiveHolders(database: Queryable, schoolId: string, role: Role): Promise<number> {
+  const { rows } = await database.query<{ count: number }>(
+    `SELECT count(DISTINCT person_id)::int AS count FROM app.school_membership membership
+     WHERE school_id = $1 AND role = $2 AND ${isActive("membership")}`,
+    [schoolId, role],
+  );
+  return rows[0]!.count;
+}
+
 /** The Schools in which this User account's Person holds a membership at this moment. */
 export async function schoolIdsWithActiveMembership(
   database: Queryable,

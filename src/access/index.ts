@@ -14,9 +14,10 @@ import {
 } from "../identity/index.ts";
 import { invitationState, type Invitation, type InvitationState } from "../identity/invitations.ts";
 import { currentEnrollmentOf, hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
-import { guardianLinksHeldBy, linkedStudentIds, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
+import { guardianLinksHeldBy, linkedStudentProfiles, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 import {
   activeRoles,
+  countActiveHolders,
   ROLES,
   schoolIdsWithActiveMembership,
   type Membership,
@@ -104,8 +105,11 @@ export interface Actor {
 /** What an Actor holds at the moment they were resolved. */
 interface Standing {
   roles: ReadonlySet<Role>;
-  /** The Students linked to the Actor as a Guardian, while that membership is in force. */
-  linkedStudentIds: ReadonlySet<string>;
+  /**
+   * The Students linked to the Actor as a Guardian, while that membership is
+   * in force, each with their own link's Access profile.
+   */
+  linkedStudents: ReadonlyMap<string, AccessProfile>;
   /**
    * Whether the Actor, as a Student, holds an open Enrollment. Looked up on every
    * request and never stored: a Student's access is full while an Enrollment is
@@ -172,14 +176,16 @@ export async function resolveActor(
   // A link reaches its Student only through a Guardian membership in force, so
   // a Guardian whose membership has ended keeps nothing through their links,
   // whatever else they still hold.
-  const linkedStudents = roles.has("guardian") ? await linkedStudentIds(database, person) : new Set<string>();
+  const linkedStudents = roles.has("guardian")
+    ? await linkedStudentProfiles(database, person)
+    : new Map<string, AccessProfile>();
   const enrolled = roles.has("student") && (await hasOpenEnrollment(database, person));
   const taught = await teachingAssignments.classOfferingIdsOf(database, person);
   const rostered = roles.has("student") ? await rosterMemberships.classOfferingIdsOf(database, person) : new Set<string>();
   const actor: Actor = Object.freeze({ person, schoolId: person.schoolId });
   standingOf.set(actor, {
     roles,
-    linkedStudentIds: linkedStudents,
+    linkedStudents,
     enrolled,
     taughtClassOfferingIds: taught,
     rosteredClassOfferingIds: rostered,
@@ -577,7 +583,12 @@ function holds(actor: Actor, role: Role): boolean {
 }
 
 function isLinkedTo(actor: Actor, student: Person): boolean {
-  return standingOf.get(actor)?.linkedStudentIds.has(student.id) ?? false;
+  return standingOf.get(actor)?.linkedStudents.has(student.id) ?? false;
+}
+
+/** Whether the actor's link to this Student is in force and its Access profile grants attendance read. */
+function mayReadAttendanceThroughLink(actor: Actor, student: Person): boolean {
+  return standingOf.get(actor)?.linkedStudents.get(student.id)?.attendanceRead ?? false;
 }
 
 function isEnrolled(actor: Actor): boolean {
@@ -604,8 +615,8 @@ function outOfReach(actor: Actor, target: { schoolId: string } | null): RefusalR
  *
  * A Guardian reaches each Student they are linked to, and nothing about the
  * School's structure widens that. The link's Access profile is not consulted
- * here: the slices whose records it gates, Attendance and Term results, enforce
- * it.
+ * here: the records it gates are decided on their own, Attendance by
+ * authorizeReadAttendanceOfStudent.
  *
  * A Person reaches their own published records whatever their Enrollment, and
  * their own unpublished ones only while an Enrollment is open. The asymmetry
@@ -635,8 +646,8 @@ function decideReadRecordOf(
 
 /**
  * Returns the Person a record belongs to if the actor may read that record, and
- * refuses otherwise, naming the record as the caller did. A Student's records
- * still to be built, Attendance and Term results, are read through this.
+ * refuses otherwise, naming the record as the caller did. A Student's Term
+ * results, still to be built, are read through this.
  */
 export function authorizeReadRecordOf(
   actor: Actor,
@@ -990,6 +1001,221 @@ export function authorizeReadOwnClassOfferings(actor: Actor): string {
 
 function hasTaught(actor: Actor, offering: { id: string }): boolean {
   return standingOf.get(actor)?.taughtClassOfferingIds.has(offering.id) ?? false;
+}
+
+/**
+ * Returns the Class Offering whose Attendance sessions the actor may read, and
+ * refuses otherwise: a School Administrator, and anyone ever assigned to teach
+ * it, who keeps reading its whole history (CONTEXT.md: Teaching assignment).
+ * A Student reads the offering but never its sessions, which name classmates.
+ */
+export function authorizeReadAttendanceOf<O extends { id: string; schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
+  const reason =
+    outOfReach(actor, target) ??
+    (holds(actor, "school_administrator") || hasTaught(actor, target!) ? null : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "class_offering", id: classOfferingId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Person whose own Attendance, in every Class Offering they were
+ * rostered in, the actor may read, and refuses otherwise.
+ *
+ * A Student reads their own whatever their Enrollment: Attendance never
+ * publishes and is readable as soon as it is recorded, so it stays theirs as a
+ * published record does (CONTEXT.md: Attendance, Enrollment). A Guardian reads
+ * a linked Student's while the link is in force and its Access profile grants
+ * attendance read, each Student by their own link's profile (CONTEXT.md:
+ * Access profile). A School Administrator reads any in the School. Faculty read
+ * Attendance by the Class Offering they taught (authorizeReadAttendanceOf),
+ * never one Student's across offerings they did not.
+ */
+export function authorizeReadAttendanceOfStudent(actor: Actor, personId: string, target: Person | null): Person {
+  const reason =
+    outOfReach(actor, target) ??
+    (holds(actor, "school_administrator") ||
+    target!.id === actor.person.id ||
+    mayReadAttendanceThroughLink(actor, target!)
+      ? null
+      : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "person", id: personId });
+  }
+  return target!;
+}
+
+/**
+ * The actor's Teaching assignment for this Class Offering that is active on
+ * the School's today, if they hold the Faculty role and one.
+ */
+async function currentTeachingAssignment(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string },
+): Promise<TeachingAssignment | undefined> {
+  if (!holds(actor, "faculty")) {
+    return undefined;
+  }
+  const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
+  return (await teachingAssignments.of(database, actor.person)).find(
+    ({ classOfferingId, firstDate, lastDate }) =>
+      classOfferingId === offering.id && firstDate <= today && (lastDate === null || today <= lastDate),
+  );
+}
+
+/**
+ * Why the actor may not record a Class Offering's Attendance on a School date,
+ * or null when they may, as far as who they are decides it: they need a
+ * Teaching assignment for it that is currently active and covers that date
+ * too (CONTEXT.md: Attendance). One whose assignment has ended keeps reading,
+ * and records nothing. A School Administrator records nothing either: every
+ * change of theirs goes through a Correction request.
+ *
+ * The date's own conditions, and each Student's, are the Attendance module's.
+ * Only for an offering the actor has already been permitted to read.
+ */
+export async function recordingRefusal(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+  date: string,
+): Promise<"not_teaching" | "not_taught_on_date" | null> {
+  const current = await currentTeachingAssignment(database, actor, offering);
+  if (current === undefined) {
+    return "not_teaching";
+  }
+  // An open assignment runs to the end of its Term, and the date is the
+  // Attendance module's to hold inside that Term.
+  return current.firstDate <= date && (current.lastDate === null || date <= current.lastDate)
+    ? null
+    : "not_taught_on_date";
+}
+
+/**
+ * Returns the Class Offering whose Attendance the actor may record on this
+ * School date, and refuses otherwise: see recordingRefusal. Only for an
+ * offering the actor has already been permitted to read.
+ */
+export async function authorizeRecordAttendance<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+  date: string,
+): Promise<O> {
+  if ((await recordingRefusal(database, actor, offering, date)) !== null) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
+ * Returns the Class Offering the actor may raise a Correction request for,
+ * and refuses otherwise: any School Administrator, and a Faculty member
+ * currently teaching it, whatever date the request is for (CONTEXT.md:
+ * Correction request). One whose assignment has ended no longer speaks for
+ * it; whoever teaches it now does. Only for an offering the actor has already
+ * been permitted to read the Attendance of.
+ */
+export async function authorizeRaiseCorrectionRequest<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+): Promise<O> {
+  if (!holds(actor, "school_administrator") && (await currentTeachingAssignment(database, actor, offering)) === undefined) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
+ * Returns whose Correction requests the actor may list, and refuses otherwise:
+ * a School Administrator every one in the School, and anyone else who may
+ * raise one, or ever could, their own alone. `requestedByPersonId` is null for
+ * every requester.
+ */
+export function authorizeReadCorrectionRequests(actor: Actor): { schoolId: string; requestedByPersonId: string | null } {
+  if (holds(actor, "school_administrator")) {
+    return { schoolId: actor.schoolId, requestedByPersonId: null };
+  }
+  if (holds(actor, "faculty") || (standingOf.get(actor)?.taughtClassOfferingIds.size ?? 0) > 0) {
+    return { schoolId: actor.schoolId, requestedByPersonId: actor.person.id };
+  }
+  throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+}
+
+/**
+ * Returns the Correction request the actor may read, and refuses otherwise: a
+ * School Administrator of its School, and its requester. What they may do
+ * with it is asked of it next.
+ */
+export function authorizeReadCorrectionRequest<R extends { schoolId: string; requestedByPersonId: string }>(
+  actor: Actor,
+  correctionRequestId: string,
+  target: R | null,
+): R {
+  const reason =
+    outOfReach(actor, target) ??
+    (holds(actor, "school_administrator") || target!.requestedByPersonId === actor.person.id ? null : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "correction_request", id: correctionRequestId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Correction request the actor may approve or reject, and refuses
+ * otherwise: a School Administrator of its School. Whether it is their own is
+ * approverStanding's to say.
+ */
+export function authorizeDecideCorrectionRequest<R extends { schoolId: string }>(
+  actor: Actor,
+  correctionRequestId: string,
+  target: R | null,
+): R {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "correction_request", id: correctionRequestId });
+  }
+  return target!;
+}
+
+/**
+ * Whether a School Administrator permitted to decide a Correction request
+ * decides another's, or their own: which they may only as the School's one
+ * active School Administrator, and which is then marked self-approved
+ * (CONTEXT.md: Correction request).
+ */
+export async function approverStanding(
+  database: Queryable,
+  actor: Actor,
+  request: { requestedByPersonId: string },
+): Promise<"another" | "sole_administrator" | "own_request"> {
+  if (request.requestedByPersonId !== actor.person.id) {
+    return "another";
+  }
+  return (await countActiveHolders(database, actor.schoolId, "school_administrator")) === 1
+    ? "sole_administrator"
+    : "own_request";
+}
+
+/** Returns the Correction request the actor may withdraw, and refuses otherwise: only its requester may. */
+export function authorizeWithdrawCorrectionRequest<R extends { schoolId: string; requestedByPersonId: string }>(
+  actor: Actor,
+  correctionRequestId: string,
+  target: R | null,
+): R {
+  const reason =
+    outOfReach(actor, target) ?? (target!.requestedByPersonId === actor.person.id ? null : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "correction_request", id: correctionRequestId });
+  }
+  return target!;
 }
 
 /**

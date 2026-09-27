@@ -29,6 +29,13 @@ export const MAX_NAME_LENGTH = 200;
 export const MAX_REASON_LENGTH = 1000;
 
 /**
+ * The longest Attendance window a School may have, in days; the shortest is 0,
+ * the same day only. The database holds to both (migrations/0021), and the web
+ * app's field for it does too.
+ */
+export const MAX_ATTENDANCE_WINDOW = 60;
+
+/**
  * Bounds a malformed sign-in rather than an honest one. Credentials longer
  * than these are refused like any other failed attempt, without being hashed.
  */
