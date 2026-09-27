@@ -49,9 +49,16 @@ export function registerResultRoutes(app: FastifyInstance, database: Database, a
         }
         const after = await saveResultValueScale(transaction, {
           schoolId,
-          after: before,
+          previous: before,
           values,
           savedByPersonId: actor.person.id,
+        }).catch((error: unknown) => {
+          // The database folds letter case its own way, which can find two
+          // labels the same that the check above did not.
+          if ((error as { constraint?: unknown } | null)?.constraint === "result_value_label_unique") {
+            throw new InvalidRequest("no two values may share a label, whatever their letter case");
+          }
+          throw error;
         });
         await appendAuditRecord(transaction, {
           schoolId,
@@ -87,14 +94,14 @@ function resultValuesFrom(value: unknown): ResultValue[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > MAX_RESULT_VALUES) {
     throw new InvalidRequest(`values must be a list of 1 to ${MAX_RESULT_VALUES} values`);
   }
-  const values = value.map((entry: unknown) => {
+  const values = value.map((entry: unknown, index) => {
     const fields = fieldsOf(entry, ["label", "description"]);
     return {
-      label: boundedLabel(fields["label"], "label", MAX_RESULT_VALUE_LABEL_LENGTH),
+      label: unpaddedText(fields["label"], `values[${index}].label`, MAX_RESULT_VALUE_LABEL_LENGTH),
       description:
         fields["description"] === undefined || fields["description"] === null
           ? null
-          : boundedLabel(fields["description"], "description", MAX_RESULT_VALUE_DESCRIPTION_LENGTH),
+          : unpaddedText(fields["description"], `values[${index}].description`, MAX_RESULT_VALUE_DESCRIPTION_LENGTH),
     };
   });
   const labels = new Set(values.map(({ label }) => label.toLowerCase()));
@@ -105,7 +112,7 @@ function resultValuesFrom(value: unknown): ResultValue[] {
 }
 
 /** Text that is not blank, carries no surrounding space, and runs to at most `max` characters. */
-function boundedLabel(value: unknown, field: string, max: number): string {
+function unpaddedText(value: unknown, field: string, max: number): string {
   if (typeof value !== "string" || value.length === 0 || value !== value.trim() || [...value].length > max) {
     throw new InvalidRequest(`${field} must be text of at most ${max} characters, with no surrounding space`);
   }

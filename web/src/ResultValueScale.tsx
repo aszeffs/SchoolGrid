@@ -4,8 +4,12 @@ import {
   MAX_RESULT_VALUE_LABEL_LENGTH,
   MAX_RESULT_VALUES,
 } from "../../src/validation/bounds.ts";
+import { sameValues } from "../../src/results/index.ts";
 import type { ApiResult, ResultValue, ResultValueScale as Scale } from "./api.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
+
+/** Sends values as the scale's next version, and answers what the server did. */
+export type SaveScale = (values: ResultValue[]) => Promise<ApiResult<{ resultValueScale: Scale }>>;
 
 /** One value as it is being edited, keyed so its fields keep their place while the list is reordered. */
 interface Draft {
@@ -34,8 +38,7 @@ export function ResultValueScale({
 }: {
   scale: Scale;
   busy: boolean;
-  /** Sends the values as the next version, and answers what the server did. */
-  onSave: (values: ResultValue[]) => Promise<ApiResult<{ resultValueScale: Scale }>>;
+  onSave: SaveScale;
 }) {
   return (
     <section aria-labelledby="result-value-scale">
@@ -64,7 +67,7 @@ function ScaleEditor({
 }: {
   scale: Scale;
   busy: boolean;
-  onSave: (values: ResultValue[]) => Promise<ApiResult<{ resultValueScale: Scale }>>;
+  onSave: SaveScale;
 }) {
   const nextKey = useRef(scale.values.length);
   const [drafts, setDrafts] = useState<Draft[]>(
@@ -240,12 +243,7 @@ function scaleProblem(values: ResultValue[], current: ResultValue[]): string | n
     }
     seen.set(label.toLowerCase(), index);
   }
-  const unchanged =
-    values.length === current.length &&
-    values.every(
-      (value, index) => value.label === current[index]!.label && value.description === current[index]!.description,
-    );
-  return unchanged ? "The scale already holds these values." : null;
+  return sameValues(values, current) ? "The scale already holds these values." : null;
 }
 
 function labelId(key: number): string {

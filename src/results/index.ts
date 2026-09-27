@@ -1,7 +1,7 @@
 import type { Queryable } from "../db/transaction.ts";
 
 /**
- * Results: what a Student achieved in a class, recorded as a value from their
+ * Results: how a Student did in a Class Offering, recorded as a value from their
  * School's Result value scale (CONTEXT.md: Result value scale).
  *
  * The scale is versioned. A save adds the next version and never changes one
@@ -54,19 +54,19 @@ export async function holdResultValueScale(transaction: Queryable, schoolId: str
 }
 
 /**
- * Adds the version after `after`, holding these values in this order. The
+ * Adds the version following `previous`, holding these values in this order. The
  * database refuses no values, and two labels the same but for letter case.
  */
 export async function saveResultValueScale(
   transaction: Queryable,
   {
     schoolId,
-    after,
+    previous,
     values,
     savedByPersonId,
-  }: { schoolId: string; after: ResultValueScale; values: readonly ResultValue[]; savedByPersonId: string },
+  }: { schoolId: string; previous: ResultValueScale; values: readonly ResultValue[]; savedByPersonId: string },
 ): Promise<ResultValueScale> {
-  const version = after.version + 1;
+  const version = previous.version + 1;
   const { rows } = await transaction.query<{ id: string }>(
     `INSERT INTO app.result_value_scale_version (school_id, number, saved_by_person_id)
      VALUES ($1, $2, $3)

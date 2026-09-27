@@ -12,7 +12,7 @@ import {
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
-import { ResultValueScale } from "./ResultValueScale.tsx";
+import { ResultValueScale, type SaveScale } from "./ResultValueScale.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
@@ -178,7 +178,7 @@ function SettingsSheet({
   changed: string | null;
   onSetTimezone: (event: FormEvent<HTMLFormElement>) => void;
   onProposeAttendanceWindow: (event: FormEvent<HTMLFormElement>) => void;
-  onSaveResultValueScale: (values: ResultValue[]) => ReturnType<typeof api.saveResultValueScale>;
+  onSaveResultValueScale: SaveScale;
 }) {
   const legend = (
     <>
