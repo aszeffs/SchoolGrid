@@ -29,7 +29,7 @@ interface Session {
   opened: { by: Named; at: string } | null;
   students: {
     person: Named;
-    markable: boolean;
+    unmarkableBecause: string | null;
     attendance: { status: Status; recordedBy: Named; recordedAt: string } | null;
   }[];
 }
@@ -91,6 +91,7 @@ describe("Attendance sessions", () => {
     earlier: string;
     /** A date inside the Term taken out of the year's Instructional days. */
     dayOff: string;
+    academicYearId: string;
     offering: { id: string };
   }
 
@@ -193,6 +194,7 @@ describe("Attendance sessions", () => {
       today,
       earlier: shifted(today, -3),
       dayOff,
+      academicYearId: academicYear.id,
       offering,
     };
   }
@@ -250,9 +252,9 @@ describe("Attendance sessions", () => {
       readOnlyBecause: null,
       opened: { by: { id: world.frankiePerson.id, displayName: "Frankie" }, at: expect.any(String) },
       students: [
-        { person: { id: world.leePerson.id, displayName: "Lee" }, markable: false, attendance: null },
-        { person: { id: world.samPerson.id, displayName: "Sam" }, markable: true, attendance: null },
-        { person: { id: world.skyPerson.id, displayName: "Sky" }, markable: true, attendance: null },
+        { person: { id: world.leePerson.id, displayName: "Lee" }, unmarkableBecause: "enrollment_ended", attendance: null },
+        { person: { id: world.samPerson.id, displayName: "Sam" }, unmarkableBecause: null, attendance: null },
+        { person: { id: world.skyPerson.id, displayName: "Sky" }, unmarkableBecause: null, attendance: null },
       ],
     });
     expect(sharedByCasey).toEqual(opened);
@@ -260,7 +262,7 @@ describe("Attendance sessions", () => {
     expect(readByAlice).toEqual({ ...opened, readOnlyBecause: "not_teaching" });
     expect(earlier).toEqual(expect.objectContaining({ date: world.earlier, readOnlyBecause: null }));
     // Lee's Enrollment ended three days ago, so the day it ended they could still be marked.
-    expect(earlier.students.find((student) => student.person.id === world.leePerson.id)?.markable).toBe(true);
+    expect(earlier.students.find((student) => student.person.id === world.leePerson.id)?.unmarkableBecause).toBeNull();
     const { rows } = await server().ownerDatabase.query(`SELECT date::text FROM app.attendance_session ORDER BY date`);
     expect(rows).toEqual([{ date: world.earlier }, { date: world.today }]);
   });
@@ -268,6 +270,13 @@ describe("Attendance sessions", () => {
   it("refuses each condition of the recording rule on its own", async () => {
     const world = await arrange();
     await open(world, world.frankie, world.today);
+    // A date whose session was opened, and which then stops being an Instructional day.
+    const stopped = shifted(world.today, -1);
+    await open(world, world.frankie, stopped);
+    expect(
+      (await world.alice.post(`/academic-years/${world.academicYearId}/exceptions`, { date: stopped, instructional: false }))
+        .status,
+    ).toBe(201);
     const refusal = await world.frankie.get(`/persons/${ABSENT_ID}`);
     const mark = [{ studentPersonId: world.samPerson.id, loaded: null, status: "present" }];
 
@@ -275,6 +284,7 @@ describe("Attendance sessions", () => {
       ["a date Dana's assignment did not cover", world.dana, world.earlier, 404, null],
       ["Ellis's ended assignment", world.ellis, world.today, 404, null],
       ["a date that is not an Instructional day", world.frankie, world.dayOff, 409, "not_instructional_day"],
+      ["a date that stopped being an Instructional day", world.frankie, stopped, 409, "not_instructional_day"],
       // No assignment reaches outside its Term, so that is refused as a date not taught.
       ["a date outside the Term", world.frankie, shifted(world.today, -61), 404, null],
       ["a date after today", world.frankie, shifted(world.today, 1), 409, "after_today"],
@@ -313,12 +323,12 @@ describe("Attendance sessions", () => {
     });
 
     expect(answered).toEqual([]);
-    expect(reasons).toEqual(["not_taught_on_date", "not_teaching", "not_instructional_day", "after_today", "window_closed"]);
+    expect(reasons).toEqual(["not_taught_on_date", "not_teaching", "not_instructional_day", "after_today", "attendance_window_closed"]);
     expect(lee.refusedMarks).toEqual([{ studentPersonId: world.leePerson.id, because: "not_markable", attendance: null }]);
     expect(statusesOf(lee.attendanceSession)).toEqual({ Lee: null, Sam: "present", Sky: null });
     expect(uncaptured.status).toBe(400);
     const { rows } = await server().ownerDatabase.query(`SELECT count(*)::int AS count FROM app.attendance_session`);
-    expect(rows).toEqual([{ count: 1 }]);
+    expect(rows).toEqual([{ count: 2 }]);
   });
 
   it("marks only unmarked Students with Mark all Present, saves with Students left unmarked, and names who marked each when", async () => {
@@ -442,11 +452,11 @@ describe("Attendance sessions", () => {
     const closed = await world.frankie.post(path(world), { date: world.earlier });
 
     expect(before.students.map((student) => student.person.displayName)).toEqual(["Lee", "Sam", "Sky"]);
-    expect(refreshed.students.map((student) => [student.person.displayName, student.markable])).toEqual([
-      ["Lee", true],
-      ["Nia", true],
-      ["Sam", true],
-      ["Sky", false],
+    expect(refreshed.students.map((student) => [student.person.displayName, student.unmarkableBecause])).toEqual([
+      ["Lee", null],
+      ["Nia", null],
+      ["Sam", null],
+      ["Sky", "not_rostered_on_date"],
     ]);
     // Still opened by Frankie: a refresh is not an opening.
     expect(refreshed.opened?.by.id).toBe(world.frankiePerson.id);
@@ -465,6 +475,8 @@ describe("Attendance sessions", () => {
     const attempts: [string, () => Promise<TestResponse>][] = [
       ["the School Administrator opening", () => world.alice.post(path(world), { date: world.today })],
       ["the School Administrator saving", () => world.alice.patch(path(world), body)],
+      // Refused before the marks are read, so a malformed save says nothing more.
+      ["the School Administrator saving nonsense", () => world.alice.patch(path(world), { date: world.today, marks: 7 })],
       ["a Student reading", () => world.sam.get(path(world))],
       ["a Student opening", () => world.sam.post(path(world), { date: world.today })],
       ["a Student saving", () => world.sam.patch(path(world), body)],

@@ -1,6 +1,11 @@
 import type { Role } from "../../src/access/roles.ts";
 import type { AttendanceWindowChange } from "../../src/attendance/index.ts";
-import type { AttendanceStatus, MarkRefusal, ReadOnlyBecause } from "../../src/attendance/sessions.ts";
+import type {
+  AttendanceStatus,
+  MarkRefusal,
+  ReadOnlyBecause,
+  UnmarkableBecause,
+} from "../../src/attendance/sessions.ts";
 import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 
@@ -338,7 +343,7 @@ export interface RosteredClassOffering extends ClassOffering {
   rosterMemberships: { id: string; firstDate: string; lastDate: string | null }[];
 }
 
-export type { AttendanceStatus, MarkRefusal, ReadOnlyBecause };
+export type { AttendanceStatus, MarkRefusal, ReadOnlyBecause, UnmarkableBecause };
 
 /** One Student's Attendance as a session shows it: the status, and who last recorded it when. */
 export interface Attendance {
@@ -361,7 +366,12 @@ export interface AttendanceSession {
   readOnlyBecause: ReadOnlyBecause | null;
   /** Null while nobody has opened it, when no one is captured yet. */
   opened: { by: { id: string; displayName: string }; at: string } | null;
-  students: { person: { id: string; displayName: string }; markable: boolean; attendance: Attendance | null }[];
+  students: {
+    person: { id: string; displayName: string };
+    /** Null for a Student who can be marked on this date. */
+    unmarkableBecause: UnmarkableBecause | null;
+    attendance: Attendance | null;
+  }[];
 }
 
 /** One mark a save refused while the rest applied, with the Attendance as it now stands. */

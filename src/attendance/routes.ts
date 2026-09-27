@@ -62,9 +62,19 @@ interface ServedAttendance {
 // Validation below runs only once the Access decision has permitted the
 // caller: see InvalidRequest.
 
-function parseSave(body: unknown): { date: SchoolDate; marks: Mark[]; markAllPresent: boolean } {
-  const fields = fieldsOf(body, ["date", "marks", "markAllPresent"]);
-  const date = schoolDateFrom(fields["date"], "date");
+const SAVE_FIELDS = ["date", "marks", "markAllPresent"];
+
+/**
+ * The School date a save is for, read on its own: whether the actor may record
+ * depends on it, so it is read once they may read the offering, and the rest
+ * of the save only once they may record (see parseSave).
+ */
+function saveDateFrom(body: unknown): SchoolDate {
+  return schoolDateFrom(fieldsOf(body, SAVE_FIELDS)["date"], "date");
+}
+
+function parseSave(body: unknown): { marks: Mark[]; markAllPresent: boolean } {
+  const fields = fieldsOf(body, SAVE_FIELDS);
   const marks = fields["marks"] ?? [];
   if (!Array.isArray(marks)) {
     throw new InvalidRequest("marks must be a list");
@@ -91,7 +101,7 @@ function parseSave(body: unknown): { date: SchoolDate; marks: Mark[]; markAllPre
   if (typeof markAllPresent !== "boolean") {
     throw new InvalidRequest("markAllPresent must be true or false");
   }
-  return { date, marks: parsed, markAllPresent };
+  return { marks: parsed, markAllPresent };
 }
 
 /** The School's today, and the date's own reason it cannot be recorded, if any. */
@@ -107,7 +117,7 @@ async function dateStanding(database: Queryable, offering: DescribedClassOfferin
 /** Refuses a date whose Attendance cannot be recorded, whoever asks. */
 function checkRecordable(problem: DateProblem | null): void {
   if (problem !== null) {
-    throw new Conflict({ conflict: problem === "window_closed" ? "attendance_window_closed" : problem });
+    throw new Conflict({ conflict: problem });
   }
 }
 
@@ -135,8 +145,8 @@ async function serveSession(database: Queryable, actor: Actor, offering: Describ
   ]);
   const named = (id: string): Named => ({ id, displayName: persons.get(id)?.displayName ?? "" });
   const markOf = new Map(marks.map((mark) => [mark.studentPersonId, mark]));
-  const markable = new Map(captured.map((student) => [student.studentPersonId, student.markable]));
-  const studentIds = [...new Set([...markable.keys(), ...markOf.keys()])];
+  const unmarkable = new Map(captured.map((student) => [student.studentPersonId, student.unmarkableBecause]));
+  const studentIds = [...new Set([...unmarkable.keys(), ...markOf.keys()])];
   return {
     classOfferingId: offering.id,
     date,
@@ -149,7 +159,8 @@ async function serveSession(database: Queryable, actor: Actor, offering: Describ
         const mark = markOf.get(id);
         return {
           person: named(id),
-          markable: markable.get(id) ?? false,
+          // One marked but never captured is not rostered on the date as far as this session knows.
+          unmarkableBecause: unmarkable.has(id) ? unmarkable.get(id)! : ("not_rostered_on_date" as const),
           attendance: mark === undefined ? null : serveAttendance(mark, named),
         };
       })
@@ -236,9 +247,10 @@ export function registerAttendanceRoutes(app: FastifyInstance, database: Databas
     // Student still unmarked once those are applied.
     scope.patch("/class-offerings/:classOfferingId/attendance-session", async (actor, { params, body }) => {
       const readable = await readableOffering(actor, params["classOfferingId"]!);
-      const { date, marks, markAllPresent } = parseSave(body);
+      const date = saveDateFrom(body);
       return withTransaction(database, async (transaction) => {
         const offering = await authorizeRecordAttendance(transaction, actor, readable, date);
+        const { marks, markAllPresent } = parseSave(body);
         checkRecordable((await dateStanding(transaction, offering, date)).problem);
         const key = { schoolId: offering.schoolId, classOfferingId: offering.id, date };
         const { session, opened } = await openSession(transaction, { ...key, openedByPersonId: actor.person.id });
@@ -246,7 +258,10 @@ export function registerAttendanceRoutes(app: FastifyInstance, database: Databas
           await captureRoster(transaction, session);
         }
         const markable = new Map(
-          (await capturedStudents(transaction, session)).map((student) => [student.studentPersonId, student.markable]),
+          (await capturedStudents(transaction, session)).map((student) => [
+            student.studentPersonId,
+            student.unmarkableBecause === null,
+          ]),
         );
         const stored = new Map(
           (await attendanceOn(transaction, key, { lock: true })).map((mark) => [mark.studentPersonId, mark]),

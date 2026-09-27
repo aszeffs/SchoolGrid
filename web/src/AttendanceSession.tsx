@@ -141,7 +141,7 @@ function SessionSheet({
   const recordable = readOnlyBecause === null;
   const on = formatSchoolDate(date);
   const markable = (student: Session["students"][number]) =>
-    recordable && student.markable && student.attendance?.status !== "absent_pending_review";
+    recordable && student.unmarkableBecause === null && student.attendance?.status !== "absent_pending_review";
   const unmarked = session.students.filter(
     (student) => markable(student) && student.attendance === null && !drafts.has(student.person.id),
   ).length;
@@ -214,7 +214,7 @@ function SessionSheet({
       <p>One class&rsquo;s Attendance on one School date, taken by whoever teaches it.</p>
       <dl>
         <Key term="Attendance session">
-          The one register for this class on this date, shared by everyone teaching it. A mark someone else changed
+          The one session for this class on this date, shared by everyone teaching it. A mark someone else changed
           after you opened it is not overwritten: it is shown to you with its newer value.
         </Key>
         <Key term="Roster snapshot">
@@ -297,10 +297,14 @@ function SessionSheet({
               cell: (student) => (
                 <>
                   {student.person.displayName}
-                  {!student.markable && (
+                  {student.unmarkableBecause !== null && (
                     <>
                       {" "}
-                      <span className="mark mark--struck">Not rostered on this date</span>
+                      <span className="mark mark--struck">
+                        {student.unmarkableBecause === "enrollment_ended"
+                          ? "Enrollment ended before this date"
+                          : "Not rostered on this date"}
+                      </span>
                     </>
                   )}
                 </>
@@ -411,7 +415,7 @@ function readOnlyText(session: Session, { administers, termName }: { administers
         : "You are not teaching this class now, so you can read its Attendance but not record it.";
     case "not_taught_on_date":
       return `Your Teaching assignment did not cover ${on}, so you can read its Attendance but not record it.`;
-    case "window_closed":
+    case "attendance_window_closed":
       return `The Attendance window for ${on} closed after ${formatSchoolDate(session.lastRecordableDate)}. A change now needs a Correction request.`;
   }
 }

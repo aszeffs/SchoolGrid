@@ -48,13 +48,16 @@ export interface AttendanceSession {
 }
 
 /**
- * One Student a session's Roster snapshot captured, and whether they can be
- * marked on its date: the captured Roster membership still covers it, and the
- * Student's Enrollment had not ended by then (CONTEXT.md: Roster snapshot).
+ * Why a captured Student cannot be marked on a session's date: the Roster
+ * membership captured no longer covers it, or their Enrollment had ended by
+ * then (CONTEXT.md: Roster snapshot).
  */
+export type UnmarkableBecause = "not_rostered_on_date" | "enrollment_ended";
+
+/** One Student a session's Roster snapshot captured, and why they cannot be marked on its date, if they cannot. */
 export interface CapturedStudent {
   studentPersonId: string;
-  markable: boolean;
+  unmarkableBecause: UnmarkableBecause | null;
 }
 
 /**
@@ -62,7 +65,7 @@ export interface CapturedStudent {
  * decides it: it is not an Instructional day in the Class Offering's Term, it
  * is after the School's today, or its Attendance window has closed.
  */
-export type DateProblem = "not_instructional_day" | "after_today" | "window_closed";
+export type DateProblem = "not_instructional_day" | "after_today" | "attendance_window_closed";
 
 /** Why a session is read-only for the actor, the date's own reasons first. */
 export type ReadOnlyBecause = DateProblem | "not_teaching" | "not_taught_on_date";
@@ -113,7 +116,7 @@ export async function dateProblem(
     return "after_today";
   }
   if (today > schoolDatePlus(date, attendanceWindow)) {
-    return "window_closed";
+    return "attendance_window_closed";
   }
   return null;
 }
@@ -188,22 +191,22 @@ export async function captureRoster(transaction: Queryable, session: AttendanceS
 }
 
 /**
- * The Students a session's Roster snapshot captured, each once, with whether
- * they can be marked on its date. A membership moved since it was captured is
+ * The Students a session's Roster snapshot captured, each once, with why they
+ * cannot be marked on its date, if they cannot. A membership moved since it was captured is
  * read as it stands now.
  */
 export async function capturedStudents(database: Queryable, session: AttendanceSession): Promise<CapturedStudent[]> {
-  const { rows } = await database.query<CapturedStudent>(
+  const { rows } = await database.query<{ studentPersonId: string; rostered: boolean; enrolled: boolean }>(
     `SELECT m.student_person_id AS "studentPersonId",
+       bool_or(m.first_date <= s.date AND coalesce(m.last_date, t.last_date) >= s.date) AS rostered,
        bool_or(
-         m.first_date <= s.date AND coalesce(m.last_date, t.last_date) >= s.date
-         AND EXISTS (
+         EXISTS (
            SELECT 1 FROM app.enrollment e
            JOIN app.school school ON school.id = e.school_id
            WHERE e.school_id = m.school_id AND e.student_person_id = m.student_person_id
              AND (e.ended_at IS NULL OR (e.ended_at AT TIME ZONE school.timezone)::date >= s.date)
          )
-       ) AS markable
+       ) AS enrolled
      FROM app.roster_snapshot_member captured
      JOIN app.attendance_session s ON s.school_id = captured.school_id AND s.id = captured.attendance_session_id
      JOIN app.roster_membership m ON m.school_id = captured.school_id AND m.id = captured.roster_membership_id
@@ -213,7 +216,10 @@ export async function capturedStudents(database: Queryable, session: AttendanceS
      GROUP BY m.student_person_id`,
     [session.schoolId, session.id],
   );
-  return rows;
+  return rows.map(({ studentPersonId, rostered, enrolled }) => ({
+    studentPersonId,
+    unmarkableBecause: !rostered ? "not_rostered_on_date" : !enrolled ? "enrollment_ended" : null,
+  }));
 }
 
 /**
