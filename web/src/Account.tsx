@@ -20,9 +20,11 @@ interface Held {
 
 /**
  * The account, and the Attendance of each linked Student the Guardian may read
- * it of, as one screen: the one refusal if any of it is refused. Which links
- * permit it is the account's own standing, read first; the server still
- * decides each read itself.
+ * it of. Which links permit it is the account's own standing, read first; the
+ * server still decides each read itself. The account being read, the session
+ * is live, so a Student whose read is refused, as one whose link ended a
+ * moment ago is, is left out alone: each linked Student stands on their own
+ * link, and one refused does not take the others, or the account, with it.
  */
 async function read(schoolId: string): Promise<ApiResult<Held>> {
   const answered = await api.account(schoolId);
@@ -35,13 +37,7 @@ async function read(schoolId: string): Promise<ApiResult<Held>> {
       .filter((linked) => linked.accessProfile.attendanceRead)
       .map((linked) => api.studentAttendance(schoolId, linked.student.id)),
   );
-  const linkedAttendance: StudentAttendance[] = [];
-  for (const each of attendance) {
-    if (!each.ok) {
-      return { ok: false };
-    }
-    linkedAttendance.push(each.body.studentAttendance);
-  }
+  const linkedAttendance = attendance.flatMap((each) => (each.ok ? [each.body.studentAttendance] : []));
   return { ok: true, body: { account, linkedAttendance } };
 }
 

@@ -39,7 +39,7 @@ import {
   type MarkRefusal,
   type ReadOnlyBecause,
 } from "./sessions.ts";
-import { classOfferingAttendance, classOfferingIdsAttendedBy } from "./totals.ts";
+import { classOfferingAttendance, studentAttendance } from "./totals.ts";
 
 /**
  * The most marks one save carries. A class of any real size fits well inside
@@ -264,32 +264,13 @@ export function registerAttendanceRoutes(app: FastifyInstance, database: Databas
       const personId = params["personId"]!;
       const student = authorizeReadAttendanceOfStudent(actor, personId, await findPerson(database, personId));
       const today = (await schoolDateAt(database, { schoolId: student.schoolId, at: await transactionTime(database) }))!;
-      const attended = await classOfferingIdsAttendedBy(database, {
+      const own = await studentAttendance(database, {
         schoolId: student.schoolId,
         studentPersonId: student.id,
+        offerings: await classOfferingsInSchool(database, student.schoolId),
+        today,
       });
-      const offerings = (await classOfferingsInSchool(database, student.schoolId)).filter((offering) =>
-        attended.has(offering.id),
-      );
-      // Listed in Term order: the Terms reversed, keeping each Term's Courses in order.
-      const terms = [...new Set(offerings.map((offering) => offering.term.id))].reverse();
-      offerings.sort((a, b) => terms.indexOf(a.term.id) - terms.indexOf(b.term.id));
-      const classOfferings = [];
-      for (const offering of offerings) {
-        const { dates, students } = await classOfferingAttendance(database, {
-          offering,
-          today,
-          studentPersonId: student.id,
-        });
-        const counted = new Set(dates.filter((date) => date.instructional).map((date) => date.date));
-        const { rosterMemberships, attendance, totals } = students[0]!;
-        classOfferings.push({
-          ...presentOffering(offering),
-          rosterMemberships,
-          attendance: attendance.map(({ date, status }) => ({ date, status, counted: counted.has(date) })),
-          totals,
-        });
-      }
+      const classOfferings = own.map(({ offering, ...rest }) => ({ ...presentOffering(offering), ...rest }));
       return {
         studentAttendance: {
           student: { id: student.id, displayName: student.displayName },

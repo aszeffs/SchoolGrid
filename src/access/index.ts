@@ -585,6 +585,11 @@ function isLinkedTo(actor: Actor, student: Person): boolean {
   return standingOf.get(actor)?.linkedStudents.has(student.id) ?? false;
 }
 
+/** Whether the actor's link to this Student is in force and its Access profile grants attendance read. */
+function mayReadAttendanceThroughLink(actor: Actor, student: Person): boolean {
+  return standingOf.get(actor)?.linkedStudents.get(student.id)?.attendanceRead ?? false;
+}
+
 function isEnrolled(actor: Actor): boolean {
   return standingOf.get(actor)?.enrolled ?? false;
 }
@@ -1035,7 +1040,7 @@ export function authorizeReadAttendanceOfStudent(actor: Actor, personId: string,
     outOfReach(actor, target) ??
     (holds(actor, "school_administrator") ||
     target!.id === actor.person.id ||
-    standingOf.get(actor)?.linkedStudents.get(target!.id)?.attendanceRead === true
+    mayReadAttendanceThroughLink(actor, target!)
       ? null
       : "forbidden");
   if (reason !== null) {

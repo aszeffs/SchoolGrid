@@ -96,14 +96,31 @@ export async function classOfferingAttendance(
   };
 }
 
+/** One Student's part in one Class Offering, each mark saying whether it counts toward the totals. */
+export interface OwnAttendance<O> {
+  offering: O;
+  rosterMemberships: RosteredBounds[];
+  attendance: { date: SchoolDate; status: AttendanceStatus; counted: boolean }[];
+  totals: AttendanceTotals;
+}
+
 /**
- * The Class Offerings a Student was ever rostered in, or holds Attendance in:
- * those whose Attendance is theirs to be read.
+ * One Student's Attendance and totals up to the School's today in each of
+ * these Class Offerings they were ever rostered in or marked in, the latest
+ * Term first and each Term's offerings in the order given. `offerings` are
+ * the School's, listed in Term order.
  */
-export async function classOfferingIdsAttendedBy(
+export async function studentAttendance<
+  O extends { id: string; schoolId: string; term: { id: string; firstDate: SchoolDate; lastDate: SchoolDate } },
+>(
   database: Queryable,
-  { schoolId, studentPersonId }: { schoolId: string; studentPersonId: string },
-): Promise<Set<string>> {
+  {
+    schoolId,
+    studentPersonId,
+    offerings,
+    today,
+  }: { schoolId: string; studentPersonId: string; offerings: readonly O[]; today: SchoolDate },
+): Promise<OwnAttendance<O>[]> {
   const { rows } = await database.query<{ classOfferingId: string }>(
     `SELECT class_offering_id AS "classOfferingId" FROM app.roster_membership
      WHERE school_id = $1 AND student_person_id = $2
@@ -112,7 +129,25 @@ export async function classOfferingIdsAttendedBy(
      WHERE school_id = $1 AND student_person_id = $2`,
     [schoolId, studentPersonId],
   );
-  return new Set(rows.map((row) => row.classOfferingId));
+  const attended = new Set(rows.map((row) => row.classOfferingId));
+  const held = offerings.filter((offering) => attended.has(offering.id));
+  const terms = [...new Set(held.map((offering) => offering.term.id))].reverse();
+  // Stable, so each Term keeps its offerings in the order given.
+  held.sort((a, b) => terms.indexOf(a.term.id) - terms.indexOf(b.term.id));
+  const own: OwnAttendance<O>[] = [];
+  for (const offering of held) {
+    const { dates, students } = await classOfferingAttendance(database, { offering, today, studentPersonId });
+    const counted = new Set(dates.filter((date) => date.instructional).map((date) => date.date));
+    // Rostered or marked in it, so they are among its Students.
+    const { rosterMemberships, attendance, totals } = students[0]!;
+    own.push({
+      offering,
+      rosterMemberships,
+      attendance: attendance.map(({ date, status }) => ({ date, status, counted: counted.has(date) })),
+      totals,
+    });
+  }
+  return own;
 }
 
 /**
