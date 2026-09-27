@@ -85,7 +85,7 @@ describe("School settings", () => {
 
       expect(response.status).toBe(200);
       const { settings, timezones } = response.body as { settings: unknown; timezones: string[] };
-      expect(settings).toEqual({ timezone: "America/New_York", timezoneFixed: false });
+      expect(settings).toEqual({ timezone: "America/New_York", timezoneFixed: false, attendanceWindow: 7 });
       expect(timezones).toEqual(expect.arrayContaining(["America/New_York", "Asia/Manila", "Europe/London", "UTC"]));
       expect(timezones).toEqual([...timezones].sort());
     });
@@ -98,7 +98,9 @@ describe("School settings", () => {
       const response = await world.alice.patch("/settings", { timezone: "Europe/London" });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ settings: { timezone: "Europe/London", timezoneFixed: false } });
+      expect(response.body).toEqual({
+        settings: { timezone: "Europe/London", timezoneFixed: false, attendanceWindow: 7 },
+      });
       expect(await timezoneOf(world.alice)).toBe("Europe/London");
       expect(await trailOf(world.alice, "school.settings_changed")).toEqual([
         {
@@ -148,7 +150,7 @@ describe("School settings", () => {
       ["a timezone padded with spaces", { timezone: " Europe/London" }],
       ["an empty timezone", { timezone: "" }],
       ["a timezone that is not text", { timezone: -5 }],
-      ["no timezone at all", {}],
+      ["no setting at all", {}],
       ["a field there is no setting for", { timezone: "Europe/London", name: "Renamed" }],
       ["a body that is not an object", ["Europe/London"]],
     ])("rejects %s, changing nothing", async (_case, body) => {
@@ -198,6 +200,175 @@ describe("School settings", () => {
       await expect(database.query("DELETE FROM app.school WHERE id = $1", [world.westbrookId])).rejects.toThrow(
         /permission denied/,
       );
+    });
+  });
+
+  describe("the Attendance window", () => {
+    async function windowOf(admin: TestClient): Promise<number> {
+      const response = await admin.get("/settings");
+      expect(response.status).toBe(200);
+      return (response.body as { settings: { attendanceWindow: number } }).settings.attendanceWindow;
+    }
+
+    /** The School date `days` after this one, or before it when `days` is negative. */
+    function shifted(date: string, days: number): string {
+      const moved = new Date(`${date}T00:00:00Z`);
+      moved.setUTCDate(moved.getUTCDate() + days);
+      return moved.toISOString().slice(0, 10);
+    }
+
+    /** An Academic Year in which every day from 90 days ago to 30 days ahead is an Instructional day. */
+    async function everyDayInSession(admin: TestClient): Promise<{ id: string; today: string }> {
+      const today = ((await admin.get("/school-date")).body as { schoolDate: string }).schoolDate;
+      const response = await admin.post("/academic-years", {
+        name: "Every day",
+        firstDate: shifted(today, -90),
+        lastDate: shifted(today, 30),
+        weekdays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+      });
+      expect(response.status).toBe(201);
+      return { id: (response.body as { academicYear: { id: string } }).academicYear.id, today };
+    }
+
+    async function previewOf(admin: TestClient, attendanceWindow: number) {
+      const response = await admin.get(`/settings/attendance-window-preview?attendanceWindow=${attendanceWindow}`);
+      expect(response.status).toBe(200);
+      return response.body;
+    }
+
+    it("lets a School Administrator change it, recording the value before and after", async () => {
+      const world = await arrange();
+
+      const response = await world.alice.patch("/settings", { attendanceWindow: 3, reason: "Policy changed" });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        settings: { timezone: "America/New_York", timezoneFixed: false, attendanceWindow: 3 },
+      });
+      expect(await windowOf(world.alice)).toBe(3);
+      expect(await windowOf(world.bob)).toBe(7);
+      expect(await trailOf(world.alice, "school.settings_changed")).toEqual([
+        expect.objectContaining({
+          actorPersonId: world.aliceId,
+          target: { type: "school", id: world.northsideId },
+          reason: "Policy changed",
+          before: { attendanceWindow: 7 },
+          after: { attendanceWindow: 3 },
+        }),
+      ]);
+    });
+
+    it("accepts its bounds, 0 and 60 days", async () => {
+      const world = await arrange();
+
+      for (const days of [0, 60]) {
+        const response = await world.alice.patch("/settings", { attendanceWindow: days });
+
+        expect(response.status).toBe(200);
+        expect(await windowOf(world.alice)).toBe(days);
+      }
+    });
+
+    it("records a change to both settings at once as one Audit record", async () => {
+      const world = await arrange();
+
+      await world.alice.patch("/settings", { timezone: "Europe/London", attendanceWindow: 10 });
+
+      expect(await trailOf(world.alice, "school.settings_changed")).toEqual([
+        expect.objectContaining({
+          before: { timezone: "America/New_York", attendanceWindow: 7 },
+          after: { timezone: "Europe/London", attendanceWindow: 10 },
+        }),
+      ]);
+    });
+
+    it("records nothing for a change stating the window the School already has", async () => {
+      const world = await arrange();
+
+      const response = await world.alice.patch("/settings", { attendanceWindow: 7 });
+
+      expect(response.status).toBe(200);
+      expect(await trailOf(world.alice, "school.settings_changed")).toEqual([]);
+    });
+
+    it("can still change once the timezone is fixed", async () => {
+      const world = await arrange();
+      await everyDayInSession(world.alice);
+
+      const response = await world.alice.patch("/settings", { timezone: "America/New_York", attendanceWindow: 14 });
+
+      expect(response.status).toBe(200);
+      expect(await windowOf(world.alice)).toBe(14);
+    });
+
+    it("rejects a window that is no whole number of days from 0 to 60, changing nothing", async () => {
+      const world = await arrange();
+
+      for (const attendanceWindow of [-1, 61, 2.5, "7", null]) {
+        const response = await world.alice.patch("/settings", { attendanceWindow });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ status: "invalid_request" });
+      }
+      expect(await windowOf(world.alice)).toBe(7);
+      expect(await trailOf(world.alice, "school.settings_changed")).toEqual([]);
+    });
+
+    it("refuses a window outside its bounds even when written directly", async () => {
+      const world = await arrange();
+
+      await expect(
+        server().database.query("UPDATE app.school SET attendance_window = 61 WHERE id = $1", [world.northsideId]),
+      ).rejects.toThrow(/attendance_window/);
+    });
+
+    describe("previewing a change", () => {
+      it("counts the Instructional days a narrower or wider window closes or opens", async () => {
+        const world = await arrange();
+        await everyDayInSession(world.alice);
+
+        // From 7 days back to 3: the 7th, 6th, 5th and 4th days back close.
+        expect(await previewOf(world.alice, 3)).toEqual({ opens: 0, closes: 4 });
+        expect(await previewOf(world.alice, 0)).toEqual({ opens: 0, closes: 7 });
+        expect(await previewOf(world.alice, 10)).toEqual({ opens: 3, closes: 0 });
+        expect(await previewOf(world.alice, 7)).toEqual({ opens: 0, closes: 0 });
+      });
+
+      it("counts only Instructional days, from the window the School has now", async () => {
+        const world = await arrange();
+        const { id, today } = await everyDayInSession(world.alice);
+        await world.alice.post(`/academic-years/${id}/exceptions`, { date: shifted(today, -4), instructional: false });
+        await world.alice.patch("/settings", { attendanceWindow: 2 });
+
+        // The 3rd to the 7th days back, less the 4th.
+        expect(await previewOf(world.alice, 7)).toEqual({ opens: 4, closes: 0 });
+      });
+
+      it("counts nothing in a School with no Academic Year, and changes nothing", async () => {
+        const world = await arrange();
+
+        expect(await previewOf(world.alice, 60)).toEqual({ opens: 0, closes: 0 });
+        expect(await windowOf(world.alice)).toBe(7);
+      });
+
+      it("rejects a window that is no whole number of days from 0 to 60", async () => {
+        const world = await arrange();
+
+        for (const query of [
+          "attendanceWindow=61",
+          "attendanceWindow=-1",
+          "attendanceWindow=2.5",
+          "attendanceWindow=07",
+          "attendanceWindow=soon",
+          "",
+          "attendanceWindow=3&attendanceWindow=4",
+        ]) {
+          const response = await world.alice.get(`/settings/attendance-window-preview?${query}`);
+
+          expect(response.status, query).toBe(400);
+          expect(response.body).toEqual({ status: "invalid_request" });
+        }
+      });
     });
   });
 
@@ -304,6 +475,24 @@ describe("School settings", () => {
       ["a Guardian reading the settings", (w: World) => w.gina.get("/settings")],
       ["a Guardian changing the timezone", (w: World) => w.gina.patch("/settings", { timezone: "UTC" })],
       ["a Guardian sending a malformed change", (w: World) => w.gina.patch("/settings", { timezone: 5 })],
+      ["a Faculty member changing the Attendance window", (w: World) => w.frankie.patch("/settings", { attendanceWindow: 3 })],
+      [
+        "a Faculty member previewing an Attendance window",
+        (w: World) => w.frankie.get("/settings/attendance-window-preview?attendanceWindow=3"),
+      ],
+      ["a Student changing the Attendance window", (w: World) => w.sam.patch("/settings", { attendanceWindow: 3 })],
+      [
+        "a Guardian previewing a malformed Attendance window",
+        (w: World) => w.gina.get("/settings/attendance-window-preview?attendanceWindow=soon"),
+      ],
+      [
+        "another School's Administrator changing the Attendance window",
+        (w: World) => w.bob.inSchool(w.northsideId).patch("/settings", { attendanceWindow: 3 }),
+      ],
+      [
+        "another School's Administrator previewing an Attendance window",
+        (w: World) => w.bob.inSchool(w.northsideId).get("/settings/attendance-window-preview?attendanceWindow=3"),
+      ],
       ["a Faculty member asking the School date", (w: World) => w.frankie.get("/school-date?at=2026-03-08T12:00:00Z")],
       ["a Student asking the School date", (w: World) => w.sam.get("/school-date")],
       ["a Guardian asking the School date of a malformed instant", (w: World) => w.gina.get("/school-date?at=soon")],
@@ -324,7 +513,7 @@ describe("School settings", () => {
       ["reading the settings of a School that does not exist", (w: World) => w.bob.inSchool(ABSENT_ID).get("/settings")],
     ] as const)("refuses %s exactly as an absent Person is refused, changing nothing", async (_case, attempt) => {
       const world = await arrange();
-      const rows = () => server().ownerDatabase.query("SELECT id, name, timezone FROM app.school ORDER BY id");
+      const rows = () => server().ownerDatabase.query("SELECT id, name, timezone, attendance_window FROM app.school ORDER BY id");
       const before = await rows();
 
       const refused = await attempt(world);

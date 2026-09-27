@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { api, type ReachedSchool, type SchoolSettings as Settings } from "./api.ts";
+import { MAX_ATTENDANCE_WINDOW } from "../../src/validation/bounds.ts";
+import { api, type AttendanceWindowChange, type ReachedSchool, type SchoolSettings as Settings } from "./api.ts";
+import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { useScreen } from "./screen.ts";
@@ -8,9 +10,16 @@ import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "School settings" };
 
+/** A window change waiting on its confirmation, with what the server says it would open or close. */
+interface ProposedWindowChange {
+  attendanceWindow: number;
+  change: AttendanceWindowChange;
+}
+
 /**
- * What a School Administrator configures about their School. For now that is
- * its timezone alone: where each of the School's days begins and ends.
+ * What a School Administrator configures about their School: its timezone,
+ * where each of the School's days begins and ends, and its Attendance window,
+ * how long after a School date its Attendance can still be recorded normally.
  *
  * The session names this page to a School Administrator only (ADR-0007), and
  * the server refuses anyone else with the one "not available" state.
@@ -18,8 +27,9 @@ const SHEET: SheetKind = { name: "School settings" };
 export function SchoolSettings({ school }: { school: ReachedSchool }) {
   const { schoolId } = school;
   const { showing, busy, change } = useScreen(schoolId, api.schoolSettings);
-  /** The timezone just set, said once so a screen reader hears the change land. */
+  /** What the last change did, said once so a screen reader hears it land. */
   const [changed, setChanged] = useState<string | null>(null);
+  const [proposed, setProposed] = useState<ProposedWindowChange | null>(null);
 
   const setTimezone = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -27,7 +37,34 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
     setChanged(null);
     const sent = await change(() => api.setTimezone(schoolId, timezone));
     if (sent.ok) {
-      setChanged(sent.body.settings.timezone);
+      setChanged(`The School now keeps its days in ${sent.body.settings.timezone}.`);
+    }
+  };
+
+  // Asks what the change would open or close before anything is sent, so the
+  // confirmation can say so.
+  const proposeAttendanceWindow = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const attendanceWindow = Number(new FormData(event.currentTarget).get("attendanceWindow"));
+    setChanged(null);
+    // Stating the window the School already has would change nothing.
+    if (showing.kind === "ready" && attendanceWindow === showing.records.settings.attendanceWindow) {
+      setChanged(`The Attendance window is already ${daysPhrase(attendanceWindow)}.`);
+      return;
+    }
+    const previewed = await api.previewAttendanceWindow(schoolId, attendanceWindow);
+    if (previewed.ok) {
+      setProposed({ attendanceWindow, change: previewed.body });
+    } else {
+      setChanged("That change is not available.");
+    }
+  };
+
+  const setAttendanceWindow = async (attendanceWindow: number) => {
+    const sent = await change(() => api.setAttendanceWindow(schoolId, attendanceWindow));
+    setProposed(null);
+    if (sent.ok) {
+      setChanged(`Attendance can now be recorded ${windowPhrase(sent.body.settings.attendanceWindow)}.`);
     }
   };
 
@@ -38,16 +75,57 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
       return <NotAvailable />;
     case "ready":
       return (
-        <SettingsSheet
-          schoolId={schoolId}
-          settings={showing.records.settings}
-          timezones={showing.records.timezones}
-          busy={busy}
-          changed={changed}
-          onSetTimezone={setTimezone}
-        />
+        <>
+          <SettingsSheet
+            schoolId={schoolId}
+            settings={showing.records.settings}
+            timezones={showing.records.timezones}
+            busy={busy}
+            changed={changed}
+            onSetTimezone={setTimezone}
+            onProposeAttendanceWindow={proposeAttendanceWindow}
+          />
+          {proposed !== null && (
+            <ConfirmDialog
+              title="Change the Attendance window?"
+              confirm="Change the window"
+              busy={busy}
+              onCancel={() => setProposed(null)}
+              onConfirm={() => void setAttendanceWindow(proposed.attendanceWindow)}
+            >
+              <p>
+                Attendance will be recorded and corrected normally {windowPhrase(proposed.attendanceWindow)}, instead
+                of {windowPhrase(showing.records.settings.attendanceWindow)}. The change applies to every School date
+                at once.
+              </p>
+              <p className="notice">{changePhrase(proposed.change)}</p>
+            </ConfirmDialog>
+          )}
+        </>
       );
   }
+}
+
+/** A count of days as a reader says it: "1 day", "7 days", "4 past Instructional days". */
+function daysPhrase(count: number, kind = ""): string {
+  return `${count} ${kind}${count === 1 ? "day" : "days"}`;
+}
+
+/** A window as a sentence says it: "on its School date only", "up to 7 days after its School date". */
+function windowPhrase(days: number): string {
+  return days === 0 ? "on its School date only" : `up to ${daysPhrase(days)} after its School date`;
+}
+
+/** What a window change does to the School dates already past, counted in Instructional days. */
+function changePhrase({ opens, closes }: AttendanceWindowChange): string {
+  const past = "past Instructional ";
+  if (opens > 0) {
+    return `This opens ${daysPhrase(opens, past)} to normal corrections again.`;
+  }
+  if (closes > 0) {
+    return `This closes ${daysPhrase(closes, past)}. Correcting their Attendance will then take a Correction request.`;
+  }
+  return "No past Instructional day opens or closes.";
 }
 
 function SettingsSheet({
@@ -57,6 +135,7 @@ function SettingsSheet({
   busy,
   changed,
   onSetTimezone,
+  onProposeAttendanceWindow,
 }: {
   schoolId: string;
   settings: Settings;
@@ -64,6 +143,7 @@ function SettingsSheet({
   busy: boolean;
   changed: string | null;
   onSetTimezone: (event: FormEvent<HTMLFormElement>) => void;
+  onProposeAttendanceWindow: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const legend = (
     <>
@@ -78,6 +158,10 @@ function SettingsSheet({
           Once the School&rsquo;s first Academic Year exists, the timezone is fixed, so no date already recorded can
           move to another day.
         </Key>
+        <Key term="Attendance window">
+          How many days after a School date Faculty can still record or correct its Attendance. After that, a
+          correction takes a Correction request.
+        </Key>
       </dl>
     </>
   );
@@ -88,9 +172,13 @@ function SettingsSheet({
       <dl className="facts">
         <dt>Timezone</dt>
         <dd>{settings.timezone}</dd>
+        <dt>Attendance window</dt>
+        <dd>
+          {settings.attendanceWindow === 0 ? "Same day only" : daysPhrase(settings.attendanceWindow)}
+        </dd>
       </dl>
       <p className="muted" role="status">
-        {changed === null ? "" : `The School now keeps its days in ${changed}.`}
+        {changed ?? ""}
       </p>
 
       {settings.timezoneFixed ? (
@@ -120,6 +208,31 @@ function SettingsSheet({
           </button>
         </form>
       )}
+
+      <form onSubmit={onProposeAttendanceWindow} aria-label="Change the Attendance window">
+        <h2>Change the Attendance window</h2>
+        <label>
+          Days after a School date
+          {/* Keyed on the window held, so the field resets to it once a change lands. */}
+          <input
+            key={settings.attendanceWindow}
+            type="number"
+            name="attendanceWindow"
+            required
+            min={0}
+            max={MAX_ATTENDANCE_WINDOW}
+            step={1}
+            defaultValue={settings.attendanceWindow}
+          />
+        </label>
+        <p className="muted">
+          From 0, the same day only, to {MAX_ATTENDANCE_WINDOW}. You see how many past days it opens or closes before
+          anything changes.
+        </p>
+        <button type="submit" disabled={busy}>
+          Review change
+        </button>
+      </form>
     </Sheet>
   );
 }

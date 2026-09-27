@@ -1,6 +1,6 @@
 import { isKnownTimezone, type SchoolDate } from "../calendar/index.ts";
 import type { Queryable } from "../db/transaction.ts";
-import { MAX_NAME_LENGTH, MAX_REASON_LENGTH } from "../validation/bounds.ts";
+import { MAX_ATTENDANCE_WINDOW, MAX_NAME_LENGTH, MAX_REASON_LENGTH } from "../validation/bounds.ts";
 import { InvalidRequest } from "./invalid-request.ts";
 
 /**
@@ -108,4 +108,22 @@ export async function timezoneFrom(database: Queryable, value: unknown): Promise
     throw new InvalidRequest("timezone must be an IANA timezone identifier the database knows");
   }
   return value;
+}
+
+const ATTENDANCE_WINDOW_RULE = `a whole number of days from 0 to ${MAX_ATTENDANCE_WINDOW}`;
+
+/** An Attendance window, from a body: a whole number of days from 0 to the bound. */
+export function attendanceWindowFrom(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_ATTENDANCE_WINDOW) {
+    throw new InvalidRequest(`${field} must be ${ATTENDANCE_WINDOW_RULE}`);
+  }
+  return value;
+}
+
+/** An Attendance window, from a query string: written in plain digits, with no sign or leading zero. */
+export function attendanceWindowFromQuery(value: unknown, field: string): number {
+  if (typeof value !== "string" || !/^(0|[1-9]\d{0,2})$/.test(value)) {
+    throw new InvalidRequest(`${field} must be ${ATTENDANCE_WINDOW_RULE}`);
+  }
+  return attendanceWindowFrom(Number(value), field);
 }
