@@ -50,7 +50,22 @@ export type ConflictDetail =
   /** Attendance is recorded for no School date after the School's today. */
   | { conflict: "after_today" }
   /** The School date's Attendance window has closed: a change needs a Correction request. */
-  | { conflict: "attendance_window_closed" };
+  | { conflict: "attendance_window_closed" }
+  /** No Roster membership of the Student's in the Class Offering covers the School date. */
+  | { conflict: "not_rostered_on_date" }
+  /** The Student's Enrollment had ended by the School date. */
+  | { conflict: "enrollment_ended" }
+  /** A Correction request would propose the value its target already holds. */
+  | { conflict: "unchanged" }
+  /** The Correction request has already been approved, rejected, or withdrawn. */
+  | { conflict: "not_pending" }
+  /**
+   * A School Administrator would decide their own Correction request while the
+   * School has another School Administrator to decide it.
+   */
+  | { conflict: "own_request" }
+  /** The Correction request's target no longer holds its before value: approving it would overwrite a newer one. */
+  | { conflict: "target_changed" };
 
 /**
  * Thrown by a handler whose caller was authorized and sent a well-formed

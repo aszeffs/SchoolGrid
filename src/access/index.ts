@@ -17,6 +17,7 @@ import { currentEnrollmentOf, hasOpenEnrollment, type Enrollment } from "./enrol
 import { guardianLinksHeldBy, linkedStudentProfiles, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 import {
   activeRoles,
+  countActiveHolders,
   ROLES,
   schoolIdsWithActiveMembership,
   type Membership,
@@ -1050,6 +1051,25 @@ export function authorizeReadAttendanceOfStudent(actor: Actor, personId: string,
 }
 
 /**
+ * The actor's Teaching assignment for this Class Offering that is active on
+ * the School's today, if they hold the Faculty role and one.
+ */
+async function currentTeachingAssignment(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string },
+): Promise<TeachingAssignment | undefined> {
+  if (!holds(actor, "faculty")) {
+    return undefined;
+  }
+  const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
+  return (await teachingAssignments.of(database, actor.person)).find(
+    ({ classOfferingId, firstDate, lastDate }) =>
+      classOfferingId === offering.id && firstDate <= today && (lastDate === null || today <= lastDate),
+  );
+}
+
+/**
  * Why the actor may not record a Class Offering's Attendance on a School date,
  * or null when they may, as far as who they are decides it: they need a
  * Teaching assignment for it that is currently active and covers that date
@@ -1066,13 +1086,7 @@ export async function recordingRefusal(
   offering: { id: string; schoolId: string },
   date: string,
 ): Promise<"not_teaching" | "not_taught_on_date" | null> {
-  const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
-  const current = holds(actor, "faculty")
-    ? (await teachingAssignments.of(database, actor.person)).find(
-        ({ classOfferingId, firstDate, lastDate }) =>
-          classOfferingId === offering.id && firstDate <= today && (lastDate === null || today <= lastDate),
-      )
-    : undefined;
+  const current = await currentTeachingAssignment(database, actor, offering);
   if (current === undefined) {
     return "not_teaching";
   }
@@ -1098,6 +1112,110 @@ export async function authorizeRecordAttendance<O extends { id: string; schoolId
     throw new Refused("forbidden", { type: "class_offering", id: offering.id });
   }
   return offering;
+}
+
+/**
+ * Returns the Class Offering the actor may raise a Correction request for,
+ * and refuses otherwise: any School Administrator, and a Faculty member
+ * currently teaching it, whatever date the request is for (CONTEXT.md:
+ * Correction request). One whose assignment has ended no longer speaks for
+ * it; whoever teaches it now does. Only for an offering the actor has already
+ * been permitted to read the Attendance of.
+ */
+export async function authorizeRaiseCorrectionRequest<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+): Promise<O> {
+  if (!holds(actor, "school_administrator") && (await currentTeachingAssignment(database, actor, offering)) === undefined) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
+ * Returns whose Correction requests the actor may list, and refuses otherwise:
+ * a School Administrator every one in the School, and anyone else who may
+ * raise one, or ever could, their own alone. `requestedByPersonId` is null for
+ * every requester.
+ */
+export function authorizeReadCorrectionRequests(actor: Actor): { schoolId: string; requestedByPersonId: string | null } {
+  if (holds(actor, "school_administrator")) {
+    return { schoolId: actor.schoolId, requestedByPersonId: null };
+  }
+  if (holds(actor, "faculty") || (standingOf.get(actor)?.taughtClassOfferingIds.size ?? 0) > 0) {
+    return { schoolId: actor.schoolId, requestedByPersonId: actor.person.id };
+  }
+  throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+}
+
+/**
+ * Returns the Correction request the actor may read, and refuses otherwise: a
+ * School Administrator of its School, and its requester. What they may do
+ * with it is asked of it next.
+ */
+export function authorizeReadCorrectionRequest<R extends { schoolId: string; requestedByPersonId: string }>(
+  actor: Actor,
+  correctionRequestId: string,
+  target: R | null,
+): R {
+  const reason =
+    outOfReach(actor, target) ??
+    (holds(actor, "school_administrator") || target!.requestedByPersonId === actor.person.id ? null : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "correction_request", id: correctionRequestId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Correction request the actor may approve or reject, and refuses
+ * otherwise: a School Administrator of its School. Whether it is their own is
+ * approverStanding's to say.
+ */
+export function authorizeDecideCorrectionRequest<R extends { schoolId: string }>(
+  actor: Actor,
+  correctionRequestId: string,
+  target: R | null,
+): R {
+  const reason = decideManageRelationships(actor, target);
+  if (reason !== null) {
+    throw new Refused(reason, { type: "correction_request", id: correctionRequestId });
+  }
+  return target!;
+}
+
+/**
+ * Whether a School Administrator permitted to decide a Correction request
+ * decides another's, or their own: which they may only as the School's one
+ * active School Administrator, and which is then marked self-approved
+ * (CONTEXT.md: Correction request).
+ */
+export async function approverStanding(
+  database: Queryable,
+  actor: Actor,
+  request: { requestedByPersonId: string },
+): Promise<"another" | "sole_administrator" | "own_request"> {
+  if (request.requestedByPersonId !== actor.person.id) {
+    return "another";
+  }
+  return (await countActiveHolders(database, actor.schoolId, "school_administrator")) === 1
+    ? "sole_administrator"
+    : "own_request";
+}
+
+/** Returns the Correction request the actor may withdraw, and refuses otherwise: only its requester may. */
+export function authorizeWithdrawCorrectionRequest<R extends { schoolId: string; requestedByPersonId: string }>(
+  actor: Actor,
+  correctionRequestId: string,
+  target: R | null,
+): R {
+  const reason =
+    outOfReach(actor, target) ?? (target!.requestedByPersonId === actor.person.id ? null : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "correction_request", id: correctionRequestId });
+  }
+  return target!;
 }
 
 /**

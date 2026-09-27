@@ -225,6 +225,15 @@ describe("Platform Administrator", () => {
     const rostered = await world.alice.post(`/class-offerings/${classOfferingId}/roster-memberships`, {
       personIds: [student.id],
     });
+      // Whether a School date is one the Student could have Attendance on turns on today's date, so the
+      // request is written as it would stand, not raised.
+      const { rows: corrections } = await server().ownerDatabase.query<{ id: string }>(
+        `INSERT INTO app.correction_request
+           (school_id, target_kind, student_person_id, class_offering_id, date, after_value, reason, requested_by_person_id)
+         VALUES ($1, 'attendance', $2, $3, '2026-09-01', 'present', 'Seen in the office', $4)
+         RETURNING id`,
+        [world.schoolId, student.id, classOfferingId, faculty.id],
+      );
       expect([
         enrolled.status,
         linked.status,
@@ -250,6 +259,7 @@ describe("Platform Administrator", () => {
         classOfferingId,
         teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
         rosterMembershipId: (rostered.body as { rosterMemberships: { id: string }[] }).rosterMemberships[0]!.id,
+        correctionRequestId: corrections[0]!.id,
       } as Record<string, string>;
     }
 
@@ -363,6 +373,9 @@ describe("Platform Administrator", () => {
           { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
           { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
           { method: "PATCH", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/attendance-session" },
+          { method: "GET", url: "/api/schools/:schoolId/correction-requests" },
+          { method: "POST", url: "/api/schools/:schoolId/correction-requests" },
+          { method: "PATCH", url: "/api/schools/:schoolId/correction-requests/:correctionRequestId" },
         ]),
       );
 
