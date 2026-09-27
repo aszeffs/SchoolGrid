@@ -1691,6 +1691,42 @@ dialog.slip::backdrop {
   margin-top: calc(var(--step) * 1.5);
 }
 
+/* A record held shut under what it details, such as a Term of days marked under their totals. */
+.disclosure {
+  margin-top: calc(var(--step) * 2);
+}
+
+.disclosure summary {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--step) * 0.75);
+  min-height: 2.5rem;
+  color: var(--action);
+  cursor: pointer;
+  font-size: var(--size-label);
+  font-weight: 600;
+  list-style: none;
+}
+
+.disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The switcher's chevron, pointing the way the record opens. */
+.disclosure summary::before {
+  content: "";
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--settle);
+}
+
+.disclosure[open] summary::before {
+  transform: rotate(45deg);
+}
+
 .not-built {
   margin-top: calc(var(--step) * 6);
   padding-top: calc(var(--step) * 2);

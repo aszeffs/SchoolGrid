@@ -395,6 +395,24 @@ export interface ClassOfferingAttendance {
   }[];
 }
 
+/**
+ * One Student's own Attendance and totals in each Class Offering they were
+ * rostered or marked in, the latest Term first. Nothing of any classmate's,
+ * nor who recorded each mark.
+ */
+export interface StudentAttendance {
+  student: { id: string; displayName: string };
+  /** The School's today, in its own timezone. */
+  today: string;
+  classOfferings: (ClassOffering & {
+    /** A null last date is open: it runs to the end of the Term. */
+    rosterMemberships: { firstDate: string; lastDate: string | null }[];
+    /** By date. One on a date no longer an Instructional day is shown, and not counted. */
+    attendance: { date: string; status: AttendanceStatus; counted: boolean }[];
+    totals: AttendanceTotals;
+  })[];
+}
+
 /** One mark a save refused while the rest applied, with the Attendance as it now stands. */
 export interface RefusedMark {
   studentPersonId: string;
@@ -676,6 +694,12 @@ export const api = {
     request<{ classOfferingAttendance: ClassOfferingAttendance }>(
       "GET",
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance`),
+    ),
+  /** One Student's own Attendance and totals: their own, a linked Student's, or any to a School Administrator. */
+  studentAttendance: (schoolId: string, personId: string) =>
+    request<{ studentAttendance: StudentAttendance }>(
+      "GET",
+      inSchool(schoolId, `/persons/${encodeURIComponent(personId)}/attendance`),
     ),
   /** The session on this date, or on the School's today when none is named. */
   attendanceSession: (schoolId: string, classOfferingId: string, date: string | null) =>

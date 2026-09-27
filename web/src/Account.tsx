@@ -1,20 +1,54 @@
-import { api, type OwnAccount, type ReachedSchool, type Role } from "./api.ts";
+import { api, type ApiResult, type OwnAccount, type ReachedSchool, type Role, type StudentAttendance } from "./api.ts";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { RecordList } from "./RecordList.tsx";
 import { ROLE_NAMES, teaches } from "./roles.ts";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
+import { StudentAttendanceKeys, StudentAttendanceRecord } from "./StudentAttendance.tsx";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "Your account" };
 
 const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
+interface Held {
+  account: OwnAccount;
+  /** Each linked Student's Attendance whose link's Access profile grants attendance read, in the links' order. */
+  linkedAttendance: StudentAttendance[];
+}
+
+/**
+ * The account, and the Attendance of each linked Student the Guardian may read
+ * it of, as one screen: the one refusal if any of it is refused. Which links
+ * permit it is the account's own standing, read first; the server still
+ * decides each read itself.
+ */
+async function read(schoolId: string): Promise<ApiResult<Held>> {
+  const answered = await api.account(schoolId);
+  if (!answered.ok) {
+    return answered;
+  }
+  const { account } = answered.body;
+  const attendance = await Promise.all(
+    account.linkedStudents
+      .filter((linked) => linked.accessProfile.attendanceRead)
+      .map((linked) => api.studentAttendance(schoolId, linked.student.id)),
+  );
+  const linkedAttendance: StudentAttendance[] = [];
+  for (const each of attendance) {
+    if (!each.ok) {
+      return { ok: false };
+    }
+    linkedAttendance.push(each.body.studentAttendance);
+  }
+  return { ok: true, body: { account, linkedAttendance } };
+}
+
 /**
  * What one Person holds in one School: who they are here, the memberships they
  * hold, the Enrollment they hold as a Student, and the Students they reach as
- * a Guardian.
+ * a Guardian, with the Attendance of each whose link permits it.
  *
  * Every page for a Faculty member, a Student and a Guardian was a list of
  * other Persons until this one; this is where they land instead. It reads,
@@ -22,7 +56,7 @@ const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
  * School Administrator's to change, and this page offers no way to.
  */
 export function Account({ school }: { school: ReachedSchool }) {
-  const { showing } = useScreen(school.schoolId, api.account);
+  const { showing } = useScreen(school.schoolId, read);
 
   switch (showing.kind) {
     case "loading":
@@ -30,7 +64,7 @@ export function Account({ school }: { school: ReachedSchool }) {
     case "not-available":
       return <NotAvailable />;
     case "ready":
-      return <AccountSheet account={showing.records.account} school={school} />;
+      return <AccountSheet {...showing.records} school={school} />;
   }
 }
 
@@ -39,7 +73,7 @@ export function Account({ school }: { school: ReachedSchool }) {
  * roles are the session's, already read by the shell; the Enrollment and the
  * links are what only this page asks for.
  */
-function AccountSheet({ account, school }: { account: OwnAccount; school: ReachedSchool }) {
+function AccountSheet({ account, linkedAttendance, school }: Held & { school: ReachedSchool }) {
   const holds = (role: Role) => school.roles.includes(role);
   const legend = (
     <>
@@ -61,6 +95,7 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
           </Key>
         )}
       </dl>
+      {linkedAttendance.length > 0 && <StudentAttendanceKeys />}
     </>
   );
 
@@ -89,13 +124,31 @@ function AccountSheet({ account, school }: { account: OwnAccount; school: Reache
         </section>
       )}
 
-      {/* Faculty and Students have their Class Offerings now; Attendance and Term results are still to come for Guardians. */}
+      {holds("guardian") && linkedAttendance.length > 0 && (
+        <section>
+          <h2>Attendance</h2>
+          {linkedAttendance.map((attendance) => (
+            <section key={attendance.student.id}>
+              <h3>{attendance.student.displayName}</h3>
+              <StudentAttendanceRecord
+                schoolId={school.schoolId}
+                attendance={attendance}
+                level="h4"
+                opensOfferings={false}
+                empty={`${attendance.student.displayName} is on no Class Offering’s roster yet, so no Attendance is held for them.`}
+              />
+            </section>
+          ))}
+        </section>
+      )}
+
+      {/* Term results are still to come for Guardians. */}
       {holds("guardian") && (
         <section className="not-built">
           <h2>Not built yet</h2>
           <p>
-            Attendance and Term results are not built yet, so there is nothing of either to show you here. What this
-            School holds for you today is above, in full.
+            Term results are not built yet, so there are none to show you here. What this School holds for you today
+            is above, in full.
           </p>
         </section>
       )}
