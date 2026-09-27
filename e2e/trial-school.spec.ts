@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { acknowledgeIssuedLink, issueInvitationFor } from "./app.ts";
+import { acknowledgeIssuedLink, issueInvitationFor, recordRows } from "./app.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
@@ -33,6 +33,15 @@ async function startTrial(page: Page): Promise<string> {
 /** Waits for the sheet to finish being read, which strikes it afresh and would close a list opened meanwhile. */
 async function settled(page: Page) {
   await expect(page.getByRole("main")).not.toHaveAttribute("aria-busy", "true");
+}
+
+/** Changes role from the switcher, and waits to land on the role's home. */
+async function viewAs(page: Page, name: string) {
+  await settled(page);
+  await page.getByRole("banner").locator("summary", { hasText: /^Viewing as / }).click();
+  await page.getByRole("list", { name: "View this School as" }).getByRole("button", { name }).click();
+  await expect(page.getByRole("banner").locator("summary")).toHaveText(`Viewing as ${name}`);
+  await settled(page);
 }
 
 function banner(page: Page) {
@@ -76,6 +85,51 @@ test.describe("in a Trial School", () => {
       await expect(page.getByRole("list", { name: /^Your roles in / })).toHaveText(name);
       await expect(banner(page)).toContainText(BANNER);
     }
+  });
+
+  test("finds Attendance already there in every role, and a request waiting for the School Administrator", async ({ page }) => {
+    const schoolId = await startTrial(page);
+    const { correctionRequests } = (await (await page.request.get(`/api/schools/${schoolId}/correction-requests`)).json()) as {
+      correctionRequests: { classOffering: { label: string; course: { name: string }; term: { name: string } } }[];
+    };
+    // A Term's first day has no day behind it to have been taken.
+    test.skip(correctionRequests.length === 0, "the trial started on its Term's first day");
+    const { classOffering } = correctionRequests[0]!;
+    const offeringName = `${classOffering.course.name}, ${classOffering.label}`;
+    // Class Offering or Student, then Present, Tardy, Excused absence, Unexcused absence, Absent pending review, and Not recorded.
+    const pendingReview = (row: ReturnType<typeof recordRows>) => row.getByRole("cell").nth(5);
+    const pending = () => recordRows(page, "Pending Correction requests").filter({ hasText: "Avery Castellano" });
+
+    await settled(page);
+    await page.getByRole("link", { name: "Correction requests" }).first().click();
+    await expect(pending()).toContainText("Sam Achterberg");
+    await expect(pending().getByRole("button", { name: /^Approve/ })).toBeVisible();
+    // Its request opens the session it names.
+    await pending().getByRole("link").first().click();
+    await expect(page.getByRole("heading", { level: 1, name: offeringName })).toBeVisible();
+    await expect(page.getByRole("main")).toContainText("Avery Castellano");
+
+    await viewAs(page, "Faculty");
+    await page.getByRole("link", { name: "Correction requests" }).first().click();
+    // Their own, which they may withdraw and not approve.
+    await expect(pending().getByRole("button", { name: /^Withdraw/ })).toBeVisible();
+    await pending().getByRole("link").first().click();
+    await expect(page.getByRole("heading", { level: 1, name: offeringName })).toBeVisible();
+    await expect(page.getByRole("main")).toContainText("Avery Castellano");
+    await page.getByRole("link", { name: offeringName }).first().click();
+    const totals = recordRows(page, "Attendance totals");
+    await expect(pendingReview(totals.filter({ hasText: "Jamie Lindqvist" }))).toHaveText("1");
+
+    await viewAs(page, "Student");
+    await page.getByRole("link", { name: "Your attendance" }).click();
+    const own = new RegExp(`^Jamie Lindqvist's Attendance totals in ${classOffering.term.name}, `);
+    const ownRow = page.getByRole("table", { name: own }).getByRole("row").filter({ hasText: offeringName });
+    await expect(pendingReview(ownRow)).toHaveText("1");
+
+    await viewAs(page, "Guardian");
+    await expect(page.getByRole("heading", { level: 2, name: "Attendance", exact: true })).toBeVisible();
+    const linkedRow = page.getByRole("table", { name: own }).getByRole("row").filter({ hasText: offeringName });
+    await expect(pendingReview(linkedRow)).toHaveText("1");
   });
 
   test("starts over in a fresh School, and the old Session is over", async ({ page, context, playwright }) => {
