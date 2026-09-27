@@ -64,6 +64,18 @@ export interface CapturedStudent {
  */
 export type DateProblem = "not_instructional_day" | "after_today" | "window_closed";
 
+/** Why a session is read-only for the actor, the date's own reasons first. */
+export type ReadOnlyBecause = DateProblem | "not_teaching" | "not_taught_on_date";
+
+/** Why one mark in a save was refused while the rest applied. */
+export type MarkRefusal =
+  /** The stored value is not the one the caller loaded: someone changed it since. */
+  | "stale"
+  /** An Absent-pending-review is resolved only through a Correction request. */
+  | "absent_pending_review"
+  /** The Student's Roster membership no longer covers the date, or their Enrollment had ended by then. */
+  | "not_markable";
+
 const SESSION_COLUMNS = `id, school_id AS "schoolId", class_offering_id AS "classOfferingId",
   to_char(date, 'YYYY-MM-DD') AS date, opened_by_person_id AS "openedByPersonId", opened_at AS "openedAt"`;
 

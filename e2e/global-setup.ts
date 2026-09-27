@@ -7,7 +7,7 @@ import { provisionSchool } from "../src/platform/index.ts";
 import { SEEDED, type Seeded } from "./seeded.ts";
 
 /** The timezone each seeded School keeps, in the order the Schools are named. */
-const SCHOOL_TIMEZONES = ["America/New_York", "Europe/London"];
+const SCHOOL_TIMEZONES = ["America/New_York", "Europe/London", "UTC"];
 
 /**
  * Arranges what the browser suite signs in as, directly in the database the
@@ -30,7 +30,9 @@ export default async function globalSetup(): Promise<void> {
     const suffix = randomUUID().slice(0, 8);
     const credentials = { username: `alice-${suffix}`, password: `correct horse battery ${suffix}` };
     const account = await createUserAccount(database, credentials);
-    const schools = [`Northside ${suffix}`, `Southside ${suffix}`];
+    // The third is the Attendance specs' own, so a year around today there
+    // meets no other spec's.
+    const schools = [`Northside ${suffix}`, `Southside ${suffix}`, `Westside ${suffix}`];
     const schoolIds: string[] = [];
     for (const [index, name] of schools.entries()) {
       const provisioned = await provisionSchool(database, {

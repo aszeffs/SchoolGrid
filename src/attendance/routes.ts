@@ -30,6 +30,8 @@ import {
   type Attendance,
   type AttendanceStatus,
   type DateProblem,
+  type MarkRefusal,
+  type ReadOnlyBecause,
 } from "./sessions.ts";
 
 /**
@@ -38,18 +40,6 @@ import {
  * unbounded list.
  */
 const MAX_MARKS_AT_ONCE = 200;
-
-/** Why a session is read-only for the actor, the date's own reasons first, or null when they may record it. */
-type ReadOnlyBecause = DateProblem | "not_teaching" | "not_taught_on_date";
-
-/** Why one mark in a save was refused while the rest applied. */
-type MarkRefusal =
-  /** The stored value is not the one the caller loaded: someone changed it since. */
-  | "stale"
-  /** An Absent-pending-review is resolved only through a Correction request. */
-  | "absent_pending_review"
-  /** The Student's Roster membership no longer covers the date, or their Enrollment had ended by then. */
-  | "not_markable";
 
 interface Mark {
   studentPersonId: string;
