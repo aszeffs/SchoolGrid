@@ -69,6 +69,13 @@ export function formatSchoolDate(date: string): string {
   return DAY.format(localDay(date));
 }
 
+/** A School date as a column head holds it: the weekday, and the day of the month. */
+export function formatSchoolDateShort(date: string): string {
+  return SHORT_DAY.format(localDay(date));
+}
+
+const SHORT_DAY = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" });
+
 /** The School date after this one, as a date field writes it. */
 export function schoolDateAfter(date: string): string {
   return dayAfter(localDay(date));

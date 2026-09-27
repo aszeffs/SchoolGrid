@@ -1,5 +1,6 @@
 import type { Role } from "../../src/access/roles.ts";
 import type { AttendanceWindowChange } from "../../src/attendance/index.ts";
+import type { AttendanceTotals, Tally } from "../../src/attendance/totals.ts";
 import type {
   AttendanceStatus,
   MarkRefusal,
@@ -343,7 +344,7 @@ export interface RosteredClassOffering extends ClassOffering {
   rosterMemberships: { id: string; firstDate: string; lastDate: string | null }[];
 }
 
-export type { AttendanceStatus, MarkRefusal, ReadOnlyBecause, UnmarkableBecause };
+export type { AttendanceStatus, AttendanceTotals, MarkRefusal, ReadOnlyBecause, Tally, UnmarkableBecause };
 
 /** One Student's Attendance as a session shows it: the status, and who last recorded it when. */
 export interface Attendance {
@@ -371,6 +372,26 @@ export interface AttendanceSession {
     /** Null for a Student who can be marked on this date. */
     unmarkableBecause: UnmarkableBecause | null;
     attendance: Attendance | null;
+  }[];
+}
+
+/**
+ * A Class Offering's Attendance for its Term up to the School's today: the
+ * dates it is shown on, and each Student ever rostered or marked in it, with
+ * their marks and Attendance totals.
+ */
+export interface ClassOfferingAttendance {
+  classOfferingId: string;
+  /** The School's today, in its own timezone. */
+  today: string;
+  /** The Term's Instructional days so far, and any other date holding a mark, which is not counted. */
+  dates: { date: string; instructional: boolean }[];
+  students: {
+    person: { id: string; displayName: string };
+    /** A null last date is open: it runs to the end of the Term. */
+    rosterMemberships: { firstDate: string; lastDate: string | null }[];
+    attendance: (Attendance & { date: string })[];
+    totals: AttendanceTotals;
   }[];
 }
 
@@ -650,6 +671,12 @@ export const api = {
     request<{ course: Course }>("DELETE", inSchool(schoolId, `/courses/${encodeURIComponent(courseId)}`)),
   classOfferings: (schoolId: string) =>
     request<{ classOfferings: ListedClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
+  /** Every mark by date, and each Student's Attendance totals, for the offering's Term so far. */
+  classOfferingAttendance: (schoolId: string, classOfferingId: string) =>
+    request<{ classOfferingAttendance: ClassOfferingAttendance }>(
+      "GET",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance`),
+    ),
   /** The session on this date, or on the School's today when none is named. */
   attendanceSession: (schoolId: string, classOfferingId: string, date: string | null) =>
     request<{ attendanceSession: AttendanceSession }>(

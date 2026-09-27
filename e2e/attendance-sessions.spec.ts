@@ -7,7 +7,8 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 /**
  * Attendance sessions: a Faculty member taking a class's attendance with Mark
  * all Present and one exception, a co-teacher's change shown in place rather
- * than overwritten, and the session read-only for a School Administrator.
+ * than overwritten, and the session read-only for a School Administrator;
+ * then the marks by date and each Student's totals on the class's page.
  * Which marks and dates are refused, and what is audited, is the HTTP suite's
  * to assert; this is about the page doing it and saying what it did.
  *
@@ -162,4 +163,27 @@ test("a Faculty member takes a class's attendance with Mark all Present and one 
   await page.reload();
   await expect(status(present)).toHaveValue("tardy");
   await expect(status(absent)).toHaveValue("unexcused_absence");
+
+  // The class's page shows the marks by date and each Student's totals, at a phone's width in the dark.
+  await page.getByRole("link", { name: courseName }).click();
+  const totals = recordRows(page, "Attendance totals");
+  // Student, then Present, Tardy, Excused absence, Unexcused absence, Absent pending review, and Not recorded.
+  const counted = /^\d+$/;
+  await expect(totals.filter({ hasText: present }).getByRole("cell")).toHaveText([present, "0", "1", "0", "0", "0", counted]);
+  await expect(totals.filter({ hasText: absent }).getByRole("cell")).toHaveText([absent, "0", "0", "0", "1", "0", counted]);
+  const register = page.getByRole("region", { name: "By date" });
+  await expect(register.getByRole("row", { name: new RegExp(present) })).toContainText("Tardy");
+  await expectNoSidewaysScroll(page);
+  await audit(page);
+
+  // And wide, in the light, where the register scrolls from the keyboard and a date opens its session.
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register.focus();
+  await expect(register).toBeFocused();
+  await audit(page);
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/attendance/${dates.firstDate}$`));
+  await expect(page.getByRole("heading", { level: 1, name: courseName })).toBeVisible();
 });
