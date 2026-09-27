@@ -184,8 +184,17 @@ function serveAttendance(mark: Attendance, named: (id: string) => Named): Served
   return { status: mark.status, recordedBy: named(mark.recordedByPersonId), recordedAt: mark.recordedAt.toISOString() };
 }
 
-/** Records the change of an existing mark. A first mark is not audited: it names its own recorder and time. */
-async function recordChange(transaction: Queryable, actor: Actor, before: Attendance, after: Attendance) {
+/**
+ * Records the change of an existing mark, for the reason given, if any. A
+ * first mark is not audited: it names its own recorder and time.
+ */
+export async function recordChange(
+  transaction: Queryable,
+  actor: Actor,
+  before: Attendance,
+  after: Attendance,
+  reason: string | null = null,
+) {
   const valuesOf = ({ studentPersonId, classOfferingId, date, status }: Attendance) => ({
     studentPersonId,
     classOfferingId,
@@ -197,7 +206,7 @@ async function recordChange(transaction: Queryable, actor: Actor, before: Attend
     actorPersonId: actor.person.id,
     action: "attendance.changed",
     target: { type: "attendance", id: after.id },
-    reason: null,
+    reason,
     before: valuesOf(before),
     after: valuesOf(after),
   });

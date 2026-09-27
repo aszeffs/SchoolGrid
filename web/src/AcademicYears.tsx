@@ -640,6 +640,12 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
     case "not_instructional_day":
     case "after_today":
     case "attendance_window_closed":
+    case "not_rostered_on_date":
+    case "enrollment_ended":
+    case "unchanged":
+    case "not_pending":
+    case "own_request":
+    case "target_changed":
       return "That change could not be made.";
   }
 }

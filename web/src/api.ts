@@ -427,6 +427,39 @@ export interface Mark {
   status: AttendanceStatus;
 }
 
+export type CorrectionRequestState = "pending" | "approved" | "rejected" | "withdrawn";
+
+/**
+ * A proposed change to one Student's Attendance in one Class Offering on one
+ * School date, as a School Administrator or its requester reads it. `before`
+ * is null when none was recorded when it was raised.
+ */
+export interface CorrectionRequest {
+  id: string;
+  kind: "attendance";
+  state: CorrectionRequestState;
+  student: { id: string; displayName: string };
+  classOffering: ClassOffering;
+  date: string;
+  before: AttendanceStatus | null;
+  after: AttendanceStatus;
+  reason: string;
+  requestedBy: { id: string; displayName: string };
+  raisedAt: string;
+  /** Who approved or rejected it, or withdrew it; null while it is Pending. */
+  decidedBy: { id: string; displayName: string } | null;
+  decidedAt: string | null;
+  rejectionReason: string | null;
+  /** Approved by its requester as the School's only School Administrator. */
+  selfApproved: boolean;
+}
+
+/** Where a Pending Correction request is taken: rejecting needs a reason. */
+export type CorrectionDecision =
+  | { state: "approved" }
+  | { state: "withdrawn" }
+  | { state: "rejected"; reason: string };
+
 /** One Term a Student has Class Offerings in, and whether it is the one running today. */
 export interface RosteredTerm {
   term: ClassOffering["term"];
@@ -727,6 +760,32 @@ export const api = {
       "PATCH",
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session`),
       save,
+    ),
+  /** A School Administrator's queue, every request; anyone else's, their own. Pending first, oldest first. */
+  correctionRequests: (schoolId: string) =>
+    request<{ correctionRequests: CorrectionRequest[] }>("GET", inSchool(schoolId, "/correction-requests")),
+  /** Proposes a change to one Student's Attendance, with a reason, whatever the date. */
+  raiseCorrectionRequest: (
+    schoolId: string,
+    { classOfferingId, ...raising }: {
+      classOfferingId: string;
+      studentPersonId: string;
+      date: string;
+      after: AttendanceStatus;
+      reason: string;
+    },
+  ) =>
+    request<{ correctionRequest: CorrectionRequest }>(
+      "POST",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/correction-requests`),
+      { kind: "attendance", ...raising },
+    ),
+  /** Approves, rejects, or withdraws a Pending request. Approval applies its change at once. */
+  decideCorrectionRequest: (schoolId: string, correctionRequestId: string, decision: CorrectionDecision) =>
+    request<{ correctionRequest: CorrectionRequest }>(
+      "PATCH",
+      inSchool(schoolId, `/correction-requests/${encodeURIComponent(correctionRequestId)}`),
+      decision,
     ),
   classOffering: (schoolId: string, classOfferingId: string) =>
     request<{ classOffering: TaughtClassOffering }>(

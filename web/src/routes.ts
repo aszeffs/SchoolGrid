@@ -30,6 +30,7 @@ const PATHS = {
   classOffering: "/schools/:schoolId/class-offerings/:classOfferingId",
   attendance: "/schools/:schoolId/class-offerings/:classOfferingId/attendance",
   attendanceOn: "/schools/:schoolId/class-offerings/:classOfferingId/attendance/:date",
+  correctionRequests: "/schools/:schoolId/correction-requests",
   settings: "/schools/:schoolId/settings",
 } as const;
 
@@ -143,6 +144,12 @@ export const SECTIONS: readonly Section[] = [
   { name: "academicYears", label: "Academic Years", reachedBy: ["school_administrator"] },
   { name: "courses", label: "Courses", reachedBy: ["school_administrator"] },
   { name: "classOfferings", label: "Class Offerings", reachedBy: ["school_administrator"] },
+  {
+    name: "correctionRequests",
+    label: "Correction requests",
+    reachedBy: ["school_administrator", "faculty"],
+    reachedByTaught: true,
+  },
   { name: "auditRecords", label: "Audit", reachedBy: ["school_administrator"] },
   { name: "settings", label: "Settings", reachedBy: ["school_administrator"] },
 ];

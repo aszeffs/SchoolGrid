@@ -4,6 +4,7 @@ import { Account } from "./Account.tsx";
 import { AttendanceSession } from "./AttendanceSession.tsx";
 import { ClassOffering } from "./ClassOffering.tsx";
 import { ClassOfferings } from "./ClassOfferings.tsx";
+import { CorrectionRequests } from "./CorrectionRequests.tsx";
 import { Courses } from "./Courses.tsx";
 import { api, type ReachedSchool, type Role, type Session } from "./api.ts";
 import { AuditRecords } from "./AuditRecords.tsx";
@@ -268,6 +269,7 @@ const SECTION_GROUP: Record<ReturnType<typeof sectionsFor>[number]["name"], (typ
   academicYears: "Academic",
   courses: "Academic",
   classOfferings: "Academic",
+  correctionRequests: "Academic",
   auditRecords: "School",
   settings: "School",
 };
@@ -285,6 +287,7 @@ const SECTION_ICONS: Record<keyof typeof SECTION_GROUP, string> = {
   academicYears: "M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 9h18M8 2v4M16 2v4",
   courses: "M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2zM4 21V5",
   classOfferings: "M3 5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM13 5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2zM3 15a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM13 15a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z",
+  correctionRequests: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4M14 20h6",
   auditRecords: "M9 3h10v18H5V7zM9 3v4H5M9 12h6M9 16h6",
   settings: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M16 4v4M10 10v4M18 16v4",
 };
@@ -350,6 +353,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={null} />;
     case "attendanceOn":
       return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={route.date} />;
+    case "correctionRequests":
+      return <CorrectionRequests school={school} />;
     case "settings":
       return <SchoolSettings school={school} />;
   }

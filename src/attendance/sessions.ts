@@ -37,6 +37,14 @@ export interface Attendance {
   recordedAt: Date;
 }
 
+/** One Student's Attendance in one Class Offering on one School date, as a Correction request names it. */
+export interface AttendanceTarget {
+  schoolId: string;
+  studentPersonId: string;
+  classOfferingId: string;
+  date: SchoolDate;
+}
+
 /** The one session for a Class Offering on a School date. */
 export interface AttendanceSession {
   id: string;
@@ -90,7 +98,8 @@ const ATTENDANCE_COLUMNS = `id, school_id AS "schoolId", student_person_id AS "s
  * Why this School date's Attendance cannot be recorded, as far as the date
  * alone decides it, or null when it can. The window is open while the
  * School's today is no later than the date plus the window (CONTEXT.md:
- * Attendance window).
+ * Attendance window); a Correction request, which the window does not bind,
+ * asks with none.
  */
 export async function dateProblem(
   database: Queryable,
@@ -105,7 +114,7 @@ export async function dateProblem(
     term: { firstDate: SchoolDate; lastDate: SchoolDate };
     date: SchoolDate;
     today: SchoolDate;
-    attendanceWindow: number;
+    attendanceWindow: number | null;
   },
 ): Promise<DateProblem | null> {
   // `YYYY-MM-DD` sorts as the dates do.
@@ -115,7 +124,7 @@ export async function dateProblem(
   if (date > today) {
     return "after_today";
   }
-  if (today > schoolDatePlus(date, attendanceWindow)) {
+  if (attendanceWindow !== null && today > schoolDatePlus(date, attendanceWindow)) {
     return "attendance_window_closed";
   }
   return null;
@@ -153,9 +162,7 @@ export async function openSession(
     openedByPersonId,
   }: { schoolId: string; classOfferingId: string; date: SchoolDate; openedByPersonId: string },
 ): Promise<{ session: AttendanceSession; opened: boolean }> {
-  await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
-    `attendance_session:${classOfferingId}:${date}`,
-  ]);
+  await holdAttendanceOn(transaction, { classOfferingId, date });
   const { rowCount } = await transaction.query(
     `INSERT INTO app.attendance_session (school_id, class_offering_id, date, opened_by_person_id)
      VALUES ($1, $2, $3, $4)
@@ -168,6 +175,68 @@ export async function openSession(
     [schoolId, classOfferingId, date],
   );
   return { session: rows[0]!, opened: (rowCount ?? 0) > 0 };
+}
+
+/**
+ * Holds a Class Offering's Attendance on a School date until the transaction
+ * ends, so whatever records or changes it, a save or an approved Correction
+ * request, takes turns: a first mark cannot be added twice.
+ */
+export async function holdAttendanceOn(
+  transaction: Queryable,
+  { classOfferingId, date }: { classOfferingId: string; date: SchoolDate },
+): Promise<void> {
+  await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+    `attendance_session:${classOfferingId}:${date}`,
+  ]);
+}
+
+/**
+ * Why a Student cannot have Attendance in a Class Offering on a School date,
+ * or null when they can: no Roster membership of theirs covers it, or their
+ * Enrollment had ended by then. The same test a Roster snapshot's Students
+ * are held to, asked of the roster as it stands.
+ */
+export async function studentProblem(
+  database: Queryable,
+  { schoolId, classOfferingId, studentPersonId, date }: AttendanceTarget,
+): Promise<UnmarkableBecause | null> {
+  const { rows } = await database.query<{ rostered: boolean; enrolled: boolean }>(
+    `SELECT
+       EXISTS (
+         SELECT 1 FROM app.roster_membership m
+         JOIN app.class_offering o ON o.school_id = m.school_id AND o.id = m.class_offering_id
+         JOIN app.term t ON t.school_id = o.school_id AND t.id = o.term_id
+         WHERE m.school_id = $1 AND m.class_offering_id = $2 AND m.student_person_id = $3
+           AND m.first_date <= $4 AND coalesce(m.last_date, t.last_date) >= $4
+       ) AS rostered,
+       EXISTS (
+         SELECT 1 FROM app.enrollment e
+         JOIN app.school school ON school.id = e.school_id
+         WHERE e.school_id = $1 AND e.student_person_id = $3
+           AND (e.ended_at IS NULL OR (e.ended_at AT TIME ZONE school.timezone)::date >= $4)
+       ) AS enrolled`,
+    [schoolId, classOfferingId, studentPersonId, date],
+  );
+  const { rostered, enrolled } = rows[0]!;
+  return !rostered ? "not_rostered_on_date" : !enrolled ? "enrollment_ended" : null;
+}
+
+/**
+ * The Attendance recorded for one Student in a Class Offering on a School
+ * date, held until the transaction ends, or null when none is.
+ */
+export async function lockAttendanceOf(
+  transaction: Queryable,
+  { schoolId, classOfferingId, studentPersonId, date }: AttendanceTarget,
+): Promise<Attendance | null> {
+  const { rows } = await transaction.query<Attendance>(
+    `SELECT ${ATTENDANCE_COLUMNS} FROM app.attendance
+     WHERE school_id = $1 AND class_offering_id = $2 AND student_person_id = $3 AND date = $4
+     FOR UPDATE`,
+    [schoolId, classOfferingId, studentPersonId, date],
+  );
+  return rows[0] ?? null;
 }
 
 /**
