@@ -26,8 +26,8 @@ export interface Person {
  * an IANA identifier the database knows (migrations/0012); what it means for a
  * School date is the School calendar's to work out. It is fixed for good once
  * the School's first Academic Year exists, which the database records
- * (migrations/0013). Its Attendance window is a whole number of days from 0
- * to 60, 7 unless changed (migrations/0021).
+ * (migrations/0013). Its Attendance window is a whole number of days, 7
+ * unless changed, within the bounds migrations/0021 sets.
  */
 export interface SchoolSettings {
   timezone: string;
@@ -125,8 +125,7 @@ export async function schoolSettingsOf(database: Queryable, schoolId: string): P
  */
 export async function setSchoolSettings(
   transaction: Queryable,
-  schoolId: string,
-  { timezone, attendanceWindow }: Partial<ChangeableSchoolSettings>,
+  { schoolId, timezone, attendanceWindow }: { schoolId: string } & Partial<ChangeableSchoolSettings>,
 ): Promise<SchoolSettings> {
   const { rows } = await transaction.query<SchoolSettings>(
     `UPDATE app.school

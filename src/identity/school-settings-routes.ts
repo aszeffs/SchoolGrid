@@ -72,7 +72,7 @@ export function registerSchoolSettingsRoutes(scope: SchoolScope, database: Datab
       if (changes.includes("timezone") && before.timezoneFixed) {
         throw new Conflict({ conflict: "timezone_fixed" });
       }
-      const after = await setSchoolSettings(transaction, schoolId, requested);
+      const after = await setSchoolSettings(transaction, { schoolId, ...requested });
       await appendAuditRecord(transaction, {
         schoolId,
         actorPersonId: actor.person.id,

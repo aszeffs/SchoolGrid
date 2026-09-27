@@ -110,10 +110,12 @@ export async function timezoneFrom(database: Queryable, value: unknown): Promise
   return value;
 }
 
+const ATTENDANCE_WINDOW_RULE = `a whole number of days from 0 to ${MAX_ATTENDANCE_WINDOW}`;
+
 /** An Attendance window, from a body: a whole number of days from 0 to the bound. */
 export function attendanceWindowFrom(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_ATTENDANCE_WINDOW) {
-    throw new InvalidRequest(`${field} must be a whole number of days from 0 to ${MAX_ATTENDANCE_WINDOW}`);
+    throw new InvalidRequest(`${field} must be ${ATTENDANCE_WINDOW_RULE}`);
   }
   return value;
 }
@@ -121,7 +123,7 @@ export function attendanceWindowFrom(value: unknown, field: string): number {
 /** An Attendance window, from a query string: written in plain digits, with no sign or leading zero. */
 export function attendanceWindowFromQuery(value: unknown, field: string): number {
   if (typeof value !== "string" || !/^(0|[1-9]\d{0,2})$/.test(value)) {
-    throw new InvalidRequest(`${field} must be a whole number of days from 0 to ${MAX_ATTENDANCE_WINDOW}`);
+    throw new InvalidRequest(`${field} must be ${ATTENDANCE_WINDOW_RULE}`);
   }
   return attendanceWindowFrom(Number(value), field);
 }

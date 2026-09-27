@@ -11,7 +11,7 @@ import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 const SHEET: SheetKind = { name: "School settings" };
 
 /** A window change waiting on its confirmation, with what the server says it would open or close. */
-interface Proposed {
+interface ProposedWindowChange {
   attendanceWindow: number;
   change: AttendanceWindowChange;
 }
@@ -29,7 +29,7 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
   const { showing, busy, change } = useScreen(schoolId, api.schoolSettings);
   /** What the last change did, said once so a screen reader hears it land. */
   const [changed, setChanged] = useState<string | null>(null);
-  const [proposed, setProposed] = useState<Proposed | null>(null);
+  const [proposed, setProposed] = useState<ProposedWindowChange | null>(null);
 
   const setTimezone = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -47,6 +47,11 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
     event.preventDefault();
     const attendanceWindow = Number(new FormData(event.currentTarget).get("attendanceWindow"));
     setChanged(null);
+    // Stating the window the School already has would change nothing.
+    if (showing.kind === "ready" && attendanceWindow === showing.records.settings.attendanceWindow) {
+      setChanged(`The Attendance window is already ${daysPhrase(attendanceWindow)}.`);
+      return;
+    }
     const previewed = await api.previewAttendanceWindow(schoolId, attendanceWindow);
     if (previewed.ok) {
       setProposed({ attendanceWindow, change: previewed.body });
@@ -89,7 +94,7 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
               onConfirm={() => void setAttendanceWindow(proposed.attendanceWindow)}
             >
               <p>
-                Attendance will be recorded and changed normally {windowPhrase(proposed.attendanceWindow)}, instead
+                Attendance will be recorded and corrected normally {windowPhrase(proposed.attendanceWindow)}, instead
                 of {windowPhrase(showing.records.settings.attendanceWindow)}. The change applies to every School date
                 at once.
               </p>
@@ -101,19 +106,24 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
   }
 }
 
+/** A count of days as a reader says it: "1 day", "7 days", "4 past Instructional days". */
+function daysPhrase(count: number, kind = ""): string {
+  return `${count} ${kind}${count === 1 ? "day" : "days"}`;
+}
+
 /** A window as a sentence says it: "on its School date only", "up to 7 days after its School date". */
 function windowPhrase(days: number): string {
-  return days === 0 ? "on its School date only" : `up to ${days} ${days === 1 ? "day" : "days"} after its School date`;
+  return days === 0 ? "on its School date only" : `up to ${daysPhrase(days)} after its School date`;
 }
 
 /** What a window change does to the School dates already past, counted in Instructional days. */
 function changePhrase({ opens, closes }: AttendanceWindowChange): string {
-  const days = (count: number) => `${count} past Instructional ${count === 1 ? "day" : "days"}`;
+  const past = "past Instructional ";
   if (opens > 0) {
-    return `This opens ${days(opens)} to normal changes again.`;
+    return `This opens ${daysPhrase(opens, past)} to normal corrections again.`;
   }
   if (closes > 0) {
-    return `This closes ${days(closes)}. Changing their Attendance will then take a Correction request.`;
+    return `This closes ${daysPhrase(closes, past)}. Correcting their Attendance will then take a Correction request.`;
   }
   return "No past Instructional day opens or closes.";
 }
@@ -149,8 +159,8 @@ function SettingsSheet({
           move to another day.
         </Key>
         <Key term="Attendance window">
-          How many days after a School date Faculty can still record or change its Attendance. After that, a change
-          takes a Correction request.
+          How many days after a School date Faculty can still record or correct its Attendance. After that, a
+          correction takes a Correction request.
         </Key>
       </dl>
     </>
@@ -164,9 +174,7 @@ function SettingsSheet({
         <dd>{settings.timezone}</dd>
         <dt>Attendance window</dt>
         <dd>
-          {settings.attendanceWindow === 0
-            ? "Same day only"
-            : `${settings.attendanceWindow} ${settings.attendanceWindow === 1 ? "day" : "days"}`}
+          {settings.attendanceWindow === 0 ? "Same day only" : daysPhrase(settings.attendanceWindow)}
         </dd>
       </dl>
       <p className="muted" role="status">

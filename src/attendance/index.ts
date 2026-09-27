@@ -3,10 +3,10 @@ import type { Queryable } from "../db/transaction.ts";
 
 /**
  * Attendance: what happens in a class, one Student, Class Offering and School
- * date at a time, and the Attendance window that keeps normal changes to it
- * recent (CONTEXT.md: Attendance, Attendance window).
+ * date at a time, and the Attendance window that keeps normal corrections to
+ * it recent (CONTEXT.md: Attendance, Attendance window).
  *
- * A School date's Attendance may be recorded or changed normally while the
+ * A School date's Attendance may be recorded or corrected normally while the
  * School's today is no later than that date plus the window. The current
  * setting governs every School date, so changing it opens or closes past
  * dates at once.
@@ -24,7 +24,9 @@ export interface AttendanceWindowChange {
  * What changing a School's Attendance window from `from` days to `to` days
  * would do at this instant: the Instructional days up to the School's today
  * that it would open, or close. Only Instructional days are counted, since no
- * other School date can hold Attendance.
+ * other School date can hold Attendance. A year's Terms cover all of it, so
+ * Terms are left out of the count; only a year with no Term yet counts days
+ * no Attendance could fall on.
  */
 export async function attendanceWindowChange(
   database: Queryable,
@@ -35,8 +37,9 @@ export async function attendanceWindowChange(
   }
   // The caller names a School that exists.
   const today = (await schoolDateAt(database, { schoolId, at }))!;
-  // A window of w days holds the School dates from w days before today to
-  // today, so the change moves only the first of them.
+  // A window of w days holds the School dates from w days before today up to
+  // today. Two windows differ only in their oldest dates: from the longer
+  // one's first date up to the day before the shorter one's.
   const changed = await countInstructionalDays(database, {
     schoolId,
     from: schoolDatePlus(today, -Math.max(from, to)),

@@ -1,4 +1,5 @@
 import type { Role } from "../../src/access/roles.ts";
+import type { AttendanceWindowChange } from "../../src/attendance/index.ts";
 import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 
@@ -228,15 +229,11 @@ export interface SchoolSettings {
   timezone: string;
   /** Whether the timezone can no longer change, as it cannot once the School has an Academic Year. */
   timezoneFixed: boolean;
-  /** How many days after a School date its Attendance may still be recorded or changed normally; 0 is the same day only. */
+  /** How many days after a School date its Attendance may still be recorded or corrected normally; 0 is the same day only. */
   attendanceWindow: number;
 }
 
-/** How many Instructional days up to the School's today a change of the Attendance window would open, and close. */
-export interface AttendanceWindowChange {
-  opens: number;
-  closes: number;
-}
+export type { AttendanceWindowChange };
 
 /** One Term of an Academic Year, bounded by School dates written `YYYY-MM-DD`, both inclusive. */
 export interface Term {

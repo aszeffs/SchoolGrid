@@ -1,5 +1,5 @@
 -- Each School's Attendance window (CONTEXT.md: Attendance window): how many
--- days after a School date its Attendance may still be recorded or changed
+-- days after a School date its Attendance may still be recorded or corrected
 -- normally. 0 is the same day only. Every School, those that exist already
 -- included, starts at 7.
 --
