@@ -171,16 +171,19 @@ test("a Faculty member takes a class's attendance with Mark all Present and one 
   const counted = /^\d+$/;
   await expect(totals.filter({ hasText: present }).getByRole("cell")).toHaveText([present, "0", "1", "0", "0", "0", counted]);
   await expect(totals.filter({ hasText: absent }).getByRole("cell")).toHaveText([absent, "0", "0", "0", "1", "0", counted]);
-  const register = page.getByRole("region", { name: "By date" });
-  await expect(register.getByRole("row", { name: new RegExp(present) })).toContainText("Tardy");
+  const grid = page.getByRole("region", { name: "By date" });
+  await expect(grid.getByRole("row", { name: new RegExp(present) })).toContainText("Tardy");
   await expectNoSidewaysScroll(page);
   await audit(page);
 
-  // And wide, in the light, where the register scrolls from the keyboard and a date opens its session.
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await expectNoSidewaysScroll(page);
+  await audit(page);
+
+  // And wide, in the light, where the grid scrolls from the keyboard and a date opens its session.
   await page.setViewportSize({ width: 1280, height: 800 });
-  await register.focus();
-  await expect(register).toBeFocused();
+  await grid.focus();
+  await expect(grid).toBeFocused();
   await audit(page);
   await page.keyboard.press("Tab");
   await page.keyboard.press("Enter");

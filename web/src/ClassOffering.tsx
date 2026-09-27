@@ -61,7 +61,12 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
           return answered;
         }
         const { classOffering } = answered.body;
-        const body = { classOffering, attendance: null, assignable: [], rosterable: [] };
+        const body = {
+          classOffering,
+          attendance: null as ClassOfferingAttendance | null,
+          assignable: [] as Assignable[],
+          rosterable: [] as ListedPerson[],
+        };
         // Sent the roster, the actor has taught it, and reads its Attendance too.
         if (classOffering.rosterMemberships === undefined) {
           return { ok: true as const, body };
@@ -87,7 +92,7 @@ export function ClassOffering({ school, classOfferingId }: { school: ReachedScho
         ok: true as const,
         body: {
           classOffering,
-          attendance: classOfferingAttendance as ClassOfferingAttendance | null,
+          attendance: classOfferingAttendance,
           assignable: assignableFaculty(memberships, persons),
           rosterable: rosterableStudents(classOffering, enrollments, persons),
         },

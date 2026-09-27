@@ -1,18 +1,20 @@
 import { useId } from "react";
 import type { ClassOfferingAttendance } from "./api.ts";
-import { STATUS_LETTERS, STATUS_NAMES, TALLIES, TALLY_NAMES } from "./attendance.ts";
+import { STATUS_LETTERS, STATUS_NAMES, STATUSES, TALLIES, TALLY_NAMES } from "./attendance.ts";
 import { Link } from "./Link.tsx";
 import { RecordList } from "./RecordList.tsx";
 import { formatSchoolDate, formatSchoolDateShort } from "./standing.ts";
 
 type Student = ClassOfferingAttendance["students"][number];
 
+const NOBODY_ROSTERED = "No Student has been on this roster.";
+
 /**
  * A Class Offering's Attendance on its own page: each Student's Attendance
  * totals for the Term so far, and every mark by date.
  *
  * The totals are a record list, read down at a phone's width. The grid keeps
- * its Students down the side and its dates across, as a register does; a Term
+ * its Students down the side and its dates across, as a class list does; a Term
  * of dates is wider than any screen, so it scrolls across inside its own
  * frame, which takes the keyboard's focus to be scrolled, and the page itself
  * never does. Each date's head opens that date's Attendance session.
@@ -44,7 +46,7 @@ export function OfferingAttendance({
         label="Attendance totals"
         rows={students}
         keyOf={(student) => student.person.id}
-        empty="No Student has been on this roster."
+        empty={NOBODY_ROSTERED}
         columns={[
           { head: "Student", cell: (student) => student.person.displayName },
           ...TALLIES.map((tally) => ({ head: TALLY_NAMES[tally], cell: (student: Student) => student.totals[tally] })),
@@ -55,11 +57,11 @@ export function OfferingAttendance({
       {dates.length === 0 ? (
         <p className="empty">No Instructional day of this Term has come yet.</p>
       ) : students.length === 0 ? (
-        <p className="empty">No Student has been on this roster.</p>
+        <p className="empty">{NOBODY_ROSTERED}</p>
       ) : (
         <>
-          <div className="register" role="region" aria-labelledby={gridId} tabIndex={0}>
-            <table className="register__grid">
+          <div className="attendance-grid" role="region" aria-labelledby={gridId} tabIndex={0}>
+            <table className="attendance-grid__grid">
               <caption className="unprinted">
                 Each Student&rsquo;s Attendance by School date, from {formatSchoolDate(dates[0]!.date)} to{" "}
                 {formatSchoolDate(dates.at(-1)!.date)}.
@@ -72,7 +74,7 @@ export function OfferingAttendance({
                       <Link to={{ name: "attendanceOn", schoolId, classOfferingId, date }}>
                         {formatSchoolDateShort(date)}
                       </Link>
-                      {!instructional && <span className="register__uncounted">Not counted</span>}
+                      {!instructional && <span className="attendance-grid__uncounted">Not counted</span>}
                     </th>
                   ))}
                 </tr>
@@ -117,10 +119,8 @@ export function OfferingAttendance({
               </tbody>
             </table>
           </div>
-          <p className="muted register__key">
-            {Object.entries(STATUS_LETTERS)
-              .map(([status, letter]) => `${letter} ${STATUS_NAMES[status as keyof typeof STATUS_NAMES]}`)
-              .join(" · ")}{" "}
+          <p className="muted attendance-grid__key">
+            {STATUSES.map((status) => `${STATUS_LETTERS[status]} ${STATUS_NAMES[status]}`).join(" · ")}{" "}
             · &ndash; Not recorded. A blank is a day off the roster.
           </p>
         </>

@@ -1443,15 +1443,15 @@ button:disabled {
   overflow-wrap: normal;
 }
 
-/* ---- The register: Students down the side, School dates across ------ */
+/* ---- The Attendance grid: Students down the side, School dates across ------ */
 
 /*
- * A Term of dates is wider than any screen, so the register scrolls across
+ * A Term of dates is wider than any screen, so the grid scrolls across
  * inside its own frame, never the page. The frame takes the keyboard's focus
  * so it can be scrolled without a pointer, and the Students' names stay put
  * at its edge while the dates pass under them.
  */
-.register {
+.attendance-grid {
   max-width: 100%;
   margin: calc(var(--step) * 2) 0 var(--step);
   overflow-x: auto;
@@ -1461,31 +1461,31 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
-.register:focus-visible {
+.attendance-grid:focus-visible {
   outline: 2px solid var(--action);
   outline-offset: 2px;
 }
 
-.register__grid {
+.attendance-grid__grid {
   border-collapse: separate;
   border-spacing: 0;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
-.register__grid th,
-.register__grid td {
+.attendance-grid__grid th,
+.attendance-grid__grid td {
   min-width: 3.25rem;
   padding: var(--step) calc(var(--step) * 1.25);
   border-bottom: 1px solid var(--rule);
   white-space: nowrap;
 }
 
-.register__grid tbody tr:last-child > * {
+.attendance-grid__grid tbody tr:last-child > * {
   border-bottom: 0;
 }
 
-.register__grid thead th {
+.attendance-grid__grid thead th {
   background: color-mix(in srgb, var(--ink) 3%, var(--surface));
   color: var(--ink-soft);
   font-size: var(--size-label);
@@ -1493,11 +1493,11 @@ button:disabled {
   vertical-align: bottom;
 }
 
-.register__grid thead th a {
+.attendance-grid__grid thead th a {
   display: block;
 }
 
-.register__grid th:first-child {
+.attendance-grid__grid th:first-child {
   position: sticky;
   left: 0;
   z-index: 1;
@@ -1509,38 +1509,38 @@ button:disabled {
   text-align: left;
 }
 
-.register__grid thead th:first-child {
+.attendance-grid__grid thead th:first-child {
   background: color-mix(in srgb, var(--ink) 3%, var(--surface));
 }
 
-.register__grid tbody th {
+.attendance-grid__grid tbody th {
   font-weight: 600;
 }
 
 /* Held in place, so a cell's unprinted words sit inside the frame and never widen the page past it. */
-.register__grid td {
+.attendance-grid__grid td {
   position: relative;
   font-weight: 650;
 }
 
 /* An absence reads apart from a day present, in the ink the sheet keeps for what needs looking at. */
-.register__grid td[data-status="unexcused_absence"],
-.register__grid td[data-status="absent_pending_review"] {
+.attendance-grid__grid td[data-status="unexcused_absence"],
+.attendance-grid__grid td[data-status="absent_pending_review"] {
   color: var(--alarm);
 }
 
-.register__grid td[data-status="excused_absence"],
-.register__grid td[data-status="tardy"] {
+.attendance-grid__grid td[data-status="excused_absence"],
+.attendance-grid__grid td[data-status="tardy"] {
   color: var(--action);
 }
 
-.register__uncounted {
+.attendance-grid__uncounted {
   display: block;
   font-size: var(--size-small);
   font-weight: 500;
 }
 
-.register__key {
+.attendance-grid__key {
   font-size: var(--size-label);
 }
 
