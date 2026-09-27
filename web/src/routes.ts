@@ -27,6 +27,8 @@ const PATHS = {
   courses: "/schools/:schoolId/courses",
   classOfferings: "/schools/:schoolId/class-offerings",
   classOffering: "/schools/:schoolId/class-offerings/:classOfferingId",
+  attendance: "/schools/:schoolId/class-offerings/:classOfferingId/attendance",
+  attendanceOn: "/schools/:schoolId/class-offerings/:classOfferingId/attendance/:date",
   settings: "/schools/:schoolId/settings",
 } as const;
 
@@ -101,6 +103,8 @@ function decoded(segment: string): string | null {
  */
 const WITHIN = {
   classOffering: "classOfferings",
+  attendance: "classOfferings",
+  attendanceOn: "classOfferings",
 } as const satisfies Partial<Record<SchoolRouteName, SchoolRouteName>>;
 
 /** A page within a School that is a section of its own, reached from the navigation with the School alone. */

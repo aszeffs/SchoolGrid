@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AcademicYears } from "./AcademicYears.tsx";
 import { Account } from "./Account.tsx";
+import { AttendanceSession } from "./AttendanceSession.tsx";
 import { ClassOffering } from "./ClassOffering.tsx";
 import { ClassOfferings } from "./ClassOfferings.tsx";
 import { Courses } from "./Courses.tsx";
@@ -340,6 +341,10 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <ClassOfferings school={school} />;
     case "classOffering":
       return <ClassOffering school={school} classOfferingId={route.classOfferingId} />;
+    case "attendance":
+      return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={null} />;
+    case "attendanceOn":
+      return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={route.date} />;
     case "settings":
       return <SchoolSettings school={school} />;
   }

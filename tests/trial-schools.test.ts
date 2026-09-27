@@ -277,7 +277,7 @@ describe("Trial Schools", () => {
       const tables = [
         "person", "school_membership", "enrollment", "guardian_link", "invitation", "audit_record",
         "academic_year", "term", "instructional_day_exception", "course", "class_offering",
-        "teaching_assignment", "roster_membership",
+        "teaching_assignment", "roster_membership", "attendance_session", "roster_snapshot_member", "attendance",
       ];
       const counts: Record<string, number> = {};
       for (const table of tables) {
@@ -317,9 +317,27 @@ describe("Trial Schools", () => {
 
     it("deletes an expired Trial School whole: its records, its Audit records and the accounts created in it", async () => {
       const { schoolId } = await server().startTrial();
+      // A session taken on one of its rosters, arranged as it is stored.
+      await server().ownerDatabase.query(
+        `WITH membership AS (
+           SELECT m.id, m.school_id, m.class_offering_id, m.student_person_id, m.first_date
+           FROM app.roster_membership m WHERE m.school_id = $1 LIMIT 1
+         ), session AS (
+           INSERT INTO app.attendance_session (school_id, class_offering_id, date, opened_by_person_id)
+           SELECT school_id, class_offering_id, first_date, student_person_id FROM membership
+           RETURNING id
+         ), captured AS (
+           INSERT INTO app.roster_snapshot_member (school_id, attendance_session_id, roster_membership_id)
+           SELECT membership.school_id, session.id, membership.id FROM membership, session
+         )
+         INSERT INTO app.attendance (school_id, student_person_id, class_offering_id, date, status, recorded_by_person_id)
+         SELECT school_id, student_person_id, class_offering_id, first_date, 'present', student_person_id FROM membership`,
+        [schoolId],
+      );
       const before = await rowsIn(schoolId);
       expect(before["audit_record"]).toBeGreaterThan(0);
       expect(before["roster_membership"]).toBeGreaterThan(0);
+      expect(before["attendance"]).toBe(1);
       await server().expireTrialSchool(schoolId);
 
       const { rows } = await server().database.query<{ deleted: boolean }>(

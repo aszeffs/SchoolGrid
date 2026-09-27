@@ -637,6 +637,9 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
     case "teaching_assignment_outside_term":
     case "roster_membership_overlap":
     case "roster_membership_outside_term":
+    case "not_instructional_day":
+    case "after_today":
+    case "attendance_window_closed":
       return "That change could not be made.";
   }
 }

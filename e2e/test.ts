@@ -21,9 +21,9 @@ export { expect };
  * of its own — audits it there and then. Between them the suite covers every
  * sheet the app has: Home, Sign in, Schools, Your account, Persons,
  * Invitations, School memberships, Enrollments, Guardian links, Academic
- * Years, Courses, Class Offerings, Class Offering, Your classes, Audit, School
- * settings, Redeem Invitation, How this was built, Trial ended and Not
- * available.
+ * Years, Courses, Class Offerings, Class Offering, Attendance session, Your
+ * classes, Audit, School settings, Redeem Invitation, How this was built,
+ * Trial ended and Not available.
  *
  * And every test requires that nothing it sent was throttled. The whole suite
  * reaches the server from one client address, and the rate limit is per

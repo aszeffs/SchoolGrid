@@ -993,6 +993,77 @@ function hasTaught(actor: Actor, offering: { id: string }): boolean {
 }
 
 /**
+ * Returns the Class Offering whose Attendance sessions the actor may read, and
+ * refuses otherwise: a School Administrator, and anyone ever assigned to teach
+ * it, who keeps reading its whole history (CONTEXT.md: Teaching assignment).
+ * A Student reads the offering but never its sessions, which name classmates.
+ */
+export function authorizeReadAttendanceOf<O extends { id: string; schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
+  const reason =
+    outOfReach(actor, target) ??
+    (holds(actor, "school_administrator") || hasTaught(actor, target!) ? null : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "class_offering", id: classOfferingId });
+  }
+  return target!;
+}
+
+/**
+ * Why the actor may not record a Class Offering's Attendance on a School date,
+ * or null when they may, as far as who they are decides it: they need a
+ * Teaching assignment for it that is currently active and covers that date
+ * too (CONTEXT.md: Attendance). One whose assignment has ended keeps reading,
+ * and records nothing. A School Administrator records nothing either: every
+ * change of theirs goes through a Correction request.
+ *
+ * The date's own conditions, and each Student's, are the Attendance module's.
+ * Only for an offering the actor has already been permitted to read.
+ */
+export async function recordingRefusal(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+  date: string,
+): Promise<"not_teaching" | "not_taught_on_date" | null> {
+  const today = (await schoolDateAt(database, { schoolId: actor.schoolId, at: await transactionTime(database) }))!;
+  const current = holds(actor, "faculty")
+    ? (await teachingAssignments.of(database, actor.person)).find(
+        ({ classOfferingId, firstDate, lastDate }) =>
+          classOfferingId === offering.id && firstDate <= today && (lastDate === null || today <= lastDate),
+      )
+    : undefined;
+  if (current === undefined) {
+    return "not_teaching";
+  }
+  // An open assignment runs to the end of its Term, and the date is the
+  // Attendance module's to hold inside that Term.
+  return current.firstDate <= date && (current.lastDate === null || date <= current.lastDate)
+    ? null
+    : "not_taught_on_date";
+}
+
+/**
+ * Returns the Class Offering whose Attendance the actor may record on this
+ * School date, and refuses otherwise: see recordingRefusal. Only for an
+ * offering the actor has already been permitted to read.
+ */
+export async function authorizeRecordAttendance<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+  date: string,
+): Promise<O> {
+  if ((await recordingRefusal(database, actor, offering, date)) !== null) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
  * Returns the Person the actor may assign to teach, and refuses otherwise.
  * Whether that Person holds a Faculty membership is a matter of the request,
  * checked once this has permitted it.

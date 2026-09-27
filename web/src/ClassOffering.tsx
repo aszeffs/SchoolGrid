@@ -443,6 +443,18 @@ function OfferingSheet({
       )}
 
       {offering.rosterMemberships !== undefined && (
+        <section>
+          <h2>Attendance</h2>
+          <p>
+            <Link to={{ name: "attendance", schoolId, classOfferingId: offering.id }}>
+              Today&rsquo;s Attendance session
+            </Link>{" "}
+            <span className="muted">Another School date can be chosen there.</span>
+          </p>
+        </section>
+      )}
+
+      {offering.rosterMemberships !== undefined && (
         <Roster
           schoolId={schoolId}
           administers={administers}

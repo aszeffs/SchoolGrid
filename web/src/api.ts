@@ -1,5 +1,11 @@
 import type { Role } from "../../src/access/roles.ts";
 import type { AttendanceWindowChange } from "../../src/attendance/index.ts";
+import type {
+  AttendanceStatus,
+  MarkRefusal,
+  ReadOnlyBecause,
+  UnmarkableBecause,
+} from "../../src/attendance/sessions.ts";
 import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 
@@ -337,6 +343,51 @@ export interface RosteredClassOffering extends ClassOffering {
   rosterMemberships: { id: string; firstDate: string; lastDate: string | null }[];
 }
 
+export type { AttendanceStatus, MarkRefusal, ReadOnlyBecause, UnmarkableBecause };
+
+/** One Student's Attendance as a session shows it: the status, and who last recorded it when. */
+export interface Attendance {
+  status: AttendanceStatus;
+  recordedBy: { id: string; displayName: string };
+  recordedAt: string;
+}
+
+/**
+ * The one Attendance session for a Class Offering on a School date, as the
+ * actor is served it. `readOnlyBecause` is null when they may record it.
+ */
+export interface AttendanceSession {
+  classOfferingId: string;
+  date: string;
+  /** The School's today, in its own timezone. */
+  today: string;
+  /** The last School date the window lets this date's Attendance be recorded on. */
+  lastRecordableDate: string;
+  readOnlyBecause: ReadOnlyBecause | null;
+  /** Null while nobody has opened it, when no one is captured yet. */
+  opened: { by: { id: string; displayName: string }; at: string } | null;
+  students: {
+    person: { id: string; displayName: string };
+    /** Null for a Student who can be marked on this date. */
+    unmarkableBecause: UnmarkableBecause | null;
+    attendance: Attendance | null;
+  }[];
+}
+
+/** One mark a save refused while the rest applied, with the Attendance as it now stands. */
+export interface RefusedMark {
+  studentPersonId: string;
+  because: MarkRefusal;
+  attendance: Attendance | null;
+}
+
+/** One mark in a save: the status, and the value the caller loaded, null for unmarked. */
+export interface Mark {
+  studentPersonId: string;
+  loaded: AttendanceStatus | null;
+  status: AttendanceStatus;
+}
+
 /** One Term a Student has Class Offerings in, and whether it is the one running today. */
 export interface RosteredTerm {
   term: ClassOffering["term"];
@@ -599,6 +650,33 @@ export const api = {
     request<{ course: Course }>("DELETE", inSchool(schoolId, `/courses/${encodeURIComponent(courseId)}`)),
   classOfferings: (schoolId: string) =>
     request<{ classOfferings: ListedClassOffering[] }>("GET", inSchool(schoolId, "/class-offerings")),
+  /** The session on this date, or on the School's today when none is named. */
+  attendanceSession: (schoolId: string, classOfferingId: string, date: string | null) =>
+    request<{ attendanceSession: AttendanceSession }>(
+      "GET",
+      inSchool(
+        schoolId,
+        `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session${date === null ? "" : `?date=${encodeURIComponent(date)}`}`,
+      ),
+    ),
+  /** Opens the session, capturing its roster, or refreshes one already open. */
+  openAttendanceSession: (schoolId: string, classOfferingId: string, date: string) =>
+    request<{ attendanceSession: AttendanceSession }>(
+      "POST",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session`),
+      { date },
+    ),
+  /** Saves these marks, then marks every Student still unmarked Present when asked to. */
+  saveAttendance: (
+    schoolId: string,
+    classOfferingId: string,
+    save: { date: string; marks: Mark[]; markAllPresent?: boolean },
+  ) =>
+    request<{ attendanceSession: AttendanceSession; refusedMarks: RefusedMark[] }>(
+      "PATCH",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session`),
+      save,
+    ),
   classOffering: (schoolId: string, classOfferingId: string) =>
     request<{ classOffering: TaughtClassOffering }>(
       "GET",

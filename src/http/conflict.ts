@@ -44,7 +44,13 @@ export type ConflictDetail =
       dependent: "term" | "instructional_day_exception" | "class_offering" | "teaching_assignment" | "roster_membership";
     }
   /** The School's timezone is fixed once its first Academic Year exists (ADR-0011). */
-  | { conflict: "timezone_fixed" };
+  | { conflict: "timezone_fixed" }
+  /** Attendance exists only on an Instructional day inside its Class Offering's Term. */
+  | { conflict: "not_instructional_day" }
+  /** Attendance is recorded for no School date after the School's today. */
+  | { conflict: "after_today" }
+  /** The School date's Attendance window has closed: a change needs a Correction request. */
+  | { conflict: "attendance_window_closed" };
 
 /**
  * Thrown by a handler whose caller was authorized and sent a well-formed
