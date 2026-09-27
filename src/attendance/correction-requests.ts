@@ -7,7 +7,10 @@ import {
   recordAttendance,
   type Attendance,
   type AttendanceStatus,
+  type AttendanceTarget,
 } from "./sessions.ts";
+
+export type { AttendanceTarget };
 
 /**
  * Correction requests (migrations/0023; CONTEXT.md: Correction request),
@@ -26,14 +29,6 @@ export type CorrectionRequestState = "pending" | "approved" | "rejected" | "with
 
 /** The kinds of record a Correction request can change. */
 export type CorrectionTargetKind = "attendance";
-
-/** One Student's Attendance in one Class Offering on one School date. */
-export interface AttendanceTarget {
-  schoolId: string;
-  studentPersonId: string;
-  classOfferingId: string;
-  date: SchoolDate;
-}
 
 export interface CorrectionRequest extends AttendanceTarget {
   id: string;

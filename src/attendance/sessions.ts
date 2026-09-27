@@ -37,6 +37,14 @@ export interface Attendance {
   recordedAt: Date;
 }
 
+/** One Student's Attendance in one Class Offering on one School date, as a Correction request names it. */
+export interface AttendanceTarget {
+  schoolId: string;
+  studentPersonId: string;
+  classOfferingId: string;
+  date: SchoolDate;
+}
+
 /** The one session for a Class Offering on a School date. */
 export interface AttendanceSession {
   id: string;
@@ -191,12 +199,7 @@ export async function holdAttendanceOn(
  */
 export async function studentProblem(
   database: Queryable,
-  {
-    schoolId,
-    classOfferingId,
-    studentPersonId,
-    date,
-  }: { schoolId: string; classOfferingId: string; studentPersonId: string; date: SchoolDate },
+  { schoolId, classOfferingId, studentPersonId, date }: AttendanceTarget,
 ): Promise<UnmarkableBecause | null> {
   const { rows } = await database.query<{ rostered: boolean; enrolled: boolean }>(
     `SELECT
@@ -225,12 +228,7 @@ export async function studentProblem(
  */
 export async function lockAttendanceOf(
   transaction: Queryable,
-  {
-    schoolId,
-    classOfferingId,
-    studentPersonId,
-    date,
-  }: { schoolId: string; classOfferingId: string; studentPersonId: string; date: SchoolDate },
+  { schoolId, classOfferingId, studentPersonId, date }: AttendanceTarget,
 ): Promise<Attendance | null> {
   const { rows } = await transaction.query<Attendance>(
     `SELECT ${ATTENDANCE_COLUMNS} FROM app.attendance

@@ -60,6 +60,15 @@ function parseRaise(body: unknown): { studentPersonId: string; date: SchoolDate;
 }
 
 /**
+ * Whether a body asks to withdraw a request, read on its own and leniently:
+ * who may act depends on it, so it is read before the rest of the body, and
+ * anything else is decided as an approval or rejection would be.
+ */
+function withdrawing(body: unknown): boolean {
+  return typeof body === "object" && body !== null && (body as Record<string, unknown>)["state"] === "withdrawn";
+}
+
+/**
  * Where a request is taken: Approved, Rejected with a reason, which nothing
  * else carries, or Withdrawn.
  */
@@ -229,17 +238,17 @@ export function registerCorrectionRequestRoutes(app: FastifyInstance, database: 
           correctionRequestId,
           await findCorrectionRequest(transaction, correctionRequestId),
         );
+        const permitted = withdrawing(body)
+          ? authorizeWithdrawCorrectionRequest(actor, correctionRequestId, readable)
+          : authorizeDecideCorrectionRequest(actor, correctionRequestId, readable);
         const decision = parseDecision(body);
-        const permitted =
-          decision.state === "withdrawn"
-            ? authorizeWithdrawCorrectionRequest(actor, correctionRequestId, readable)
-            : authorizeDecideCorrectionRequest(actor, correctionRequestId, readable);
         const request = await lockCorrectionRequest(transaction, permitted);
         if (request.state !== "pending") {
           throw new Conflict({ conflict: "not_pending" });
         }
-        const standing = await approverStanding(transaction, actor, request);
-        if (decision.state !== "withdrawn" && standing === "own_request") {
+        // Only a requester withdraws, so only an approval or rejection can be someone's own.
+        const standing = decision.state === "withdrawn" ? "another" : await approverStanding(transaction, actor, request);
+        if (standing === "own_request") {
           throw new Conflict({ conflict: "own_request" });
         }
         const decided = { decidedByPersonId: actor.person.id };
