@@ -12,12 +12,13 @@ import {
   type RefusedMark,
   type TaughtClassOffering as Offering,
 } from "./api.ts";
-import { STATUS_NAMES, STATUSES } from "./attendance.ts";
+import { correctionConflictMessage, STATUS_NAMES, STATUSES } from "./attendance.ts";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { offeringName } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
+import { RequestCorrection, type Raising } from "./RequestCorrection.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { formatSchoolDate, MOMENT } from "./standing.ts";
@@ -43,6 +44,12 @@ const SHEET: SheetKind = { name: "Attendance session" };
  * plainly, as does a Faculty member on a date that cannot be recorded. Anyone
  * else again, and an offering that does not exist or is another School's, is
  * the one "not available" state (ADR-0002).
+ *
+ * Where a mark cannot be changed here (its window has closed, it is Absent,
+ * pending review, or the reader is a School Administrator) a School
+ * Administrator or a Faculty member teaching the class now requests a
+ * correction beside the Student instead. On a date nobody opened, the roster
+ * as it stood that day is listed for it, so a missed day can be filled in.
  */
 export function AttendanceSession({
   school,
@@ -94,6 +101,7 @@ export function AttendanceSession({
           busy={busy}
           onSave={(save) => change(() => api.saveAttendance(schoolId, classOfferingId, save))}
           onRefresh={() => change(() => api.openAttendanceSession(schoolId, classOfferingId, attendanceSession.date))}
+          onRequest={(raising) => change(() => api.raiseCorrectionRequest(schoolId, raising))}
         />
       );
     }
@@ -108,6 +116,7 @@ function SessionSheet({
   busy,
   onSave,
   onRefresh,
+  onRequest,
 }: {
   schoolId: string;
   administers: boolean;
@@ -120,6 +129,7 @@ function SessionSheet({
     markAllPresent?: boolean;
   }) => Promise<ApiResult<{ attendanceSession: Session; refusedMarks: RefusedMark[] }>>;
   onRefresh: () => Promise<ApiResult<{ attendanceSession: Session }>>;
+  onRequest: (raising: Raising) => Promise<ApiResult<unknown>>;
 }) {
   /** The statuses chosen and not yet saved, by Student. */
   const [drafts, setDrafts] = useState<ReadonlyMap<string, AttendanceStatus>>(new Map());
@@ -128,16 +138,51 @@ function SessionSheet({
   /** What the last change did, said once so a screen reader hears it land. */
   const [done, setDone] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  /** The Student a correction is being requested for, while its dialog is open. */
+  const [requesting, setRequesting] = useState<Student | null>(null);
+  /** Whether the last change raised a Correction request, so the way to it is offered beside what it did. */
+  const [raised, setRaised] = useState(false);
   const { date, today, readOnlyBecause } = session;
+  const students = session.opened === null ? rosteredOn(offering, session) : session.students;
   const recordable = readOnlyBecause === null;
   const on = formatSchoolDate(date);
   const markable = (student: Session["students"][number]) =>
     recordable && student.unmarkableBecause === null && student.attendance?.status !== "absent_pending_review";
-  const unmarked = session.students.filter(
+  const unmarked = students.filter(
     (student) => markable(student) && student.attendance === null && !drafts.has(student.person.id),
   ).length;
 
   const why = readOnlyText(session, { administers, termName: offering.term.name });
+
+  // Whether the reader may request a correction on this date: a School
+  // Administrator, or a Faculty member teaching the class now, on a date that
+  // can hold Attendance. The server decides each request itself.
+  const correctable =
+    readOnlyBecause !== "not_instructional_day" &&
+    readOnlyBecause !== "after_today" &&
+    (administers ||
+      readOnlyBecause === null ||
+      readOnlyBecause === "attendance_window_closed" ||
+      readOnlyBecause === "not_taught_on_date");
+  // Offered for a Student this page could mark only where their mark is locked to it.
+  const mayRequest = (student: Student) =>
+    correctable &&
+    student.unmarkableBecause === null &&
+    (readOnlyBecause !== null || student.attendance?.status === "absent_pending_review");
+
+  const request = async (student: Student, raising: Raising) => {
+    setRequesting(null);
+    setDone("");
+    setRaised(false);
+    setProblem(null);
+    const sent = await onRequest(raising);
+    if (sent.ok) {
+      setDone(`Your Correction request for ${student.person.displayName} is pending.`);
+      setRaised(true);
+    } else if (sent.conflict !== undefined) {
+      setProblem(correctionConflictMessage(sent.conflict));
+    }
+  };
 
   const choose = (studentId: string, status: AttendanceStatus) => {
     setDrafts((held) => new Map(held).set(studentId, status));
@@ -145,6 +190,7 @@ function SessionSheet({
 
   const send = async (markAllPresent: boolean) => {
     setDone("");
+    setRaised(false);
     setProblem(null);
     const loaded = new Map(session.students.map((student) => [student.person.id, student.attendance?.status ?? null]));
     const marks = [...drafts].map(([studentPersonId, status]) => ({
@@ -176,6 +222,7 @@ function SessionSheet({
 
   const refresh = async () => {
     setDone("");
+    setRaised(false);
     setProblem(null);
     const before = session.students.length;
     const sent = await onRefresh();
@@ -270,18 +317,15 @@ function SessionSheet({
       </form>
 
       {why !== null && <p className="notice">{why}</p>}
+      {session.opened === null && <p className="muted">Nobody has opened this session.</p>}
 
       <form onSubmit={save} aria-label="Take attendance">
         <h2>Attendance</h2>
         <RecordList
           label="Attendance"
-          rows={session.students}
+          rows={students}
           keyOf={(student) => student.person.id}
-          empty={
-            session.opened === null
-              ? "Nobody has opened this session."
-              : `No Student was on this roster on ${on}.`
-          }
+          empty={`No Student was on this roster on ${on}.`}
           columns={[
             {
               head: "Student",
@@ -346,6 +390,26 @@ function SessionSheet({
               head: "Recorded",
               cell: (student) => recordedText(student.attendance),
             },
+            ...(correctable
+              ? [
+                  {
+                    head: "Correction",
+                    actions: true,
+                    cell: (student: Student) =>
+                      mayRequest(student) && (
+                        <button
+                          type="button"
+                          className="button-quiet"
+                          disabled={busy}
+                          aria-label={`Request a correction for ${student.person.displayName}`}
+                          onClick={() => setRequesting(student)}
+                        >
+                          Request a correction
+                        </button>
+                      ),
+                  },
+                ]
+              : []),
           ]}
         />
         {problem !== null && (
@@ -353,7 +417,7 @@ function SessionSheet({
             {problem}
           </p>
         )}
-        {recordable && session.students.length > 0 && (
+        {recordable && students.length > 0 && (
           <p className="actions">
             <button type="submit" disabled={busy || drafts.size === 0}>
               Save
@@ -379,7 +443,45 @@ function SessionSheet({
       <p className="muted" role="status">
         {done}
       </p>
+      {raised && (
+        <p>
+          <Link to={{ name: "correctionRequests", schoolId }}>Correction requests</Link>
+        </p>
+      )}
+      {requesting !== null && (
+        <RequestCorrection
+          classOfferingId={offering.id}
+          date={date}
+          student={requesting.person}
+          current={requesting.attendance?.status ?? null}
+          busy={busy}
+          onCancel={() => setRequesting(null)}
+          onRequest={(raising) => void request(requesting, raising)}
+        />
+      )}
     </Sheet>
+  );
+}
+
+type Student = Session["students"][number];
+
+/**
+ * The Students on the class's roster on a session's date, for a session
+ * nobody opened, as the roster stands now, and anyone marked on it; each
+ * with the mark, if any, an approved Correction request left without a
+ * session. Whether each could have
+ * Attendance on it is the server's to decide when a correction is requested.
+ */
+function rosteredOn(offering: Offering, session: Session): Student[] {
+  const listed = new Map(session.students.map((student) => [student.person.id, student]));
+  for (const { person, firstDate, lastDate } of offering.rosterMemberships ?? []) {
+    if (firstDate <= session.date && session.date <= (lastDate ?? offering.term.lastDate)) {
+      // A mark with no session is listed as never captured; the roster says they were on it.
+      listed.set(person.id, { person, unmarkableBecause: null, attendance: listed.get(person.id)?.attendance ?? null });
+    }
+  }
+  return [...listed.values()].sort(
+    (a, b) => a.person.displayName.localeCompare(b.person.displayName) || a.person.id.localeCompare(b.person.id),
   );
 }
 
