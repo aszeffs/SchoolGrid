@@ -9,12 +9,14 @@ import {
   ROLES,
   type Role,
 } from "../access/index.ts";
+import { raiseCorrectionRequest } from "../attendance/correction-requests.ts";
+import { recordTakenSessions, type TakenSession } from "../attendance/sessions.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import type { UserAccount } from "../authentication/index.ts";
-import { schoolDateAt } from "../calendar/index.ts";
+import { instructionalDaysBetween, schoolDateAt, schoolDatePlus } from "../calendar/index.ts";
 import { transactionTime, type Queryable } from "../db/transaction.ts";
-import { createPerson, createSchool, type Person, type School } from "../identity/index.ts";
-import { INVENTED_SCHOOL_NAME, inventedSchool, NO_LABEL } from "./invented-school.ts";
+import { createPerson, createSchool, schoolSettingsOf, type Person, type School } from "../identity/index.ts";
+import { INVENTED_SCHOOL_NAME, inventedAttendance, inventedSchool, NO_LABEL } from "./invented-school.ts";
 
 /**
  * The Trials module starts Trial Schools, lets their visitor change role
@@ -76,7 +78,8 @@ export async function startTrialSchool(
   const expiresAt = new Date(now.getTime() + TRIAL_LIFETIME_MS);
   const school = await createSchool(transaction, { name: INVENTED_SCHOOL_NAME, timezone, trialExpiresAt: expiresAt });
   // Built around today as the School sees it, so its dates look right to the visitor.
-  const invented = inventedSchool((await schoolDateAt(transaction, { schoolId: school.id, at: now }))!);
+  const today = (await schoolDateAt(transaction, { schoolId: school.id, at: now }))!;
+  const invented = inventedSchool(today);
 
   const accounts = new Map<Role, UserAccount>();
   const rolePersons = new Map<Role, Person>();
@@ -141,12 +144,17 @@ export async function startTrialSchool(
     ({ year } = await addException(transaction, year, { date, instructional: false }));
   }
 
+  // Today's Term's offerings, by Course code and label, and who teaches each.
+  const current = new Map<string, { classOfferingId: string; teacher: Person }>();
   for (const { name, code, labels, taughtByRole, rosters } of invented.courses) {
     const course = await createCourse(transaction, { schoolId: school.id, name, code });
     const assigned = taughtByRole ? faculty : otherFaculty[0]!;
     for (const term of year.terms) {
       for (const label of labels) {
         const offering = await createClassOffering(transaction, { course, term, label });
+        if (term.firstDate <= today && today <= term.lastDate) {
+          current.set(`${code}|${label ?? NO_LABEL}`, { classOfferingId: offering.id, teacher: assigned });
+        }
         const firstDate = term.firstDate;
         await assignTeaching(transaction, {
           schoolId: school.id,
@@ -166,6 +174,38 @@ export async function startTrialSchool(
         }
       }
     }
+  }
+
+  // Taken by each offering's teacher on the Term's days before today, and
+  // written as the invented past it is: nothing here is audited.
+  const term = year.terms.find((term) => term.firstDate <= today && today <= term.lastDate)!;
+  const yesterday = schoolDatePlus(today, -1);
+  const pastDays =
+    yesterday < term.firstDate
+      ? []
+      : await instructionalDaysBetween(transaction, { schoolId: school.id, from: term.firstDate, to: yesterday });
+  const { attendanceWindow } = (await schoolSettingsOf(transaction, school.id))!;
+  const { marks, correctionRequest } = inventedAttendance(invented, { pastDays, today, attendanceWindow });
+  const sessions = new Map<string, TakenSession & { marks: TakenSession["marks"][number][] }>();
+  for (const { course, label, student, date, status } of marks) {
+    const { classOfferingId, teacher } = current.get(`${course}|${label}`)!;
+    let session = sessions.get(`${classOfferingId}|${date}`);
+    if (session === undefined) {
+      session = { schoolId: school.id, classOfferingId, date, openedByPersonId: teacher.id, marks: [] };
+      sessions.set(`${classOfferingId}|${date}`, session);
+    }
+    session.marks.push({ studentPersonId: students.get(student)!.id, status });
+  }
+  await recordTakenSessions(transaction, [...sessions.values()]);
+  if (correctionRequest !== null) {
+    const { course, label, student, ...request } = correctionRequest;
+    await raiseCorrectionRequest(transaction, {
+      schoolId: school.id,
+      classOfferingId: current.get(`${course}|${label}`)!.classOfferingId,
+      studentPersonId: students.get(student)!.id,
+      ...request,
+      requestedByPersonId: faculty.id,
+    });
   }
 
   return { school, expiresAt, schoolAdministrator: accounts.get("school_administrator")! };

@@ -362,3 +362,57 @@ export async function changeAttendance(
   );
   return rows[0]!;
 }
+
+/** A session taken whole on its date: its Roster snapshot captured, and these marks recorded by whoever opened it. */
+export interface TakenSession {
+  schoolId: string;
+  classOfferingId: string;
+  date: SchoolDate;
+  openedByPersonId: string;
+  marks: readonly { studentPersonId: string; status: AttendanceStatus }[];
+}
+
+/**
+ * Opens each session, captures its roster, and records its marks as its
+ * opener's, set by set rather than row by row, for a past a new School starts
+ * with. None may have been opened already.
+ */
+export async function recordTakenSessions(transaction: Queryable, sessions: readonly TakenSession[]): Promise<void> {
+  if (sessions.length === 0) {
+    return;
+  }
+  const { rows } = await transaction.query<{ id: string }>(
+    `INSERT INTO app.attendance_session (school_id, class_offering_id, date, opened_by_person_id)
+     SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::date[], $4::uuid[])
+     RETURNING id`,
+    [
+      sessions.map((session) => session.schoolId),
+      sessions.map((session) => session.classOfferingId),
+      sessions.map((session) => session.date),
+      sessions.map((session) => session.openedByPersonId),
+    ],
+  );
+  await transaction.query(
+    `INSERT INTO app.roster_snapshot_member (school_id, attendance_session_id, roster_membership_id)
+     SELECT m.school_id, s.id, m.id
+     FROM app.attendance_session s
+     JOIN app.roster_membership m ON m.school_id = s.school_id AND m.class_offering_id = s.class_offering_id
+     JOIN app.class_offering o ON o.school_id = m.school_id AND o.id = m.class_offering_id
+     JOIN app.term t ON t.school_id = o.school_id AND t.id = o.term_id
+     WHERE s.id = ANY($1::uuid[]) AND m.first_date <= s.date AND coalesce(m.last_date, t.last_date) >= s.date`,
+    [rows.map((row) => row.id)],
+  );
+  const marks = sessions.flatMap((session) => session.marks.map((mark) => ({ ...session, ...mark })));
+  await transaction.query(
+    `INSERT INTO app.attendance (school_id, student_person_id, class_offering_id, date, status, recorded_by_person_id)
+     SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::date[], $5::text[], $6::uuid[])`,
+    [
+      marks.map((mark) => mark.schoolId),
+      marks.map((mark) => mark.studentPersonId),
+      marks.map((mark) => mark.classOfferingId),
+      marks.map((mark) => mark.date),
+      marks.map((mark) => mark.status),
+      marks.map((mark) => mark.openedByPersonId),
+    ],
+  );
+}
