@@ -26,14 +26,19 @@ export interface Person {
  * an IANA identifier the database knows (migrations/0012); what it means for a
  * School date is the School calendar's to work out. It is fixed for good once
  * the School's first Academic Year exists, which the database records
- * (migrations/0013).
+ * (migrations/0013). Its Attendance window is a whole number of days from 0
+ * to 60, 7 unless changed (migrations/0021).
  */
 export interface SchoolSettings {
   timezone: string;
   timezoneFixed: boolean;
+  attendanceWindow: number;
 }
 
-const SCHOOL_SETTINGS_COLUMNS = `timezone, timezone_fixed AS "timezoneFixed"`;
+/** The settings a School Administrator changes; whether the timezone is fixed is not one. */
+export type ChangeableSchoolSettings = Pick<SchoolSettings, "timezone" | "attendanceWindow">;
+
+const SCHOOL_SETTINGS_COLUMNS = `timezone, timezone_fixed AS "timezoneFixed", attendance_window AS "attendanceWindow"`;
 
 /**
  * A School is always created with a timezone: nothing names a School date
@@ -113,14 +118,22 @@ export async function schoolSettingsOf(database: Queryable, schoolId: string): P
   return rows[0] ?? null;
 }
 
-/** Sets a School's timezone, which the database refuses unless it knows it. */
-export async function setSchoolTimezone(
+/**
+ * Sets a School's timezone and Attendance window, each left as it is where
+ * none is given. The database refuses a timezone it does not know and a
+ * window outside its bounds.
+ */
+export async function setSchoolSettings(
   transaction: Queryable,
-  { schoolId, timezone }: { schoolId: string; timezone: string },
+  schoolId: string,
+  { timezone, attendanceWindow }: Partial<ChangeableSchoolSettings>,
 ): Promise<SchoolSettings> {
   const { rows } = await transaction.query<SchoolSettings>(
-    `UPDATE app.school SET timezone = $2 WHERE id = $1 RETURNING ${SCHOOL_SETTINGS_COLUMNS}`,
-    [schoolId, timezone],
+    `UPDATE app.school
+     SET timezone = coalesce($2, timezone), attendance_window = coalesce($3, attendance_window)
+     WHERE id = $1
+     RETURNING ${SCHOOL_SETTINGS_COLUMNS}`,
+    [schoolId, timezone ?? null, attendanceWindow ?? null],
   );
   return rows[0]!;
 }

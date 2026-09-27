@@ -234,6 +234,36 @@ describe("migrations", () => {
     });
   });
 
+  describe("giving Schools an Attendance window", () => {
+    const MIGRATION = "0021_attendance_window.sql";
+
+    // Returns the database to where it stood before the migration, when a
+    // School had no Attendance window.
+    async function undoMigration() {
+      const owner = server().ownerDatabase;
+      await owner.query(`ALTER TABLE app.school DROP COLUMN attendance_window`);
+      await owner.query(`DELETE FROM public.schema_migrations WHERE name = $1`, [MIGRATION]);
+    }
+
+    it("gives every existing School the default, 7 days", async () => {
+      await undoMigration();
+      await server().ownerDatabase.query(
+        `INSERT INTO app.school (name, timezone) VALUES ('Northside', 'UTC'), ('Westbrook', 'Asia/Manila')`,
+      );
+
+      const result = await migrate(server().ownerDatabase);
+
+      expect(result.applied).toEqual([MIGRATION]);
+      const { rows } = await server().ownerDatabase.query(
+        `SELECT name, attendance_window AS "attendanceWindow" FROM app.school ORDER BY name`,
+      );
+      expect(rows).toEqual([
+        { name: "Northside", attendanceWindow: 7 },
+        { name: "Westbrook", attendanceWindow: 7 },
+      ]);
+    });
+  });
+
   describe("normalising usernames", () => {
     const MIGRATION = "0009_normalised_usernames.sql";
 

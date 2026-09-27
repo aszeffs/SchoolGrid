@@ -228,6 +228,14 @@ export interface SchoolSettings {
   timezone: string;
   /** Whether the timezone can no longer change, as it cannot once the School has an Academic Year. */
   timezoneFixed: boolean;
+  /** How many days after a School date its Attendance may still be recorded or changed normally; 0 is the same day only. */
+  attendanceWindow: number;
+}
+
+/** How many Instructional days up to the School's today a change of the Attendance window would open, and close. */
+export interface AttendanceWindowChange {
+  opens: number;
+  closes: number;
 }
 
 /** One Term of an Academic Year, bounded by School dates written `YYYY-MM-DD`, both inclusive. */
@@ -525,6 +533,14 @@ export const api = {
     request<{ settings: SchoolSettings; timezones: string[] }>("GET", inSchool(schoolId, "/settings")),
   setTimezone: (schoolId: string, timezone: string) =>
     request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { timezone }),
+  /** What changing the Attendance window to this many days would open or close, changing nothing. */
+  previewAttendanceWindow: (schoolId: string, attendanceWindow: number) =>
+    request<AttendanceWindowChange>(
+      "GET",
+      inSchool(schoolId, `/settings/attendance-window-preview?attendanceWindow=${attendanceWindow}`),
+    ),
+  setAttendanceWindow: (schoolId: string, attendanceWindow: number) =>
+    request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { attendanceWindow }),
   academicYears: (schoolId: string) =>
     request<{ academicYears: AcademicYear[] }>("GET", inSchool(schoolId, "/academic-years")),
   createAcademicYear: (schoolId: string, year: { name: string; firstDate: string; lastDate: string }) =>

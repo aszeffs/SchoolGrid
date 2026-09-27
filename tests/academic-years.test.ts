@@ -864,7 +864,7 @@ describe("Academic Years and Terms", () => {
     it("may change while the School has no Academic Year", async () => {
       const world = await arrange();
 
-      expect(await settingsOf(world.alice)).toEqual({ timezone: "America/New_York", timezoneFixed: false });
+      expect(await settingsOf(world.alice)).toEqual({ timezone: "America/New_York", timezoneFixed: false, attendanceWindow: 7 });
       expect((await world.alice.patch("/settings", { timezone: "America/Chicago" })).status).toBe(200);
     });
 
@@ -876,7 +876,7 @@ describe("Academic Years and Terms", () => {
 
       expect(response.status).toBe(409);
       expect(response.body).toEqual({ status: "conflict", conflict: "timezone_fixed" });
-      expect(await settingsOf(world.alice)).toEqual({ timezone: "America/New_York", timezoneFixed: true });
+      expect(await settingsOf(world.alice)).toEqual({ timezone: "America/New_York", timezoneFixed: true, attendanceWindow: 7 });
       expect(await trailOf(world.alice, "school.settings_changed")).toEqual([]);
     });
 
@@ -909,7 +909,7 @@ describe("Academic Years and Terms", () => {
 
       expect(response.status).toBe(409);
       expect(response.body).toEqual({ status: "conflict", conflict: "timezone_fixed" });
-      expect(await settingsOf(world.alice)).toEqual({ timezone: "America/New_York", timezoneFixed: true });
+      expect(await settingsOf(world.alice)).toEqual({ timezone: "America/New_York", timezoneFixed: true, attendanceWindow: 7 });
       for (const database of [server().database, server().ownerDatabase]) {
         await expect(
           database.query("UPDATE app.school SET timezone = 'America/Chicago' WHERE id = $1", [world.northsideId]),

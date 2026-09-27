@@ -47,7 +47,7 @@ describe("Platform Administrator", () => {
         persons: [{ ...schoolAdministrator, claimed: true }],
       });
       expect((await alice.inSchool(school.id).get("/settings")).body).toEqual(
-        expect.objectContaining({ settings: { timezone: "America/New_York", timezoneFixed: false } }),
+        expect.objectContaining({ settings: { timezone: "America/New_York", timezoneFixed: false, attendanceWindow: 7 } }),
       );
     });
 
@@ -328,6 +328,7 @@ describe("Platform Administrator", () => {
           { method: "DELETE", url: "/api/schools/:schoolId/invitations/:invitationId" },
           { method: "GET", url: "/api/schools/:schoolId/settings" },
           { method: "PATCH", url: "/api/schools/:schoolId/settings" },
+          { method: "GET", url: "/api/schools/:schoolId/settings/attendance-window-preview" },
           { method: "GET", url: "/api/schools/:schoolId/school-date" },
           { method: "GET", url: "/api/schools/:schoolId/academic-years" },
           { method: "POST", url: "/api/schools/:schoolId/academic-years" },

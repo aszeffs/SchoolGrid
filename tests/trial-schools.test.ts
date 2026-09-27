@@ -82,8 +82,8 @@ describe("Trial Schools", () => {
       ]);
 
       const school = client.inSchool(schoolId);
-      const settings = (await school.get("/settings")).body as { settings: { timezone: string } };
-      expect(settings.settings.timezone).toBe("Pacific/Kiritimati");
+      const settings = (await school.get("/settings")).body as { settings: { timezone: string; attendanceWindow: number } };
+      expect(settings.settings).toEqual(expect.objectContaining({ timezone: "Pacific/Kiritimati", attendanceWindow: 7 }));
 
       const persons = (await school.get("/persons")).body as { persons: { displayName: string }[] };
       expect(persons.persons.map((person) => person.displayName)).toEqual(INVENTED_PERSONS);

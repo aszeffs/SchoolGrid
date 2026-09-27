@@ -85,6 +85,34 @@ export async function isInstructionalDay(
   return rows[0]!.instructional;
 }
 
+/** How many of the School dates from `from` to `to`, both included, are Instructional days. */
+export async function countInstructionalDays(
+  database: Queryable,
+  { schoolId, from, to }: { schoolId: string; from: SchoolDate; to: SchoolDate },
+): Promise<number> {
+  const { rows } = await database.query<{ count: number }>(
+    // Only the years overlapping the dates are stepped through.
+    `SELECT count(*)::int AS count
+     FROM (
+       ${INSTRUCTIONAL_DAYS}
+         AND academic_year.first_date <= $3::date AND academic_year.last_date >= $2::date
+     ) AS instructional
+     WHERE instructional.date::date BETWEEN $2::date AND $3::date`,
+    [schoolId, from, to],
+  );
+  return rows[0]!.count;
+}
+
+/**
+ * The School date `days` after this one, or before it when `days` is
+ * negative. A School date carries no timezone, so no clock change is met.
+ */
+export function schoolDatePlus(date: SchoolDate, days: number): SchoolDate {
+  const moved = new Date(`${date}T00:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() + days);
+  return moved.toISOString().slice(0, 10);
+}
+
 /** Each of a School's Academic Years' Instructional days in order, by the year's identifier. */
 export async function instructionalDaysInSchool(
   database: Queryable,
