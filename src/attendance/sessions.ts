@@ -245,16 +245,22 @@ export async function lockAttendanceOf(
  * ever taken away (CONTEXT.md: Roster snapshot). Returns how many were added.
  */
 export async function captureRoster(transaction: Queryable, session: AttendanceSession): Promise<number> {
+  return captureRosters(transaction, session.schoolId, [session.id]);
+}
+
+/** Captures the rosters of these sessions of one School at once, as captureRoster does each; returns how many were added. */
+async function captureRosters(transaction: Queryable, schoolId: string, sessionIds: readonly string[]): Promise<number> {
   const { rowCount } = await transaction.query(
     `INSERT INTO app.roster_snapshot_member (school_id, attendance_session_id, roster_membership_id)
-     SELECT m.school_id, $2, m.id
-     FROM app.roster_membership m
+     SELECT m.school_id, s.id, m.id
+     FROM app.attendance_session s
+     JOIN app.roster_membership m ON m.school_id = s.school_id AND m.class_offering_id = s.class_offering_id
      JOIN app.class_offering o ON o.school_id = m.school_id AND o.id = m.class_offering_id
      JOIN app.term t ON t.school_id = o.school_id AND t.id = o.term_id
-     WHERE m.school_id = $1 AND m.class_offering_id = $3
-       AND m.first_date <= $4 AND coalesce(m.last_date, t.last_date) >= $4
+     WHERE s.school_id = $1 AND s.id = ANY($2::uuid[])
+       AND m.first_date <= s.date AND coalesce(m.last_date, t.last_date) >= s.date
      ON CONFLICT DO NOTHING`,
-    [session.schoolId, session.id, session.classOfferingId, session.date],
+    [schoolId, sessionIds],
   );
   return rowCount ?? 0;
 }
@@ -375,7 +381,9 @@ export interface TakenSession {
 /**
  * Opens each session, captures its roster, and records its marks as its
  * opener's, set by set rather than row by row, for a past a new School starts
- * with. None may have been opened already.
+ * with: every session of one School, none opened already. Like the rest of
+ * this module it checks no recording rule; the caller's days and rosters
+ * must satisfy them.
  */
 export async function recordTakenSessions(transaction: Queryable, sessions: readonly TakenSession[]): Promise<void> {
   if (sessions.length === 0) {
@@ -392,16 +400,7 @@ export async function recordTakenSessions(transaction: Queryable, sessions: read
       sessions.map((session) => session.openedByPersonId),
     ],
   );
-  await transaction.query(
-    `INSERT INTO app.roster_snapshot_member (school_id, attendance_session_id, roster_membership_id)
-     SELECT m.school_id, s.id, m.id
-     FROM app.attendance_session s
-     JOIN app.roster_membership m ON m.school_id = s.school_id AND m.class_offering_id = s.class_offering_id
-     JOIN app.class_offering o ON o.school_id = m.school_id AND o.id = m.class_offering_id
-     JOIN app.term t ON t.school_id = o.school_id AND t.id = o.term_id
-     WHERE s.id = ANY($1::uuid[]) AND m.first_date <= s.date AND coalesce(m.last_date, t.last_date) >= s.date`,
-    [rows.map((row) => row.id)],
-  );
+  await captureRosters(transaction, sessions[0]!.schoolId, rows.map((row) => row.id));
   const marks = sessions.flatMap((session) => session.marks.map((mark) => ({ ...session, ...mark })));
   await transaction.query(
     `INSERT INTO app.attendance (school_id, student_person_id, class_offering_id, date, status, recorded_by_person_id)

@@ -71,7 +71,7 @@ describe("the Attendance a trial starts with", () => {
     expect(count("absent_pending_review")).toBe(1);
   });
 
-  it("leaves the Absent-pending-review, and a gap, on the last day in a class the Faculty role teaches the Student role", () => {
+  it("leaves the Absent-pending-review, and a gap, on the last day in the Class Offering the Faculty role teaches the Student role in", () => {
     const { marks } = inventedAttendance(school, { pastDays: PAST_DAYS, today: TODAY, attendanceWindow: WINDOW });
     const lastDay = PAST_DAYS.at(-1)!;
     const taught = new Set(school.courses.filter((course) => course.taughtByRole).map((course) => course.code));
@@ -84,7 +84,7 @@ describe("the Attendance a trial starts with", () => {
     expect(marked.length).toBe(onLastDay.roster.length - 1);
   });
 
-  it("has the Faculty role request a closed absence be excused, in a class they teach", () => {
+  it("has the Faculty role request a closed absence be excused, in a Class Offering they teach", () => {
     const { marks, correctionRequest } = inventedAttendance(school, { pastDays: PAST_DAYS, today: TODAY, attendanceWindow: WINDOW });
 
     const request = correctionRequest!;

@@ -121,10 +121,10 @@ export interface InventedAttendance {
     | null;
 }
 
-/** Where the Faculty role's Attendance is most worth showing: the Student role's class that they teach. */
+/** Where the Faculty role's Attendance is most worth showing: the Class Offering they teach the Student role in. */
 const SHOWN_COURSE = "MATH";
 const SHOWN_LABEL = "Section A";
-/** The classmates the shown class leaves unmarked, and asks to have excused. */
+/** The classmates it leaves unmarked, and asks to have excused. */
 const UNMARKED = "Jordan Okafor";
 const EXCUSED = "Avery Castellano";
 
@@ -134,12 +134,12 @@ const EXCUSED = "Avery Castellano";
  * Present, with some tardiness and absences, and a few Students left
  * unmarked, the same for any two trials given the same days.
  *
- * On the last of them, the Student role is Absent-pending-review in the class
- * the Faculty role teaches them, and a classmate there is left unmarked, which
- * the Faculty role may still fill in. The Faculty role has asked for another
- * classmate's unexcused absence there to be excused, on the last day the
- * Attendance window has closed on, or the first day when it has closed on
- * none, so the School Administrator has a request waiting.
+ * On the last of them, the Student role is Absent-pending-review in the Class
+ * Offering the Faculty role teaches them in, and a classmate there is left
+ * unmarked, which the Faculty role may still fill in. The Faculty role has
+ * asked for another classmate's unexcused absence there to be excused, on the
+ * last day the Attendance window has closed on, or the first day when it has
+ * closed on none, so the School Administrator has a request waiting.
  */
 export function inventedAttendance(
   school: InventedSchool,
@@ -152,7 +152,7 @@ export function inventedAttendance(
   const closedOn = (date: SchoolDate) => Date.parse(today) - Date.parse(date) > attendanceWindow * DAY;
   const excusedOn = pastDays.findLast(closedOn) ?? pastDays[0]!;
 
-  /** What the shown class holds on a day by design: a status, null for a gap, or undefined where it is as any other. */
+  /** What the shown offering holds on a day by design: a status, null for a gap, or undefined where it is as any other. */
   const arranged = (student: string, date: SchoolDate): AttendanceStatus | null | undefined => {
     if (date === lastDay && student === school.rolePersons.student) {
       return "absent_pending_review";
@@ -169,9 +169,9 @@ export function inventedAttendance(
       const shown = code === SHOWN_COURSE && label === SHOWN_LABEL;
       for (const student of rosters[label] ?? []) {
         for (const date of pastDays) {
-          const set = shown ? arranged(student, date) : undefined;
+          const arrangedStatus = shown ? arranged(student, date) : undefined;
           // The last day's sessions were taken whole, but for the gap arranged.
-          const status = set !== undefined ? set : usualStatus(`${code}|${label}|${student}|${date}`, date !== lastDay);
+          const status = arrangedStatus !== undefined ? arrangedStatus : usualStatus(`${code}|${label}|${student}|${date}`, date !== lastDay);
           if (status !== null) {
             marks.push({ course: code, label, student, date, status });
           }
@@ -194,7 +194,7 @@ export function inventedAttendance(
 }
 
 /**
- * A Student's status on an ordinary day, drawn from the day and class alone,
+ * A Student's status on an ordinary day, drawn from the day and offering alone,
  * or null for a mark missed, when `mayMiss`.
  */
 function usualStatus(key: string, mayMiss: boolean): AttendanceStatus | null {

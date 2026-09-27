@@ -144,16 +144,17 @@ export async function startTrialSchool(
     ({ year } = await addException(transaction, year, { date, instructional: false }));
   }
 
-  // Today's Term's offerings, by Course code and label, and who teaches each.
-  const current = new Map<string, { classOfferingId: string; teacher: Person }>();
+  // Today's Term's offerings, by Course code and label, and who is assigned to each.
+  const currentTerm = year.terms.find((term) => term.firstDate <= today && today <= term.lastDate)!;
+  const current = new Map<string, { classOfferingId: string; assigned: Person }>();
   for (const { name, code, labels, taughtByRole, rosters } of invented.courses) {
     const course = await createCourse(transaction, { schoolId: school.id, name, code });
     const assigned = taughtByRole ? faculty : otherFaculty[0]!;
     for (const term of year.terms) {
       for (const label of labels) {
         const offering = await createClassOffering(transaction, { course, term, label });
-        if (term.firstDate <= today && today <= term.lastDate) {
-          current.set(`${code}|${label ?? NO_LABEL}`, { classOfferingId: offering.id, teacher: assigned });
+        if (term.id === currentTerm.id) {
+          current.set(offeringKey(code, label ?? NO_LABEL), { classOfferingId: offering.id, assigned });
         }
         const firstDate = term.firstDate;
         await assignTeaching(transaction, {
@@ -176,22 +177,21 @@ export async function startTrialSchool(
     }
   }
 
-  // Taken by each offering's teacher on the Term's days before today, and
-  // written as the invented past it is: nothing here is audited.
-  const term = year.terms.find((term) => term.firstDate <= today && today <= term.lastDate)!;
+  // Taken by the Faculty member assigned to each offering on the Term's days
+  // before today, and written as the invented past it is: nothing here is audited.
   const yesterday = schoolDatePlus(today, -1);
   const pastDays =
-    yesterday < term.firstDate
+    yesterday < currentTerm.firstDate
       ? []
-      : await instructionalDaysBetween(transaction, { schoolId: school.id, from: term.firstDate, to: yesterday });
+      : await instructionalDaysBetween(transaction, { schoolId: school.id, from: currentTerm.firstDate, to: yesterday });
   const { attendanceWindow } = (await schoolSettingsOf(transaction, school.id))!;
   const { marks, correctionRequest } = inventedAttendance(invented, { pastDays, today, attendanceWindow });
   const sessions = new Map<string, TakenSession & { marks: TakenSession["marks"][number][] }>();
   for (const { course, label, student, date, status } of marks) {
-    const { classOfferingId, teacher } = current.get(`${course}|${label}`)!;
+    const { classOfferingId, assigned } = current.get(offeringKey(course, label))!;
     let session = sessions.get(`${classOfferingId}|${date}`);
     if (session === undefined) {
-      session = { schoolId: school.id, classOfferingId, date, openedByPersonId: teacher.id, marks: [] };
+      session = { schoolId: school.id, classOfferingId, date, openedByPersonId: assigned.id, marks: [] };
       sessions.set(`${classOfferingId}|${date}`, session);
     }
     session.marks.push({ studentPersonId: students.get(student)!.id, status });
@@ -201,7 +201,7 @@ export async function startTrialSchool(
     const { course, label, student, ...request } = correctionRequest;
     await raiseCorrectionRequest(transaction, {
       schoolId: school.id,
-      classOfferingId: current.get(`${course}|${label}`)!.classOfferingId,
+      classOfferingId: current.get(offeringKey(course, label))!.classOfferingId,
       studentPersonId: students.get(student)!.id,
       ...request,
       requestedByPersonId: faculty.id,
@@ -209,6 +209,11 @@ export async function startTrialSchool(
   }
 
   return { school, expiresAt, schoolAdministrator: accounts.get("school_administrator")! };
+}
+
+/** One invented Class Offering's key: its Course's code and its label, NO_LABEL for none. */
+function offeringKey(code: string, label: string): string {
+  return `${code}|${label}`;
 }
 
 /**

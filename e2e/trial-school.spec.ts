@@ -95,7 +95,7 @@ test.describe("in a Trial School", () => {
     // A Term's first day has no day behind it to have been taken.
     test.skip(correctionRequests.length === 0, "the trial started on its Term's first day");
     const { classOffering } = correctionRequests[0]!;
-    const className = `${classOffering.course.name}, ${classOffering.label}`;
+    const offeringName = `${classOffering.course.name}, ${classOffering.label}`;
     // Class Offering or Student, then Present, Tardy, Excused absence, Unexcused absence, Absent pending review, and Not recorded.
     const pendingReview = (row: ReturnType<typeof recordRows>) => row.getByRole("cell").nth(5);
     const pending = () => recordRows(page, "Pending Correction requests").filter({ hasText: "Avery Castellano" });
@@ -104,26 +104,31 @@ test.describe("in a Trial School", () => {
     await page.getByRole("link", { name: "Correction requests" }).first().click();
     await expect(pending()).toContainText("Sam Achterberg");
     await expect(pending().getByRole("button", { name: /^Approve/ })).toBeVisible();
+    // Its request opens the session it names.
+    await pending().getByRole("link").first().click();
+    await expect(page.getByRole("heading", { level: 1, name: offeringName })).toBeVisible();
+    await expect(page.getByRole("main")).toContainText("Avery Castellano");
 
     await viewAs(page, "Faculty");
     await page.getByRole("link", { name: "Correction requests" }).first().click();
-    await expect(pending()).toContainText("Pending");
+    // Their own, which they may withdraw and not approve.
+    await expect(pending().getByRole("button", { name: /^Withdraw/ })).toBeVisible();
     await pending().getByRole("link").first().click();
-    await expect(page.getByRole("heading", { level: 1, name: className })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: offeringName })).toBeVisible();
     await expect(page.getByRole("main")).toContainText("Avery Castellano");
-    await page.getByRole("link", { name: className }).first().click();
+    await page.getByRole("link", { name: offeringName }).first().click();
     const totals = recordRows(page, "Attendance totals");
     await expect(pendingReview(totals.filter({ hasText: "Jamie Lindqvist" }))).toHaveText("1");
 
     await viewAs(page, "Student");
     await page.getByRole("link", { name: "Your attendance" }).click();
     const own = new RegExp(`^Jamie Lindqvist's Attendance totals in ${classOffering.term.name}, `);
-    const ownRow = page.getByRole("table", { name: own }).getByRole("row").filter({ hasText: className });
+    const ownRow = page.getByRole("table", { name: own }).getByRole("row").filter({ hasText: offeringName });
     await expect(pendingReview(ownRow)).toHaveText("1");
 
     await viewAs(page, "Guardian");
     await expect(page.getByRole("heading", { level: 2, name: "Attendance", exact: true })).toBeVisible();
-    const linkedRow = page.getByRole("table", { name: own }).getByRole("row").filter({ hasText: className });
+    const linkedRow = page.getByRole("table", { name: own }).getByRole("row").filter({ hasText: offeringName });
     await expect(pendingReview(linkedRow)).toHaveText("1");
   });
 
