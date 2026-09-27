@@ -192,6 +192,14 @@ describe("Browser sessions", () => {
       assigned.status,
       rostered.status,
     ]).toEqual([201, 201, 200, 201, 201, 201, 200, 201, 201, 201, 201]);
+    // Written as it would stand, not raised: whether its date could hold Attendance turns on today's.
+    const { rows: corrections } = await server().ownerDatabase.query<{ id: string }>(
+      `INSERT INTO app.correction_request
+         (school_id, target_kind, student_person_id, class_offering_id, date, after_value, reason, requested_by_person_id)
+       VALUES ($1, 'attendance', $2, $3, '2026-09-01', 'present', 'Seen in the office', $4)
+       RETURNING id`,
+      [school.id, student.id, classOfferingId, schoolAdministrator.id],
+    );
 
     const identifiers: Record<string, string> = {
       schoolId: school.id,
@@ -206,6 +214,7 @@ describe("Browser sessions", () => {
       classOfferingId,
       teachingAssignmentId: (assigned.body as { teachingAssignment: { id: string } }).teachingAssignment.id,
       rosterMembershipId: (rostered.body as { rosterMemberships: { id: string }[] }).rosterMemberships[0]!.id,
+      correctionRequestId: corrections[0]!.id,
     };
     return {
       school,

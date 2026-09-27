@@ -205,7 +205,7 @@ describe("Correction requests", () => {
   }
 
   function raise(world: World, as: TestClient, { reason = "Seen in the office", ...target }: Raise): Promise<TestResponse> {
-    return as.post("/correction-requests", { kind: "attendance", classOfferingId: world.offering.id, reason, ...target });
+    return as.post(`/class-offerings/${world.offering.id}/correction-requests`, { kind: "attendance", reason, ...target });
   }
 
   async function raised(world: World, as: TestClient, target: Raise): Promise<CorrectionRequest> {
@@ -314,9 +314,8 @@ describe("Correction requests", () => {
         answered.push(`${what} answered ${response.status} ${JSON.stringify(response.body)}`);
       }
     }
-    const withoutReason = await world.frankie.post("/correction-requests", {
+    const withoutReason = await world.frankie.post(`/class-offerings/${world.offering.id}/correction-requests`, {
       kind: "attendance",
-      classOfferingId: world.offering.id,
       studentPersonId: world.samPerson.id,
       date: world.closed,
       after: "tardy",
@@ -540,10 +539,10 @@ describe("Correction requests", () => {
       ["a Guardian", () => raise(world, world.gina, target)],
       ["another School's Administrator", () => raise(world, world.bob.inSchool(world.schoolId), target)],
       // Refused before the rest of the body is read, so nonsense says nothing more.
-      ["a former teacher sending nonsense", () => world.ellis.post("/correction-requests", { kind: "attendance", classOfferingId: world.offering.id, date: 7 })],
+      ["a former teacher sending nonsense", () => world.ellis.post(`/class-offerings/${world.offering.id}/correction-requests`, { date: 7 })],
       [
         "an offering that does not exist",
-        () => world.alice.post("/correction-requests", { kind: "attendance", classOfferingId: ABSENT_ID, ...target, reason: "x" }),
+        () => world.alice.post(`/class-offerings/${ABSENT_ID}/correction-requests`, { kind: "attendance", ...target, reason: "x" }),
       ],
     ];
     const answered: string[] = [];

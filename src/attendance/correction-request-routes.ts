@@ -35,22 +35,12 @@ import {
 import { recordChange } from "./routes.ts";
 import { ATTENDANCE_STATUSES, dateProblem, isAttendanceStatus, studentProblem, type AttendanceStatus } from "./sessions.ts";
 
-const RAISE_FIELDS = ["kind", "classOfferingId", "studentPersonId", "date", "after", "reason"];
+const RAISE_FIELDS = ["kind", "studentPersonId", "date", "after", "reason"];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Validation below runs only once the Access decision has permitted the
 // caller: see InvalidRequest.
-
-/**
- * The Class Offering a request is raised for, read on its own, and leniently:
- * who may raise one depends on it, so it is read before anything else, and a
- * body that names none names an offering that does not exist.
- */
-function offeringIdFrom(body: unknown): string {
-  const value = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["classOfferingId"] : undefined;
-  return typeof value === "string" ? value : "";
-}
 
 function parseRaise(body: unknown): { studentPersonId: string; date: SchoolDate; after: AttendanceStatus; reason: string } {
   const fields = fieldsOf(body, RAISE_FIELDS);
@@ -203,10 +193,10 @@ export function registerCorrectionRequestRoutes(app: FastifyInstance, database: 
       return { correctionRequests: await serveRequests(database, actor.schoolId, await correctionRequestsIn(database, whose)) };
     });
 
-    // Raises a request, its before value the target's as it stands: none,
-    // when nothing was recorded.
-    scope.post("/correction-requests", async (actor, { body }) => {
-      const classOfferingId = offeringIdFrom(body);
+    // Raises a request for one Student's Attendance in the offering, its
+    // before value the target's as it stands: none, when nothing was recorded.
+    scope.post("/class-offerings/:classOfferingId/correction-requests", async (actor, { params, body }) => {
+      const classOfferingId = params["classOfferingId"]!;
       const readable = authorizeReadAttendanceOf(actor, classOfferingId, await findClassOffering(database, classOfferingId));
       return withTransaction(database, async (transaction) => {
         const offering = await authorizeRaiseCorrectionRequest(transaction, actor, readable);

@@ -767,12 +767,19 @@ export const api = {
   /** Proposes a change to one Student's Attendance, with a reason, whatever the date. */
   raiseCorrectionRequest: (
     schoolId: string,
-    raising: { classOfferingId: string; studentPersonId: string; date: string; after: AttendanceStatus; reason: string },
+    { classOfferingId, ...raising }: {
+      classOfferingId: string;
+      studentPersonId: string;
+      date: string;
+      after: AttendanceStatus;
+      reason: string;
+    },
   ) =>
-    request<{ correctionRequest: CorrectionRequest }>("POST", inSchool(schoolId, "/correction-requests"), {
-      kind: "attendance",
-      ...raising,
-    }),
+    request<{ correctionRequest: CorrectionRequest }>(
+      "POST",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/correction-requests`),
+      { kind: "attendance", ...raising },
+    ),
   /** Approves, rejects, or withdraws a Pending request. Approval applies its change at once. */
   decideCorrectionRequest: (schoolId: string, correctionRequestId: string, decision: CorrectionDecision) =>
     request<{ correctionRequest: CorrectionRequest }>(
