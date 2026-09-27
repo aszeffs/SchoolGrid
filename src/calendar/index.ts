@@ -103,6 +103,25 @@ export async function countInstructionalDays(
   return rows[0]!.count;
 }
 
+/** The School dates from `from` to `to`, both included, that are Instructional days, in order. */
+export async function instructionalDaysBetween(
+  database: Queryable,
+  { schoolId, from, to }: { schoolId: string; from: SchoolDate; to: SchoolDate },
+): Promise<SchoolDate[]> {
+  const { rows } = await database.query<{ date: SchoolDate }>(
+    // Only the years overlapping the dates are stepped through.
+    `SELECT instructional.date
+     FROM (
+       ${INSTRUCTIONAL_DAYS}
+         AND academic_year.first_date <= $3::date AND academic_year.last_date >= $2::date
+     ) AS instructional
+     WHERE instructional.date::date BETWEEN $2::date AND $3::date
+     ORDER BY instructional.date`,
+    [schoolId, from, to],
+  );
+  return rows.map((row) => row.date);
+}
+
 /**
  * The School date `days` after this one, or before it when `days` is
  * negative. A School date carries no timezone, so no clock change is met.
