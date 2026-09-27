@@ -31,12 +31,12 @@ function linkedStudents(page: Page) {
   return page.getByRole("table", { name: "Students you are linked to" }).getByRole("row");
 }
 
-/** A Guardian landing here is told what is not built, in the glossary's own terms. */
+/** A Guardian landing here is told what is not built, in the glossary's own terms: Term results, and no longer Attendance. */
 async function expectSaysWhatIsNotBuilt(page: Page): Promise<void> {
-  const notBuilt = page.getByRole("main").getByText(/not built yet/);
-  await expect(notBuilt.first()).toBeVisible();
-  await expect(page.getByRole("main")).toContainText("Attendance");
-  await expect(page.getByRole("main")).toContainText("Term results");
+  const notBuilt = page.getByRole("main").locator(".not-built");
+  await expect(notBuilt).toBeVisible();
+  await expect(notBuilt).toContainText("Term results");
+  await expect(notBuilt).not.toContainText("Attendance");
 }
 
 test("a Student lands on their account, which names their School, their role and their Enrollment", async ({

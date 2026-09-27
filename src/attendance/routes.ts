@@ -1,11 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import {
   authorizeReadAttendanceOf,
+  authorizeReadAttendanceOfStudent,
   authorizeRecordAttendance,
   recordingRefusal,
   type Actor,
 } from "../access/index.ts";
-import { findClassOffering, type DescribedClassOffering } from "../academic-structure/courses.ts";
+import { presentOffering } from "../academic-structure/course-routes.ts";
+import {
+  classOfferingsInSchool,
+  findClassOffering,
+  type DescribedClassOffering,
+} from "../academic-structure/courses.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
 import { schoolDateAt, schoolDatePlus, type SchoolDate } from "../calendar/index.ts";
@@ -15,7 +21,7 @@ import { Conflict } from "../http/conflict.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { fieldsOf, schoolDateFrom } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
-import { findPersons, schoolSettingsOf } from "../identity/index.ts";
+import { findPerson, findPersons, schoolSettingsOf } from "../identity/index.ts";
 import {
   ATTENDANCE_STATUSES,
   attendanceOn,
@@ -33,7 +39,7 @@ import {
   type MarkRefusal,
   type ReadOnlyBecause,
 } from "./sessions.ts";
-import { classOfferingAttendance } from "./totals.ts";
+import { classOfferingAttendance, studentAttendance } from "./totals.ts";
 
 /**
  * The most marks one save carries. A class of any real size fits well inside
@@ -203,7 +209,11 @@ async function recordChange(transaction: Queryable, actor: Actor, before: Attend
  *
  * Reading one, or the offering's Attendance as a whole with each Student's
  * Attendance totals, is for anyone who may read the offering's Attendance: a
- * School Administrator, or Faculty ever assigned to it. Opening
+ * School Administrator, or Faculty ever assigned to it. One Student's own
+ * Attendance and totals, in every Class Offering they were rostered in, are
+ * read by that Student, a Guardian their link permits, and a School
+ * Administrator. Attendance is read as soon as it is recorded, and never
+ * publishes. Opening
  * it, refreshing its Roster snapshot, and saving marks are for a Faculty
  * member whose Teaching assignment covers the date and is active now, on an
  * Instructional day of the Term up to the School's today, inside its
@@ -242,6 +252,30 @@ export function registerAttendanceRoutes(app: FastifyInstance, database: Databas
               totals,
             }))
             .sort(byName),
+        },
+      };
+    });
+
+    // One Student's own Attendance and totals in each Class Offering they were
+    // rostered in or marked in, up to the School's today: the latest Term
+    // first, and by Course within it. Nothing of any classmate's, nor who
+    // recorded each mark.
+    scope.get("/persons/:personId/attendance", async (actor, { params }) => {
+      const personId = params["personId"]!;
+      const student = authorizeReadAttendanceOfStudent(actor, personId, await findPerson(database, personId));
+      const today = (await schoolDateAt(database, { schoolId: student.schoolId, at: await transactionTime(database) }))!;
+      const own = await studentAttendance(database, {
+        schoolId: student.schoolId,
+        studentPersonId: student.id,
+        offerings: await classOfferingsInSchool(database, student.schoolId),
+        today,
+      });
+      const classOfferings = own.map(({ offering, ...rest }) => ({ ...presentOffering(offering), ...rest }));
+      return {
+        studentAttendance: {
+          student: { id: student.id, displayName: student.displayName },
+          today,
+          classOfferings,
         },
       };
     });

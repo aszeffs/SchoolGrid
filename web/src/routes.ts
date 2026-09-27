@@ -17,6 +17,7 @@ const PATHS = {
   trialEnded: "/trial-ended",
   account: "/schools/:schoolId/account",
   classes: "/schools/:schoolId/classes",
+  yourAttendance: "/schools/:schoolId/attendance",
   persons: "/schools/:schoolId/persons",
   invitations: "/schools/:schoolId/invitations",
   memberships: "/schools/:schoolId/memberships",
@@ -133,6 +134,7 @@ export interface Section {
 export const SECTIONS: readonly Section[] = [
   { name: "account", label: "Your account", reachedBy: null },
   { name: "classes", label: "Your classes", reachedBy: ["faculty", "student"], reachedByTaught: true },
+  { name: "yourAttendance", label: "Your attendance", reachedBy: ["student"] },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
   { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },

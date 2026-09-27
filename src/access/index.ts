@@ -14,7 +14,7 @@ import {
 } from "../identity/index.ts";
 import { invitationState, type Invitation, type InvitationState } from "../identity/invitations.ts";
 import { currentEnrollmentOf, hasOpenEnrollment, type Enrollment } from "./enrollments.ts";
-import { guardianLinksHeldBy, linkedStudentIds, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
+import { guardianLinksHeldBy, linkedStudentProfiles, type AccessProfile, type GuardianLink } from "./guardian-links.ts";
 import {
   activeRoles,
   ROLES,
@@ -104,8 +104,11 @@ export interface Actor {
 /** What an Actor holds at the moment they were resolved. */
 interface Standing {
   roles: ReadonlySet<Role>;
-  /** The Students linked to the Actor as a Guardian, while that membership is in force. */
-  linkedStudentIds: ReadonlySet<string>;
+  /**
+   * The Students linked to the Actor as a Guardian, while that membership is
+   * in force, each with their own link's Access profile.
+   */
+  linkedStudents: ReadonlyMap<string, AccessProfile>;
   /**
    * Whether the Actor, as a Student, holds an open Enrollment. Looked up on every
    * request and never stored: a Student's access is full while an Enrollment is
@@ -172,14 +175,16 @@ export async function resolveActor(
   // A link reaches its Student only through a Guardian membership in force, so
   // a Guardian whose membership has ended keeps nothing through their links,
   // whatever else they still hold.
-  const linkedStudents = roles.has("guardian") ? await linkedStudentIds(database, person) : new Set<string>();
+  const linkedStudents = roles.has("guardian")
+    ? await linkedStudentProfiles(database, person)
+    : new Map<string, AccessProfile>();
   const enrolled = roles.has("student") && (await hasOpenEnrollment(database, person));
   const taught = await teachingAssignments.classOfferingIdsOf(database, person);
   const rostered = roles.has("student") ? await rosterMemberships.classOfferingIdsOf(database, person) : new Set<string>();
   const actor: Actor = Object.freeze({ person, schoolId: person.schoolId });
   standingOf.set(actor, {
     roles,
-    linkedStudentIds: linkedStudents,
+    linkedStudents,
     enrolled,
     taughtClassOfferingIds: taught,
     rosteredClassOfferingIds: rostered,
@@ -577,7 +582,12 @@ function holds(actor: Actor, role: Role): boolean {
 }
 
 function isLinkedTo(actor: Actor, student: Person): boolean {
-  return standingOf.get(actor)?.linkedStudentIds.has(student.id) ?? false;
+  return standingOf.get(actor)?.linkedStudents.has(student.id) ?? false;
+}
+
+/** Whether the actor's link to this Student is in force and its Access profile grants attendance read. */
+function mayReadAttendanceThroughLink(actor: Actor, student: Person): boolean {
+  return standingOf.get(actor)?.linkedStudents.get(student.id)?.attendanceRead ?? false;
 }
 
 function isEnrolled(actor: Actor): boolean {
@@ -604,8 +614,8 @@ function outOfReach(actor: Actor, target: { schoolId: string } | null): RefusalR
  *
  * A Guardian reaches each Student they are linked to, and nothing about the
  * School's structure widens that. The link's Access profile is not consulted
- * here: the slices whose records it gates, Attendance and Term results, enforce
- * it.
+ * here: the records it gates are decided on their own, Attendance by
+ * authorizeReadAttendanceOfStudent.
  *
  * A Person reaches their own published records whatever their Enrollment, and
  * their own unpublished ones only while an Enrollment is open. The asymmetry
@@ -635,8 +645,8 @@ function decideReadRecordOf(
 
 /**
  * Returns the Person a record belongs to if the actor may read that record, and
- * refuses otherwise, naming the record as the caller did. A Student's records
- * still to be built, Attendance and Term results, are read through this.
+ * refuses otherwise, naming the record as the caller did. A Student's Term
+ * results, still to be built, are read through this.
  */
 export function authorizeReadRecordOf(
   actor: Actor,
@@ -1008,6 +1018,33 @@ export function authorizeReadAttendanceOf<O extends { id: string; schoolId: stri
     (holds(actor, "school_administrator") || hasTaught(actor, target!) ? null : "forbidden");
   if (reason !== null) {
     throw new Refused(reason, { type: "class_offering", id: classOfferingId });
+  }
+  return target!;
+}
+
+/**
+ * Returns the Person whose own Attendance, in every Class Offering they were
+ * rostered in, the actor may read, and refuses otherwise.
+ *
+ * A Student reads their own whatever their Enrollment: Attendance never
+ * publishes and is readable as soon as it is recorded, so it stays theirs as a
+ * published record does (CONTEXT.md: Attendance, Enrollment). A Guardian reads
+ * a linked Student's while the link is in force and its Access profile grants
+ * attendance read, each Student by their own link's profile (CONTEXT.md:
+ * Access profile). A School Administrator reads any in the School. Faculty read
+ * Attendance by the Class Offering they taught (authorizeReadAttendanceOf),
+ * never one Student's across offerings they did not.
+ */
+export function authorizeReadAttendanceOfStudent(actor: Actor, personId: string, target: Person | null): Person {
+  const reason =
+    outOfReach(actor, target) ??
+    (holds(actor, "school_administrator") ||
+    target!.id === actor.person.id ||
+    mayReadAttendanceThroughLink(actor, target!)
+      ? null
+      : "forbidden");
+  if (reason !== null) {
+    throw new Refused(reason, { type: "person", id: personId });
   }
   return target!;
 }
