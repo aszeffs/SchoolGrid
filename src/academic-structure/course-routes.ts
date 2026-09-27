@@ -45,7 +45,7 @@ function presentCourse({ id, name, code }: Course) {
 }
 
 /** A Class Offering as served, with the Course it offers and the Term, and year, it is offered in. */
-function presentOffering({ id, label, course, term }: DescribedClassOffering) {
+export function presentOffering({ id, label, course, term }: DescribedClassOffering) {
   return {
     id,
     label,

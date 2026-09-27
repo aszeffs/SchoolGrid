@@ -13,8 +13,8 @@ import type { Person } from "../identity/index.ts";
 
 /**
  * Two independent permissions, not named modes, so any combination can be
- * held. Stored and returned only: nothing reads with them until Attendance and
- * Term results exist, and those slices enforce them.
+ * held. The decision in ./index.ts enforces attendance read; results read
+ * waits for Term results.
  */
 export interface AccessProfile {
   attendanceRead: boolean;
@@ -152,14 +152,16 @@ export async function endGuardianLinksTo(
   return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
 }
 
-/** The Students this Person holds a link in force to, as a Guardian. */
-export async function linkedStudentIds(database: Queryable, guardian: Person): Promise<Set<string>> {
-  const { rows } = await database.query<{ studentPersonId: string }>(
-    `SELECT student_person_id AS "studentPersonId" FROM app.guardian_link
+/** The Students this Person holds a link in force to, as a Guardian, each with that link's Access profile. */
+export async function linkedStudentProfiles(database: Queryable, guardian: Person): Promise<Map<string, AccessProfile>> {
+  const { rows } = await database.query<{ studentPersonId: string; accessProfile: AccessProfile }>(
+    `SELECT student_person_id AS "studentPersonId",
+       json_build_object('attendanceRead', attendance_read, 'resultsRead', results_read) AS "accessProfile"
+     FROM app.guardian_link
      WHERE school_id = $1 AND guardian_person_id = $2 AND ended_at IS NULL`,
     [guardian.schoolId, guardian.id],
   );
-  return new Set(rows.map((row) => row.studentPersonId));
+  return new Map(rows.map((row) => [row.studentPersonId, row.accessProfile]));
 }
 
 /**

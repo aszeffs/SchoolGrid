@@ -40,16 +40,18 @@ export interface StudentAttendance {
  * A Class Offering's Attendance up to the School's today: the dates it is
  * shown on, which are its Term's Instructional days so far and any other date
  * that holds a mark; and each Student ever rostered in it, or marked in it,
- * with their marks and totals.
+ * with their marks and totals. Given `studentPersonId`, that Student alone.
  */
 export async function classOfferingAttendance(
   database: Queryable,
   {
     offering,
     today,
+    studentPersonId = null,
   }: {
     offering: { id: string; schoolId: string; term: { firstDate: SchoolDate; lastDate: SchoolDate } };
     today: SchoolDate;
+    studentPersonId?: string | null;
   },
 ): Promise<{ dates: AttendanceDate[]; students: StudentAttendance[] }> {
   const { schoolId, term } = offering;
@@ -59,14 +61,14 @@ export async function classOfferingAttendance(
     from: term.firstDate,
     to: [today, term.lastDate].sort()[0]!,
   });
-  const marks = await attendanceIn(database, { schoolId, classOfferingId: offering.id });
+  const marks = await attendanceIn(database, { schoolId, classOfferingId: offering.id, studentPersonId });
   const { rows: memberships } = await database.query<RosteredBounds & { studentPersonId: string }>(
     `SELECT student_person_id AS "studentPersonId", to_char(first_date, 'YYYY-MM-DD') AS "firstDate",
        to_char(last_date, 'YYYY-MM-DD') AS "lastDate"
      FROM app.roster_membership
-     WHERE school_id = $1 AND class_offering_id = $2
+     WHERE school_id = $1 AND class_offering_id = $2 AND ($3::uuid IS NULL OR student_person_id = $3)
      ORDER BY first_date, id`,
-    [schoolId, offering.id],
+    [schoolId, offering.id, studentPersonId],
   );
 
   const instructional = new Set(instructionalDays);
@@ -92,6 +94,25 @@ export async function classOfferingAttendance(
       totals: totalsOf(student, instructionalDays, instructional, term.lastDate),
     })),
   };
+}
+
+/**
+ * The Class Offerings a Student was ever rostered in, or holds Attendance in:
+ * those whose Attendance is theirs to be read.
+ */
+export async function classOfferingIdsAttendedBy(
+  database: Queryable,
+  { schoolId, studentPersonId }: { schoolId: string; studentPersonId: string },
+): Promise<Set<string>> {
+  const { rows } = await database.query<{ classOfferingId: string }>(
+    `SELECT class_offering_id AS "classOfferingId" FROM app.roster_membership
+     WHERE school_id = $1 AND student_person_id = $2
+     UNION
+     SELECT class_offering_id FROM app.attendance
+     WHERE school_id = $1 AND student_person_id = $2`,
+    [schoolId, studentPersonId],
+  );
+  return new Set(rows.map((row) => row.classOfferingId));
 }
 
 /**

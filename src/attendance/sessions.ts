@@ -240,16 +240,20 @@ export async function attendanceOn(
   return rows;
 }
 
-/** Every Attendance recorded for a Class Offering, on whichever School date, by date. */
+/** Every Attendance recorded for a Class Offering, on whichever School date, by date: one Student's alone, given `studentPersonId`. */
 export async function attendanceIn(
   database: Queryable,
-  { schoolId, classOfferingId }: { schoolId: string; classOfferingId: string },
+  {
+    schoolId,
+    classOfferingId,
+    studentPersonId = null,
+  }: { schoolId: string; classOfferingId: string; studentPersonId?: string | null },
 ): Promise<Attendance[]> {
   const { rows } = await database.query<Attendance>(
     `SELECT ${ATTENDANCE_COLUMNS} FROM app.attendance
-     WHERE school_id = $1 AND class_offering_id = $2
+     WHERE school_id = $1 AND class_offering_id = $2 AND ($3::uuid IS NULL OR student_person_id = $3)
      ORDER BY date, id`,
-    [schoolId, classOfferingId],
+    [schoolId, classOfferingId, studentPersonId],
   );
   return rows;
 }
