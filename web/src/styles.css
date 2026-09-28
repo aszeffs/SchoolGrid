@@ -902,10 +902,22 @@ fieldset legend {
   font-weight: 650;
 }
 
-/* One Term among a year's, edited in place: its fields, then the way to remove it. */
-.term-draft {
+/*
+ * One Term among a year's, or one value of a Result value scale, edited in
+ * place: its fields, then the ways to move or remove it.
+ */
+.term-draft,
+.value-draft {
   gap: calc(var(--step) * 1.5);
   padding-bottom: calc(var(--step) * 1.5);
+}
+
+/* A Result value scale as it stands: its values in their order, numbered. */
+.scale-values {
+  display: grid;
+  gap: calc(var(--step) * 0.5);
+  margin: 0;
+  padding-left: calc(var(--step) * 3);
 }
 
 .term-draft > button,

@@ -55,7 +55,10 @@ export type ConflictDetail =
   | { conflict: "not_rostered_on_date" }
   /** The Student's Enrollment had ended by the School date. */
   | { conflict: "enrollment_ended" }
-  /** A Correction request would propose the value its target already holds. */
+  /**
+   * A Correction request would propose the value its target already holds, or
+   * a Result value scale save the values the current version already holds.
+   */
   | { conflict: "unchanged" }
   /** The Correction request has already been approved, rejected, or withdrawn. */
   | { conflict: "not_pending" }

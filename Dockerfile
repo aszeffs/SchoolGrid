@@ -50,9 +50,11 @@ COPY web/package.json ./web/
 RUN npm ci --workspace=@schoolgrid/web --include-workspace-root=false
 
 # The bounds the page holds a form to are the service's, imported rather than
-# restated (src/validation/bounds.ts). That one directory, and not the rest of
-# the service, so a change to a route does not invalidate this layer.
+# restated (src/validation/bounds.ts), and so is the Result value scale's
+# same-values check (src/results). Those directories, and not the rest of the
+# service, so a change elsewhere does not invalidate this layer.
 COPY src/validation ./src/validation
+COPY src/results ./src/results
 COPY web ./web
 RUN npm run build --workspace=@schoolgrid/web
 
