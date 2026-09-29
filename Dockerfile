@@ -12,7 +12,7 @@
 # The Node major here must match the distroless runtime below. Compiled output
 # and installed dependencies built on one major and run on another work until a
 # dependency or a language feature depends on the difference.
-FROM node:24-bookworm@sha256:6dac556d980b7f0e5498d08f08cee0ca67798b4ad6c23964a9214920e67758d0 AS node-base
+FROM node:24-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4 AS node-base
 
 # ---- build -----------------------------------------------------------------
 # A full Node image, because compiling needs the toolchain. Nothing from this
