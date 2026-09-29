@@ -88,6 +88,7 @@ export function TermResults({ school, classOfferingId }: { school: ReachedSchool
           busy={busy}
           onSave={(drafts) => change(() => api.saveTermResults(schoolId, classOfferingId, drafts))}
           onPublish={() => change(() => api.publishTermResults(schoolId, classOfferingId))}
+          onRefresh={() => change(() => api.classOfferingResults(schoolId, classOfferingId))}
         />
       );
     }
@@ -102,6 +103,7 @@ function ResultsSheet({
   busy,
   onSave,
   onPublish,
+  onRefresh,
 }: {
   schoolId: string;
   administers: boolean;
@@ -112,6 +114,7 @@ function ResultsSheet({
     drafts: TermResultDraft[],
   ) => Promise<ApiResult<{ classOfferingResults: ClassOfferingResults; refusedDrafts: RefusedDraft[] }>>;
   onPublish: () => Promise<ApiResult<{ publication: { resultCount: number } }>>;
+  onRefresh: () => Promise<ApiResult<{ classOfferingResults: ClassOfferingResults }>>;
 }) {
   /** The results edited and not yet saved, by Student. */
   const [entries, setEntries] = useState<ReadonlyMap<string, Entry>>(new Map());
@@ -127,17 +130,24 @@ function ResultsSheet({
   const recordable = readOnlyBecause === null;
   const { term } = offering;
   /** Whether a Student's result is edited here: a published one changes only through a Correction request. */
-  const editable = (student: Student) => recordable && student.termResult?.publishedAt == null;
-  const published = students.filter((student) => student.termResult?.publishedAt != null).length;
+  const editable = (student: Student) => recordable && !isPublished(student);
+  const publishedCount = students.filter(isPublished).length;
 
-  // Checks what the server would refuse before asking for a confirmation, so
-  // the dialog only ever confirms a Publication that can land.
-  const review = () => {
+  // Reads the results again, so a value a co-teacher has given since counts,
+  // and checks what the server would refuse before asking for a
+  // confirmation: the dialog only ever confirms a Publication that can land.
+  const review = async () => {
     setDone("");
+    const read = await onRefresh();
+    if (!read.ok) {
+      setPublishProblem("Publishing is not available.");
+      return;
+    }
+    const { missingValue, ready } = read.body.classOfferingResults.publication;
     const problem =
-      publication.missingValue.length > 0
-        ? publishProblemOf({ conflict: "values_missing", students: publication.missingValue })
-        : publication.ready === 0
+      missingValue.length > 0
+        ? publishProblemOf({ conflict: "values_missing", students: missingValue })
+        : ready === 0
           ? publishProblemOf({ conflict: "nothing_to_publish" })
           : null;
     setPublishProblem(problem);
@@ -206,7 +216,7 @@ function ResultsSheet({
           with Students still left without a value.
         </Key>
         <Key term="Published">
-          A result its Student and their Guardians can see. Publishing cannot be undone, and waits until every Student
+          A result its Student can see, as can each Guardian permitted to see their results. Publishing cannot be undone, and waits until every Student
           still on the roster has a value. A published result changes only through a Correction request.
         </Key>
         <Key term="Changed since you opened it">
@@ -276,7 +286,7 @@ function ResultsSheet({
                         <span className="mark mark--struck">Left {formatSchoolDate(left)}</span>
                       </>
                     )}
-                    {student.termResult?.publishedAt != null && (
+                    {isPublished(student) && (
                       <>
                         {" "}
                         <span className="mark">Published</span>
@@ -378,14 +388,14 @@ function ResultsSheet({
       <section aria-labelledby="publication-heading">
         <h2 id="publication-heading">Publication</h2>
         <p>
-          {published === 0 ? "No result is published yet." : `${countOf(published)} published.`}{" "}
+          {publishedCount === 0 ? "No result is published yet." : `${countOf(publishedCount)} published.`}{" "}
           {publication.ready === 0 ? "Nothing new to publish." : `${countOf(publication.ready)} ready to publish.`}
         </p>
         {publication.mayPublish && (
           <>
             {entries.size > 0 && <p className="muted">Save your changes first: only saved results are published.</p>}
             <p className="actions">
-              <button type="button" disabled={busy || entries.size > 0} onClick={review}>
+              <button type="button" disabled={busy || entries.size > 0} onClick={() => void review()}>
                 Publish results
               </button>
             </p>
@@ -409,8 +419,8 @@ function ResultsSheet({
           onConfirm={() => void publish()}
         >
           <p>
-            {countOf(publication.ready)} in {offeringName(offering)} will be visible to each Student and their
-            Guardians.
+            {countOf(publication.ready)} in {offeringName(offering)} will be visible to each Student, and to each
+            Guardian permitted to see their results.
           </p>
           <p className="notice">
             Publishing cannot be undone. A published result changes only through a Correction request.
@@ -441,6 +451,10 @@ function contentFrom({ value, score, comment }: Entry): TermResultContent {
     score: score.trim() === "" ? null : Number(score),
     comment: comment.trim() === "" ? null : comment,
   };
+}
+
+function isPublished(student: Student): boolean {
+  return student.termResult?.publishedAt != null;
 }
 
 /** "1 result" or "3 results". */

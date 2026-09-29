@@ -138,9 +138,14 @@ function serveTermResult(result: TermResult, named: (id: string) => Named) {
   };
 }
 
-/** By the Student's display name, and by identifier between two of one name. */
-function byName(a: { person: Named }, b: { person: Named }): number {
-  return a.person.displayName.localeCompare(b.person.displayName) || a.person.id.localeCompare(b.person.id);
+/** By display name, and by identifier between two of one name. */
+function byName(a: Named, b: Named): number {
+  return a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id);
+}
+
+/** Names each Person by the display name found for them. */
+function namerOf(persons: ReadonlyMap<string, { displayName: string }>): (id: string) => Named {
+  return (id) => ({ id, displayName: persons.get(id)?.displayName ?? "" });
 }
 
 /**
@@ -177,7 +182,7 @@ async function serveOfferingResults(database: Queryable, actor: Actor, offering:
     ...rostered.keys(),
     ...results.flatMap((result) => [result.studentPersonId, result.recordedByPersonId]),
   ]);
-  const named = (id: string): Named => ({ id, displayName: persons.get(id)?.displayName ?? "" });
+  const named = namerOf(persons);
   const resultOf = new Map(results.map((result) => [result.studentPersonId, result]));
   const outlook = publicationOutlook(rostered, results, offering.term.lastDate);
   return {
@@ -185,7 +190,7 @@ async function serveOfferingResults(database: Queryable, actor: Actor, offering:
     readOnlyBecause: await termResultsRecordingRefusal(database, actor, offering),
     publication: {
       mayPublish: await mayPublishTermResults(database, actor, offering),
-      missingValue: outlook.missingValue.map(named).sort((a, b) => byName({ person: a }, { person: b })),
+      missingValue: outlook.missingValue.map(named).sort(byName),
       ready: outlook.ready.length,
     },
     resultValueScale: await currentResultValueScale(database, offering.schoolId),
@@ -198,7 +203,7 @@ async function serveOfferingResults(database: Queryable, actor: Actor, offering:
           termResult: result === undefined ? null : serveTermResult(result, named),
         };
       })
-      .sort(byName),
+      .sort((a, b) => byName(a.person, b.person)),
   };
 }
 
@@ -220,11 +225,13 @@ function auditedResult(result: TermResult, classOfferingId: string) {
 }
 
 /**
- * Draft Term results, one Class Offering at a time (CONTEXT.md: Term result).
+ * Term results, one Class Offering at a time (CONTEXT.md: Term result,
+ * Publication).
  *
  * Reading them is for anyone who may read the offering's results: a School
  * Administrator, or Faculty ever assigned to it. Saving drafts is for a Faculty
- * member whose Teaching assignment for it is active now. Every decision on who
+ * member whose Teaching assignment for it is active now, and publishing them
+ * for such a Faculty member or a School Administrator. Every decision on who
  * may is the Access module's, asked before anything else about the request is
  * looked at.
  */
@@ -302,7 +309,7 @@ export function registerTermResultRoutes(app: FastifyInstance, database: Databas
           transaction,
           refused.flatMap(({ current }) => (current === null ? [] : [current.recordedByPersonId])),
         );
-        const named = (id: string): Named => ({ id, displayName: persons.get(id)?.displayName ?? "" });
+        const named = namerOf(persons);
         return {
           classOfferingResults: served,
           refusedDrafts: refused.map(({ studentPersonId, because, current }) => ({
@@ -329,9 +336,7 @@ export function registerTermResultRoutes(app: FastifyInstance, database: Databas
           const persons = await findPersons(transaction, missingValue);
           throw new Conflict({
             conflict: "values_missing",
-            students: missingValue
-              .map((id) => ({ id, displayName: persons.get(id)?.displayName ?? "" }))
-              .sort((a, b) => byName({ person: a }, { person: b })),
+            students: missingValue.map(namerOf(persons)).sort(byName),
           });
         }
         if (ready.length === 0) {

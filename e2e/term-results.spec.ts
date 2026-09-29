@@ -82,6 +82,7 @@ test("a Faculty member records a class's draft Term results, sees a co-teacher's
     `Not published: ${second} has no value yet. Every Student still on the roster needs one first.`,
   );
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await audit(page);
 
   // The co-teacher changes that draft after this page read it.
   const path = `/api/schools/${schoolId}/class-offerings/${classOfferingId}/term-results`;
