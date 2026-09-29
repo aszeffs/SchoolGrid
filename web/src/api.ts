@@ -10,6 +10,7 @@ import type {
 import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 import type { ResultValue, ResultValueScale } from "../../src/results/index.ts";
+import type { DraftRefusal, TermResultContent } from "../../src/results/term-results.ts";
 
 /**
  * The API, reached on the page's own origin.
@@ -431,6 +432,48 @@ export interface Mark {
   status: AttendanceStatus;
 }
 
+/** What a Term result says, imported rather than restated: a value, score and comment, each possibly null. */
+export type { TermResultContent };
+
+/** One Student's Term result in a Class Offering, bound to the scale version its value came from. */
+export interface TermResult extends TermResultContent {
+  /** Null with no value. */
+  scaleVersion: number | null;
+  recordedBy: { id: string; displayName: string };
+  recordedAt: string;
+}
+
+/**
+ * A Class Offering's Term results, drafts included, as the actor is served
+ * them: why they are read-only for them if they are, the scale a value is
+ * chosen from, and every Student ever rostered in it with their result.
+ */
+export interface ClassOfferingResults {
+  classOfferingId: string;
+  /** Null when the actor may record drafts. */
+  readOnlyBecause: "not_teaching" | null;
+  resultValueScale: ResultValueScale;
+  students: {
+    person: { id: string; displayName: string };
+    /** A null last date is open: it runs to the end of the Term. */
+    rosterMemberships: { firstDate: string; lastDate: string | null }[];
+    termResult: TermResult | null;
+  }[];
+}
+
+/** One draft in a save: what it should now say, and the content the caller loaded, null for none. */
+export interface TermResultDraft extends TermResultContent {
+  studentPersonId: string;
+  loaded: TermResultContent | null;
+}
+
+/** One draft a save refused while the rest applied, with the result as it now stands. */
+export interface RefusedDraft {
+  studentPersonId: string;
+  because: DraftRefusal;
+  termResult: TermResult | null;
+}
+
 export type CorrectionRequestState = "pending" | "approved" | "rejected" | "withdrawn";
 
 /**
@@ -769,6 +812,19 @@ export const api = {
       "PATCH",
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session`),
       save,
+    ),
+  /** A Class Offering's Term results, drafts included, and the scale a value is chosen from. */
+  classOfferingResults: (schoolId: string, classOfferingId: string) =>
+    request<{ classOfferingResults: ClassOfferingResults }>(
+      "GET",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/term-results`),
+    ),
+  /** Saves these drafts; one changed since it was loaded is refused and returned as it stands. */
+  saveTermResults: (schoolId: string, classOfferingId: string, drafts: TermResultDraft[]) =>
+    request<{ classOfferingResults: ClassOfferingResults; refusedDrafts: RefusedDraft[] }>(
+      "PATCH",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/term-results`),
+      { drafts },
     ),
   /** A School Administrator's queue, every request; anyone else's, their own. Pending first, oldest first. */
   correctionRequests: (schoolId: string) =>
