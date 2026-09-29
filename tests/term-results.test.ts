@@ -266,6 +266,43 @@ describe("draft Term results", () => {
     });
   });
 
+  it("keeps recording after the Term has ended while the Teaching assignment runs with it", async () => {
+    const world = await arrange();
+    const year = await world.alice.post("/academic-years", {
+      name: "Last year",
+      firstDate: shifted(world.today, -60),
+      lastDate: shifted(world.today, -20),
+      weekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+    });
+    expect(year.status).toBe(201);
+    const { academicYear } = year.body as { academicYear: { id: string } };
+    const divided = await world.alice.patch(`/academic-years/${academicYear.id}`, {
+      terms: [{ name: "Ended", firstDate: shifted(world.today, -60), lastDate: shifted(world.today, -20) }],
+    });
+    const [term] = (divided.body as { academicYear: { terms: { id: string }[] } }).academicYear.terms;
+    const course = await world.alice.post("/courses", { name: "Geometry" });
+    const offered = await world.alice.post("/class-offerings", {
+      courseId: (course.body as { course: { id: string } }).course.id,
+      termId: term!.id,
+    });
+    const ended = (offered.body as { classOffering: { id: string } }).classOffering;
+    for (const [path, body] of [
+      [`/class-offerings/${ended.id}/teaching-assignments`, { personId: world.frankiePerson.id }],
+      [`/class-offerings/${ended.id}/roster-memberships`, { personIds: [world.samPerson.id] }],
+    ] as const) {
+      expect((await world.alice.post(path, body)).status).toBe(201);
+    }
+
+    const saved = await world.frankie.patch(`/class-offerings/${ended.id}/term-results`, {
+      drafts: [{ studentPersonId: world.samPerson.id, loaded: null, value: "B", score: null, comment: null }],
+    });
+
+    expect(saved.status).toBe(200);
+    const { classOfferingResults } = saved.body as { classOfferingResults: OfferingResults };
+    expect(classOfferingResults.readOnlyBecause).toBeNull();
+    expect(resultOf(classOfferingResults, world.samPerson)?.value).toBe("B");
+  });
+
   it("holds a score to 0 to 100 with one decimal and a comment to 500 characters, refusing anything else whole", async () => {
     const world = await arrange();
     const sam = world.samPerson;

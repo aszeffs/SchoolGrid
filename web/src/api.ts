@@ -10,7 +10,7 @@ import type {
 import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 import type { ResultValue, ResultValueScale } from "../../src/results/index.ts";
-import type { TermResultContent } from "../../src/results/term-results.ts";
+import type { DraftRefusal, TermResultContent } from "../../src/results/term-results.ts";
 
 /**
  * The API, reached on the page's own origin.
@@ -470,7 +470,7 @@ export interface TermResultDraft extends TermResultContent {
 /** One draft a save refused while the rest applied, with the result as it now stands. */
 export interface RefusedDraft {
   studentPersonId: string;
-  because: "stale" | "value_not_in_scale";
+  because: DraftRefusal;
   termResult: TermResult | null;
 }
 

@@ -1,4 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
+import { NO_CONTENT, sameContent } from "../../src/results/term-results.ts";
 import { MAX_TERM_RESULT_COMMENT_LENGTH, MAX_TERM_RESULT_SCORE } from "../../src/validation/bounds.ts";
 import {
   api,
@@ -330,8 +331,6 @@ function ResultsSheet({
   );
 }
 
-const NO_CONTENT: TermResultContent = { value: null, score: null, comment: null };
-
 /** What a stored result says, as a save carries it back; null for a Student with none. */
 function contentOf(result: TermResult | null): TermResultContent | null {
   return result === null ? null : { value: result.value, score: result.score, comment: result.comment };
@@ -352,10 +351,6 @@ function contentFrom({ value, score, comment }: Entry): TermResultContent {
     score: score.trim() === "" ? null : Number(score),
     comment: comment.trim() === "" ? null : comment,
   };
-}
-
-function sameContent(one: TermResultContent, other: TermResultContent): boolean {
-  return one.value === other.value && one.score === other.score && one.comment === other.comment;
 }
 
 /** The School date a Student left the roster, when every Roster membership of theirs ended before the Term did. */

@@ -33,6 +33,9 @@ export interface OfferingKey {
   classOfferingId: string;
 }
 
+/** Why one draft of a save was not applied: changed since it was loaded, or given a value the current scale lacks. */
+export type DraftRefusal = "stale" | "value_not_in_scale";
+
 /** A result with nothing in it: how a Student with no result reads. */
 export const NO_CONTENT: TermResultContent = { value: null, score: null, comment: null };
 

@@ -29,6 +29,7 @@ import {
   rosteredIn,
   sameContent,
   termResultsIn,
+  type DraftRefusal,
   type OfferingKey,
   type TermResult,
   type TermResultContent,
@@ -46,9 +47,6 @@ interface Draft extends TermResultContent {
   studentPersonId: string;
   loaded: TermResultContent | null;
 }
-
-/** Why one draft of a save was not applied. */
-type DraftRefusal = "stale" | "value_not_in_scale";
 
 /** Someone named on a result, by display name alone. */
 interface Named {
@@ -170,6 +168,11 @@ async function serveOfferingResults(database: Queryable, actor: Actor, offering:
   };
 }
 
+/** The row a changed value binds to: its label's in the current scale version, which the caller has checked holds it. */
+function boundValueId(value: string | null, currentValues: ReadonlyMap<string, string>): string | null {
+  return value === null ? null : currentValues.get(value)!;
+}
+
 /** A result as its Audit record holds it. */
 function auditedResult(result: TermResult, classOfferingId: string) {
   return {
@@ -236,7 +239,7 @@ export function registerTermResultRoutes(app: FastifyInstance, database: Databas
             continue;
           }
           const recording = {
-            resultValueId: !valueChanged ? (current?.resultValueId ?? null) : content.value === null ? null : currentValues.get(content.value)!,
+            resultValueId: valueChanged ? boundValueId(content.value, currentValues) : (current?.resultValueId ?? null),
             score: content.score,
             comment: content.comment,
             recordedByPersonId: actor.person.id,
