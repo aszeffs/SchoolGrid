@@ -36,6 +36,15 @@ export const MAX_REASON_LENGTH = 1000;
 export const MAX_ATTENDANCE_WINDOW = 60;
 
 /**
+ * A Result value scale's bounds: how many values one version may hold, and how
+ * long a value's label and its optional description may be. The database
+ * holds to the two lengths (migrations/0024), and the web app's fields do too.
+ */
+export const MAX_RESULT_VALUES = 30;
+export const MAX_RESULT_VALUE_LABEL_LENGTH = 20;
+export const MAX_RESULT_VALUE_DESCRIPTION_LENGTH = 200;
+
+/**
  * Bounds a malformed sign-in rather than an honest one. Credentials longer
  * than these are refused like any other failed attempt, without being hashed.
  */

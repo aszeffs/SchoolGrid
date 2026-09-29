@@ -9,6 +9,7 @@ import type {
 } from "../../src/attendance/sessions.ts";
 import type { Weekday } from "../../src/calendar/index.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
+import type { ResultValue, ResultValueScale } from "../../src/results/index.ts";
 
 /**
  * The API, reached on the page's own origin.
@@ -241,6 +242,9 @@ export interface SchoolSettings {
 }
 
 export type { AttendanceWindowChange };
+
+/** A School's Result value scale, imported rather than restated: a version, and its values in their order. */
+export type { ResultValue, ResultValueScale };
 
 /** One Term of an Academic Year, bounded by School dates written `YYYY-MM-DD`, both inclusive. */
 export interface Term {
@@ -661,6 +665,11 @@ export const api = {
     ),
   setAttendanceWindow: (schoolId: string, attendanceWindow: number) =>
     request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { attendanceWindow }),
+  resultValueScale: (schoolId: string) =>
+    request<{ resultValueScale: ResultValueScale }>("GET", inSchool(schoolId, "/result-value-scale")),
+  /** Saves these values, in this order, as the scale's next version. */
+  saveResultValueScale: (schoolId: string, values: ResultValue[]) =>
+    request<{ resultValueScale: ResultValueScale }>("POST", inSchool(schoolId, "/result-value-scale"), { values }),
   academicYears: (schoolId: string) =>
     request<{ academicYears: AcademicYear[] }>("GET", inSchool(schoolId, "/academic-years")),
   createAcademicYear: (schoolId: string, year: { name: string; firstDate: string; lastDate: string }) =>

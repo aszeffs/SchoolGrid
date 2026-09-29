@@ -817,6 +817,27 @@ export function authorizeManageSchoolSettings(actor: Actor): string {
 }
 
 /**
+ * Returns the School whose Result value scale the actor may read, and refuses
+ * otherwise. Faculty read it to choose a Term result's value from it, and
+ * School Administrators to keep it; no one else needs it.
+ */
+export function authorizeReadResultValueScale(actor: Actor): string {
+  if (!holds(actor, "school_administrator") && !holds(actor, "faculty")) {
+    throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+  }
+  return actor.schoolId;
+}
+
+/**
+ * Returns the School whose Result value scale the actor may save a new version
+ * of, and refuses otherwise. Only a School Administrator may, as for the
+ * School's other settings, asked before the body is read.
+ */
+export function authorizeSaveResultValueScale(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/**
  * Returns the School whose calendar the actor may ask about, and refuses
  * otherwise. For now only a School Administrator may: which School date an
  * instant falls on tells the asker the School's timezone, which is one of its

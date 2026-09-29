@@ -376,6 +376,8 @@ describe("Platform Administrator", () => {
           { method: "GET", url: "/api/schools/:schoolId/correction-requests" },
           { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/correction-requests" },
           { method: "PATCH", url: "/api/schools/:schoolId/correction-requests/:correctionRequestId" },
+          { method: "GET", url: "/api/schools/:schoolId/result-value-scale" },
+          { method: "POST", url: "/api/schools/:schoolId/result-value-scale" },
         ]),
       );
 

@@ -264,6 +264,45 @@ describe("migrations", () => {
     });
   });
 
+  describe("giving Schools a Result value scale", () => {
+    const MIGRATION = "0024_result_value_scale.sql";
+
+    // Returns the database to where it stood before the migration, when a
+    // School had no Result value scale.
+    async function undoMigration() {
+      const owner = server().ownerDatabase;
+      await owner.query(`DROP TRIGGER school_starts_with_result_value_scale ON app.school`);
+      await owner.query(`DROP FUNCTION app.school_starts_with_result_value_scale()`);
+      await owner.query(`DROP FUNCTION app.create_first_result_value_scale(uuid)`);
+      await owner.query(`DROP TABLE app.result_value, app.result_value_scale_version`);
+      await owner.query(`DROP FUNCTION app.result_value_scale_version_has_values()`);
+      await owner.query(`DELETE FROM public.schema_migrations WHERE name = $1`, [MIGRATION]);
+    }
+
+    it("gives every existing School a first version holding A, B, C, D and F", async () => {
+      await undoMigration();
+      await server().ownerDatabase.query(
+        `INSERT INTO app.school (name, timezone) VALUES ('Northside', 'UTC'), ('Westbrook', 'Asia/Manila')`,
+      );
+
+      const result = await migrate(server().ownerDatabase);
+
+      expect(result.applied).toEqual([MIGRATION]);
+      const { rows } = await server().ownerDatabase.query(
+        `SELECT school.name, version.number, array_agg(value.label ORDER BY value.position) AS labels
+         FROM app.school school
+         JOIN app.result_value_scale_version version ON version.school_id = school.id
+         JOIN app.result_value value ON value.scale_version_id = version.id
+         GROUP BY school.name, version.number
+         ORDER BY school.name`,
+      );
+      expect(rows).toEqual([
+        { name: "Northside", number: 1, labels: ["A", "B", "C", "D", "F"] },
+        { name: "Westbrook", number: 1, labels: ["A", "B", "C", "D", "F"] },
+      ]);
+    });
+  });
+
   describe("normalising usernames", () => {
     const MIGRATION = "0009_normalised_usernames.sql";
 
