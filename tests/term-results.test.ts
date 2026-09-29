@@ -28,11 +28,13 @@ interface TermResult extends Content {
   scaleVersion: number | null;
   recordedBy: Named;
   recordedAt: string;
+  publishedAt: string | null;
 }
 
 interface OfferingResults {
   classOfferingId: string;
   readOnlyBecause: "not_teaching" | null;
+  publication: { mayPublish: boolean; missingValue: Named[]; ready: number };
   resultValueScale: { version: number; values: { label: string; description: string | null }[] };
   students: {
     person: Named;
@@ -43,7 +45,7 @@ interface OfferingResults {
 
 interface RefusedDraft {
   studentPersonId: string;
-  because: "stale" | "value_not_in_scale";
+  because: "stale" | "value_not_in_scale" | "published";
   termResult: TermResult | null;
 }
 
@@ -224,10 +226,16 @@ describe("draft Term results", () => {
     return results.students.find((each) => each.person.id === student.id)!.termResult;
   }
 
-  async function trailOf(world: World): Promise<Recorded[]> {
+  async function trailOf(world: World, subject = "term_result"): Promise<Recorded[]> {
     const response = await world.alice.get("/audit-records");
     expect(response.status).toBe(200);
-    return (response.body as { auditRecords: Recorded[] }).auditRecords.filter((each) => each.action.startsWith("term_result."));
+    return (response.body as { auditRecords: Recorded[] }).auditRecords.filter((each) => each.action.startsWith(`${subject}.`));
+  }
+
+  const publications = (world: World) => `/class-offerings/${world.offering.id}/publications`;
+
+  function publish(world: World, as: TestClient) {
+    return as.post(publications(world), {});
   }
 
   it("records a value, score and comment for every roster member, a withdrawn one included, and saves with some left without a value", async () => {
@@ -255,6 +263,7 @@ describe("draft Term results", () => {
       comment: "Steady, careful work all Term.",
       recordedBy: frankie,
       recordedAt: expect.any(String),
+      publishedAt: null,
     });
     expect(resultOf(saved, lee)).toEqual({
       value: null,
@@ -263,6 +272,7 @@ describe("draft Term results", () => {
       comment: "Left before the first test.",
       recordedBy: frankie,
       recordedAt: expect.any(String),
+      publishedAt: null,
     });
   });
 
@@ -402,12 +412,12 @@ describe("draft Term results", () => {
       {
         studentPersonId: sam.id,
         because: "stale",
-        termResult: { value: "B", scaleVersion: 1, score: 82, comment: null, recordedBy: corey, recordedAt: expect.any(String) },
+        termResult: { value: "B", scaleVersion: 1, score: 82, comment: null, recordedBy: corey, recordedAt: expect.any(String), publishedAt: null },
       },
       {
         studentPersonId: lee.id,
         because: "stale",
-        termResult: { value: "C", scaleVersion: 1, score: null, comment: null, recordedBy: corey, recordedAt: expect.any(String) },
+        termResult: { value: "C", scaleVersion: 1, score: null, comment: null, recordedBy: corey, recordedAt: expect.any(String), publishedAt: null },
       },
     ]);
     expect(resultOf(classOfferingResults, sam)).toMatchObject({ value: "B", score: 82, recordedBy: corey });
@@ -453,7 +463,12 @@ describe("draft Term results", () => {
     const byAlice = await read(world, world.alice);
 
     expect(byFrankie.readOnlyBecause).toBeNull();
-    expect(byEllis).toEqual({ ...byFrankie, readOnlyBecause: "not_teaching" });
+    expect(byFrankie.publication.mayPublish).toBe(true);
+    expect(byEllis).toEqual({
+      ...byFrankie,
+      readOnlyBecause: "not_teaching",
+      publication: { ...byFrankie.publication, mayPublish: false },
+    });
     expect(byAlice).toEqual({ ...byFrankie, readOnlyBecause: "not_teaching" });
   });
 
@@ -476,6 +491,13 @@ describe("draft Term results", () => {
       ["a Guardian saving", () => world.gina.patch(path(world), draft)],
       ["saving to an offering that does not exist", () => world.frankie.patch(`/class-offerings/${ABSENT_ID}/term-results`, draft)],
       ["Faculty whose assignment has ended saving a malformed body", () => world.ellis.patch(path(world), { drafts: "A" })],
+      ["Faculty whose assignment has ended publishing", () => publish(world, world.ellis)],
+      ["Faculty never assigned publishing", () => publish(world, world.dana)],
+      ["a Student publishing", () => publish(world, world.sam)],
+      ["a Guardian with results read publishing", () => publish(world, world.gina)],
+      ["another School's Administrator publishing", () => publish(world, world.bob.inSchool(world.schoolId))],
+      ["a caller with no session publishing", () => publish(world, server().client.inSchool(world.schoolId))],
+      ["publishing an offering that does not exist", () => world.frankie.post(`/class-offerings/${ABSENT_ID}/publications`, {})],
     ];
 
     const answered: string[] = [];
@@ -487,6 +509,93 @@ describe("draft Term results", () => {
     }
 
     expect(answered).toEqual([]);
-    expect(resultOf(await read(world, world.frankie), world.samPerson)?.value).toBe("C");
+    expect(resultOf(await read(world, world.frankie), world.samPerson)).toMatchObject({ value: "C", publishedAt: null });
+    expect(await trailOf(world, "publication")).toEqual([]);
+  });
+
+  it("refuses Publication while an active roster member has no value, naming each, and a withdrawn Student does not block it", async () => {
+    const world = await arrange();
+    const { samPerson: sam, leePerson: lee } = world;
+    await record(world, world.frankie, [[lee, { value: null, score: null, comment: "Left before the first test." }]]);
+    const before = await read(world, world.frankie);
+    expect(before.publication).toEqual({ mayPublish: true, missingValue: [{ id: sam.id, displayName: "Sam" }], ready: 0 });
+
+    const refused = await publish(world, world.frankie);
+
+    expect(refused.status).toBe(409);
+    expect(refused.body).toEqual({ status: "conflict", conflict: "values_missing", students: [{ id: sam.id, displayName: "Sam" }] });
+    expect(await read(world, world.frankie)).toEqual(before);
+    expect(await trailOf(world, "publication")).toEqual([]);
+  });
+
+  it("publishes every unpublished result carrying a value at once, then only what a later Publication finds new, and refuses one with nothing new", async () => {
+    const world = await arrange();
+    const { samPerson: sam, leePerson: lee } = world;
+    await record(world, world.frankie, [
+      [sam, { value: "A", score: 91.5, comment: null }],
+      [lee, { value: null, score: null, comment: "Left before the first test." }],
+    ]);
+    expect((await read(world, world.alice)).publication).toEqual({ mayPublish: true, missingValue: [], ready: 1 });
+
+    const first = await publish(world, world.frankie);
+
+    expect(first.status).toBe(201);
+    const frankie = { id: world.frankiePerson.id, displayName: "Frankie" };
+    const published = first.body as { publication: { id: string; publishedAt: string; publishedBy: Named; resultCount: number }; classOfferingResults: OfferingResults };
+    expect(published.publication).toEqual({ id: expect.any(String), publishedAt: expect.any(String), publishedBy: frankie, resultCount: 1 });
+    expect(published.classOfferingResults).toEqual(await read(world, world.frankie));
+    expect(resultOf(published.classOfferingResults, sam)?.publishedAt).toBe(published.publication.publishedAt);
+    expect(resultOf(published.classOfferingResults, lee)?.publishedAt).toBeNull();
+    expect(published.classOfferingResults.publication).toEqual({ mayPublish: true, missingValue: [], ready: 0 });
+
+    const nothing = await publish(world, world.alice);
+    expect(nothing.status).toBe(409);
+    expect(nothing.body).toEqual({ status: "conflict", conflict: "nothing_to_publish" });
+
+    // The withdrawn Student's result, given a value since, is published by the School Administrator; Sam's stays as it was.
+    await record(world, world.corey, [[lee, { value: "D", score: null, comment: "Left before the first test." }]]);
+    const later = await publish(world, world.alice);
+    expect(later.status).toBe(201);
+    const { publication, classOfferingResults } = later.body as typeof published;
+    expect(publication).toMatchObject({ publishedBy: { id: expect.any(String), displayName: expect.any(String) }, resultCount: 1 });
+    expect(resultOf(classOfferingResults, lee)).toMatchObject({ value: "D", publishedAt: publication.publishedAt });
+    expect(resultOf(classOfferingResults, sam)).toEqual(resultOf(published.classOfferingResults, sam));
+
+    expect(await trailOf(world, "publication")).toEqual([
+      expect.objectContaining({
+        actorPersonId: expect.any(String),
+        action: "publication.recorded",
+        target: { type: "publication", id: publication.id },
+        before: null,
+        after: { classOfferingId: world.offering.id, resultCount: 1 },
+      }),
+      expect.objectContaining({
+        actorPersonId: world.frankiePerson.id,
+        action: "publication.recorded",
+        target: { type: "publication", id: published.publication.id },
+        before: null,
+        after: { classOfferingId: world.offering.id, resultCount: 1 },
+      }),
+    ]);
+  });
+
+  it("refuses a draft edit to a published result, returning it as it stands, while the rest of the save applies", async () => {
+    const world = await arrange();
+    const { samPerson: sam, leePerson: lee } = world;
+    await record(world, world.frankie, [[sam, { value: "A", score: 91.5, comment: null }]]);
+    expect((await publish(world, world.frankie)).status).toBe(201);
+    const loaded = await read(world, world.corey);
+
+    const saved = await save(world, world.corey, [
+      { studentPersonId: sam.id, loaded: loadedFor(loaded, sam), value: "B", score: 91.5, comment: null },
+      { studentPersonId: lee.id, loaded: null, value: "C", score: null, comment: null },
+    ]);
+
+    expect(saved.status).toBe(200);
+    const { classOfferingResults, refusedDrafts } = saved.body as { classOfferingResults: OfferingResults; refusedDrafts: RefusedDraft[] };
+    expect(refusedDrafts).toEqual([{ studentPersonId: sam.id, because: "published", termResult: resultOf(loaded, sam) }]);
+    expect(resultOf(classOfferingResults, sam)).toEqual(resultOf(loaded, sam));
+    expect(resultOf(classOfferingResults, lee)).toMatchObject({ value: "C", publishedAt: null });
+    expect(await trailOf(world)).toEqual([]);
   });
 });

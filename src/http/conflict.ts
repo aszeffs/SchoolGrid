@@ -68,7 +68,14 @@ export type ConflictDetail =
    */
   | { conflict: "own_request" }
   /** The Correction request's target no longer holds its before value: approving it would overwrite a newer one. */
-  | { conflict: "target_changed" };
+  | { conflict: "target_changed" }
+  /**
+   * Publication waits while these active roster members of the Class Offering
+   * have no value, each named so the publisher knows whose to give.
+   */
+  | { conflict: "values_missing"; students: { id: string; displayName: string }[] }
+  /** Every result of the Class Offering carrying a value is already published. */
+  | { conflict: "nothing_to_publish" };
 
 /**
  * Thrown by a handler whose caller was authorized and sent a well-formed
