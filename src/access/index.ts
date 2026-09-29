@@ -1191,6 +1191,35 @@ export async function authorizeRecordTermResults<O extends { id: string; schoolI
 }
 
 /**
+ * Whether the actor may publish a Class Offering's Term results: a School
+ * Administrator, and a Faculty member whose Teaching assignment for it is
+ * active now (CONTEXT.md: Publication). Only for an offering the actor has
+ * already been permitted to read the results of.
+ */
+export async function mayPublishTermResults(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+): Promise<boolean> {
+  return holds(actor, "school_administrator") || (await currentTeachingAssignment(database, actor, offering)) !== undefined;
+}
+
+/**
+ * Returns the Class Offering whose Term results the actor may publish, and
+ * refuses otherwise: see mayPublishTermResults.
+ */
+export async function authorizePublishTermResults<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+): Promise<O> {
+  if (!(await mayPublishTermResults(database, actor, offering))) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
  * Returns the Class Offering the actor may raise a Correction request for,
  * and refuses otherwise: any School Administrator, and a Faculty member
  * currently teaching it, whatever date the request is for (CONTEXT.md:

@@ -267,15 +267,17 @@ describe("migrations", () => {
   describe("giving Schools a Result value scale", () => {
     const MIGRATION = "0024_result_value_scale.sql";
 
-    // The Term results that bind to a scale's values came after it.
-    const LATER = "0025_term_results.sql";
+    // The Term results that bind to a scale's values came after it, and their Publication after them.
+    const LATER = ["0025_term_results.sql", "0026_publication.sql"];
 
     // Returns the database to where it stood before the migration, when a
     // School had no Result value scale, and so no Term results either.
     async function undoMigration() {
       const owner = server().ownerDatabase;
       await owner.query(`DROP TABLE app.term_result`);
-      await owner.query(`DELETE FROM public.schema_migrations WHERE name = $1`, [LATER]);
+      await owner.query(`DROP FUNCTION app.term_result_publication_is_final()`);
+      await owner.query(`DROP TABLE app.publication`);
+      await owner.query(`DELETE FROM public.schema_migrations WHERE name = ANY($1)`, [LATER]);
       await owner.query(`DROP TRIGGER school_starts_with_result_value_scale ON app.school`);
       await owner.query(`DROP FUNCTION app.school_starts_with_result_value_scale()`);
       await owner.query(`DROP FUNCTION app.create_first_result_value_scale(uuid)`);
@@ -292,7 +294,7 @@ describe("migrations", () => {
 
       const result = await migrate(server().ownerDatabase);
 
-      expect(result.applied).toEqual([MIGRATION, LATER]);
+      expect(result.applied).toEqual([MIGRATION, ...LATER]);
       const { rows } = await server().ownerDatabase.query(
         `SELECT school.name, version.number, array_agg(value.label ORDER BY value.position) AS labels
          FROM app.school school

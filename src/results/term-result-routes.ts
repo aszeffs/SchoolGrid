@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import {
+  authorizePublishTermResults,
   authorizeReadTermResultsOf,
   authorizeRecordTermResults,
+  mayPublishTermResults,
   termResultsRecordingRefusal,
   type Actor,
 } from "../access/index.ts";
@@ -10,6 +12,7 @@ import { appendAuditRecord } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
+import { Conflict } from "../http/conflict.ts";
 import { InvalidRequest } from "../http/invalid-request.ts";
 import { fieldsOf } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
@@ -24,13 +27,16 @@ import {
   changeTermResult,
   currentResultValueIds,
   holdTermResults,
+  leftOn,
   NO_CONTENT,
+  publishTermResults,
   recordTermResult,
   rosteredIn,
   sameContent,
   termResultsIn,
   type DraftRefusal,
   type OfferingKey,
+  type RosteredBounds,
   type TermResult,
   type TermResultContent,
 } from "./term-results.ts";
@@ -128,6 +134,7 @@ function serveTermResult(result: TermResult, named: (id: string) => Named) {
     scaleVersion: result.scaleVersion,
     recordedBy: named(result.recordedByPersonId),
     recordedAt: result.recordedAt.toISOString(),
+    publishedAt: result.publishedAt?.toISOString() ?? null,
   };
 }
 
@@ -137,9 +144,30 @@ function byName(a: { person: Named }, b: { person: Named }): number {
 }
 
 /**
+ * What a Publication of the offering would now do (CONTEXT.md: Publication):
+ * the unpublished results carrying a value it would publish, and the active
+ * roster members without a value it waits on. One who left the roster, or was
+ * never on it, is not waited on.
+ */
+function publicationOutlook(
+  rostered: ReadonlyMap<string, RosteredBounds[]>,
+  results: readonly TermResult[],
+  termLastDate: string,
+) {
+  const valued = new Set(results.filter((result) => result.value !== null).map((result) => result.studentPersonId));
+  return {
+    ready: results.filter((result) => result.value !== null && result.publishedAt === null),
+    missingValue: [...rostered]
+      .filter(([id, memberships]) => !valued.has(id) && leftOn(memberships, termLastDate) === null)
+      .map(([id]) => id),
+  };
+}
+
+/**
  * The offering's results as the actor is served them: why they are read-only
- * for them if they are, the scale a value is chosen from, and every Student
- * ever rostered in it, a withdrawn one too, with their result if they have one.
+ * for them if they are, whether they may publish them and what a Publication
+ * would now do, the scale a value is chosen from, and every Student ever
+ * rostered in it, a withdrawn one too, with their result if they have one.
  */
 async function serveOfferingResults(database: Queryable, actor: Actor, offering: DescribedClassOffering) {
   const key: OfferingKey = { schoolId: offering.schoolId, classOfferingId: offering.id };
@@ -151,9 +179,15 @@ async function serveOfferingResults(database: Queryable, actor: Actor, offering:
   ]);
   const named = (id: string): Named => ({ id, displayName: persons.get(id)?.displayName ?? "" });
   const resultOf = new Map(results.map((result) => [result.studentPersonId, result]));
+  const outlook = publicationOutlook(rostered, results, offering.term.lastDate);
   return {
     classOfferingId: offering.id,
     readOnlyBecause: await termResultsRecordingRefusal(database, actor, offering),
+    publication: {
+      mayPublish: await mayPublishTermResults(database, actor, offering),
+      missingValue: outlook.missingValue.map(named).sort((a, b) => byName({ person: a }, { person: b })),
+      ready: outlook.ready.length,
+    },
     resultValueScale: await currentResultValueScale(database, offering.schoolId),
     students: [...new Set([...rostered.keys(), ...resultOf.keys()])]
       .map((id) => {
@@ -226,11 +260,15 @@ export function registerTermResultRoutes(app: FastifyInstance, database: Databas
           const current = stored.get(studentPersonId) ?? null;
           const refuse = (because: DraftRefusal) => refused.push({ studentPersonId, because, current });
           const held = contentOf(current);
-          if (!sameContent(held, loaded ?? NO_CONTENT)) {
-            refuse("stale");
+          if (sameContent(held, content) && sameContent(held, loaded ?? NO_CONTENT)) {
             continue;
           }
-          if (sameContent(held, content)) {
+          if (current?.publishedAt != null) {
+            refuse("published");
+            continue;
+          }
+          if (!sameContent(held, loaded ?? NO_CONTENT)) {
+            refuse("stale");
             continue;
           }
           const valueChanged = content.value !== held.value;
@@ -272,6 +310,51 @@ export function registerTermResultRoutes(app: FastifyInstance, database: Databas
             because,
             termResult: current === null ? null : serveTermResult(current, named),
           })),
+        };
+      });
+    });
+
+    // Publishes every unpublished result carrying a value, at once, as one
+    // Publication. Refused, naming each, while an active roster member has no
+    // value, and refused with nothing new to publish. What is already
+    // published is left as it is.
+    scope.post("/class-offerings/:classOfferingId/publications", async (actor, { params }) => {
+      const readable = await readableOffering(actor, params["classOfferingId"]!);
+      return withTransaction(database, async (transaction) => {
+        const offering = await authorizePublishTermResults(transaction, actor, readable);
+        const key: OfferingKey = { schoolId: offering.schoolId, classOfferingId: offering.id };
+        const results = await holdTermResults(transaction, key);
+        const { ready, missingValue } = publicationOutlook(await rosteredIn(transaction, key), results, offering.term.lastDate);
+        if (missingValue.length > 0) {
+          const persons = await findPersons(transaction, missingValue);
+          throw new Conflict({
+            conflict: "values_missing",
+            students: missingValue
+              .map((id) => ({ id, displayName: persons.get(id)?.displayName ?? "" }))
+              .sort((a, b) => byName({ person: a }, { person: b })),
+          });
+        }
+        if (ready.length === 0) {
+          throw new Conflict({ conflict: "nothing_to_publish" });
+        }
+        const publication = await publishTermResults(transaction, key, actor.person.id, ready);
+        await appendAuditRecord(transaction, {
+          schoolId: offering.schoolId,
+          actorPersonId: actor.person.id,
+          action: "publication.recorded",
+          target: { type: "publication", id: publication.id },
+          reason: null,
+          before: null,
+          after: { classOfferingId: offering.id, resultCount: publication.resultCount },
+        });
+        return {
+          publication: {
+            id: publication.id,
+            publishedAt: publication.publishedAt.toISOString(),
+            publishedBy: { id: actor.person.id, displayName: actor.person.displayName },
+            resultCount: publication.resultCount,
+          },
+          classOfferingResults: await serveOfferingResults(transaction, actor, offering),
         };
       });
     });

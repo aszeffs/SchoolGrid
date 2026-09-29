@@ -1,11 +1,12 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { NO_CONTENT, sameContent } from "../../src/results/term-results.ts";
+import { leftOn, NO_CONTENT, sameContent } from "../../src/results/term-results.ts";
 import { MAX_TERM_RESULT_COMMENT_LENGTH, MAX_TERM_RESULT_SCORE } from "../../src/validation/bounds.ts";
 import {
   api,
   readAll,
   type ApiResult,
   type ClassOfferingResults,
+  type ConflictDetail,
   type ReachedSchool,
   type RefusedDraft,
   type TaughtClassOffering as Offering,
@@ -13,6 +14,7 @@ import {
   type TermResultContent,
   type TermResultDraft,
 } from "./api.ts";
+import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { offeringName } from "./offerings.ts";
@@ -44,7 +46,10 @@ interface Entry {
  * shown in place with its newer content, never overwritten.
  *
  * A School Administrator, and a Faculty member whose assignment has ended,
- * read the drafts with why they cannot record them said plainly. Anyone else,
+ * read the drafts with why they cannot record them said plainly. A School
+ * Administrator, and Faculty teaching it now, publish the class's results
+ * after a confirmation giving the count, or are told who has no value yet. A
+ * published result shows as published and read-only. Anyone else,
  * and an offering that does not exist or is another School's, is the one "not
  * available" state (ADR-0002).
  */
@@ -82,6 +87,7 @@ export function TermResults({ school, classOfferingId }: { school: ReachedSchool
           results={classOfferingResults}
           busy={busy}
           onSave={(drafts) => change(() => api.saveTermResults(schoolId, classOfferingId, drafts))}
+          onPublish={() => change(() => api.publishTermResults(schoolId, classOfferingId))}
         />
       );
     }
@@ -95,6 +101,7 @@ function ResultsSheet({
   results,
   busy,
   onSave,
+  onPublish,
 }: {
   schoolId: string;
   administers: boolean;
@@ -104,6 +111,7 @@ function ResultsSheet({
   onSave: (
     drafts: TermResultDraft[],
   ) => Promise<ApiResult<{ classOfferingResults: ClassOfferingResults; refusedDrafts: RefusedDraft[] }>>;
+  onPublish: () => Promise<ApiResult<{ publication: { resultCount: number } }>>;
 }) {
   /** The results edited and not yet saved, by Student. */
   const [entries, setEntries] = useState<ReadonlyMap<string, Entry>>(new Map());
@@ -111,9 +119,40 @@ function ResultsSheet({
   const [refused, setRefused] = useState<ReadonlyMap<string, { refusal: RefusedDraft; tried: string | null }>>(new Map());
   /** What the last save did, said once so a screen reader hears it land. */
   const [done, setDone] = useState("");
-  const { resultValueScale: scale, readOnlyBecause, students } = results;
+  /** Whether the Publication confirmation is open. */
+  const [confirming, setConfirming] = useState(false);
+  /** Why the last Publish was not done, said beside the action until the next. */
+  const [publishProblem, setPublishProblem] = useState<string | null>(null);
+  const { resultValueScale: scale, readOnlyBecause, students, publication } = results;
   const recordable = readOnlyBecause === null;
   const { term } = offering;
+  /** Whether a Student's result is edited here: a published one changes only through a Correction request. */
+  const editable = (student: Student) => recordable && student.termResult?.publishedAt == null;
+  const published = students.filter((student) => student.termResult?.publishedAt != null).length;
+
+  // Checks what the server would refuse before asking for a confirmation, so
+  // the dialog only ever confirms a Publication that can land.
+  const review = () => {
+    setDone("");
+    const problem =
+      publication.missingValue.length > 0
+        ? publishProblemOf({ conflict: "values_missing", students: publication.missingValue })
+        : publication.ready === 0
+          ? publishProblemOf({ conflict: "nothing_to_publish" })
+          : null;
+    setPublishProblem(problem);
+    setConfirming(problem === null);
+  };
+
+  const publish = async () => {
+    const sent = await onPublish();
+    setConfirming(false);
+    if (sent.ok) {
+      setDone(`Published ${countOf(sent.body.publication.resultCount)}.`);
+    } else {
+      setPublishProblem(sent.conflict === undefined ? "Publishing is not available." : publishProblemOf(sent.conflict));
+    }
+  };
 
   const entryOf = (student: Student): Entry => entries.get(student.person.id) ?? entryFrom(student.termResult);
   const edit = (student: Student, field: keyof Entry, typed: string) => {
@@ -123,6 +162,7 @@ function ResultsSheet({
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setDone("");
+    setPublishProblem(null);
     const drafts = students.flatMap((student): TermResultDraft[] => {
       const entry = entries.get(student.person.id);
       if (entry === undefined) {
@@ -164,6 +204,10 @@ function ResultsSheet({
         <Key term="Draft">
           A result not yet published. Only the Faculty teaching this class and School Administrators see it. It saves
           with Students still left without a value.
+        </Key>
+        <Key term="Published">
+          A result its Student and their Guardians can see. Publishing cannot be undone, and waits until every Student
+          still on the roster has a value. A published result changes only through a Correction request.
         </Key>
         <Key term="Changed since you opened it">
           A result someone else changed after you opened this page is not overwritten: it is shown to you with its
@@ -222,7 +266,7 @@ function ResultsSheet({
             {
               head: "Student",
               cell: (student) => {
-                const left = leftOn(student, term.lastDate);
+                const left = leftOn(student.rosterMemberships, term.lastDate);
                 return (
                   <>
                     {student.person.displayName}
@@ -230,6 +274,12 @@ function ResultsSheet({
                       <>
                         {" "}
                         <span className="mark mark--struck">Left {formatSchoolDate(left)}</span>
+                      </>
+                    )}
+                    {student.termResult?.publishedAt != null && (
+                      <>
+                        {" "}
+                        <span className="mark">Published</span>
                       </>
                     )}
                   </>
@@ -246,7 +296,7 @@ function ResultsSheet({
                 const offered = scale.values.map((value) => value.label);
                 return (
                   <>
-                    {recordable ? (
+                    {editable(student) ? (
                       <select
                         aria-label={`${name}’s value`}
                         aria-describedby={held === undefined ? undefined : noteId}
@@ -279,7 +329,7 @@ function ResultsSheet({
             {
               head: "Score",
               cell: (student) =>
-                recordable ? (
+                editable(student) ? (
                   <input
                     type="number"
                     className="term-results__score"
@@ -299,7 +349,7 @@ function ResultsSheet({
             {
               head: "Comment",
               cell: (student) =>
-                recordable ? (
+                editable(student) ? (
                   <textarea
                     className="term-results__comment"
                     aria-label={`${student.person.displayName}’s comment`}
@@ -316,7 +366,7 @@ function ResultsSheet({
             { head: "Recorded", cell: (student) => recordedText(student.termResult) },
           ]}
         />
-        {recordable && students.length > 0 && (
+        {recordable && students.some(editable) && (
           <p className="actions">
             <button type="submit" disabled={busy || entries.size === 0}>
               Save
@@ -324,9 +374,49 @@ function ResultsSheet({
           </p>
         )}
       </form>
+
+      <section aria-labelledby="publication-heading">
+        <h2 id="publication-heading">Publication</h2>
+        <p>
+          {published === 0 ? "No result is published yet." : `${countOf(published)} published.`}{" "}
+          {publication.ready === 0 ? "Nothing new to publish." : `${countOf(publication.ready)} ready to publish.`}
+        </p>
+        {publication.mayPublish && (
+          <>
+            {entries.size > 0 && <p className="muted">Save your changes first: only saved results are published.</p>}
+            <p className="actions">
+              <button type="button" disabled={busy || entries.size > 0} onClick={review}>
+                Publish results
+              </button>
+            </p>
+          </>
+        )}
+        {publishProblem !== null && (
+          <p role="alert" className="error">
+            {publishProblem}
+          </p>
+        )}
+      </section>
       <p className="muted" role="status">
         {done}
       </p>
+      {confirming && (
+        <ConfirmDialog
+          title={`Publish ${countOf(publication.ready)}?`}
+          confirm={`Publish ${countOf(publication.ready)}`}
+          busy={busy}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => void publish()}
+        >
+          <p>
+            {countOf(publication.ready)} in {offeringName(offering)} will be visible to each Student and their
+            Guardians.
+          </p>
+          <p className="notice">
+            Publishing cannot be undone. A published result changes only through a Correction request.
+          </p>
+        </ConfirmDialog>
+      )}
     </Sheet>
   );
 }
@@ -353,10 +443,28 @@ function contentFrom({ value, score, comment }: Entry): TermResultContent {
   };
 }
 
-/** The School date a Student left the roster, when every Roster membership of theirs ended before the Term did. */
-function leftOn(student: Student, termLastDate: string): string | null {
-  const last = student.rosterMemberships.map((membership) => membership.lastDate ?? termLastDate).sort().at(-1);
-  return last !== undefined && last < termLastDate ? last : null;
+/** "1 result" or "3 results". */
+function countOf(results: number): string {
+  return results === 1 ? "1 result" : `${results} results`;
+}
+
+/** Why a Publication was not done, as the page says it. */
+function publishProblemOf(conflict: ConflictDetail): string {
+  switch (conflict.conflict) {
+    case "values_missing": {
+      const names = conflict.students.map((student) => student.displayName);
+      return `Not published: ${listOf(names)} ${names.length === 1 ? "has" : "have"} no value yet. Every Student still on the roster needs one first.`;
+    }
+    case "nothing_to_publish":
+      return "Not published: every result with a value is already published.";
+    default:
+      return "Publishing is not available.";
+  }
+}
+
+/** Names as a sentence lists them: "Sam", "Sam and Lee", "Ana, Sam and Lee". */
+function listOf(names: string[]): string {
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
 /** Who last recorded a result and when, or that nobody has. */
@@ -376,6 +484,8 @@ function summaryOf(result: TermResultContent): string {
 /** Why one draft was not saved, beside the Student it was for. */
 function refusalText({ because, termResult }: RefusedDraft, tried: string | null): string {
   switch (because) {
+    case "published":
+      return "This result was published after you opened the page, so it is no longer changed here. Your change was not saved.";
     case "stale":
       return termResult === null
         ? "This result changed after you opened the page. Your change was not saved."

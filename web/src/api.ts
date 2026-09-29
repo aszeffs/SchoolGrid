@@ -441,6 +441,8 @@ export interface TermResult extends TermResultContent {
   scaleVersion: number | null;
   recordedBy: { id: string; displayName: string };
   recordedAt: string;
+  /** When it was published; null for a draft. A published result is never a draft again. */
+  publishedAt: string | null;
 }
 
 /**
@@ -452,6 +454,12 @@ export interface ClassOfferingResults {
   classOfferingId: string;
   /** Null when the actor may record drafts. */
   readOnlyBecause: "not_teaching" | null;
+  /**
+   * Whether the actor may publish, and what a Publication would now do: how
+   * many results it would publish, and the active roster members without a
+   * value it would be refused for.
+   */
+  publication: { mayPublish: boolean; missingValue: { id: string; displayName: string }[]; ready: number };
   resultValueScale: ResultValueScale;
   students: {
     person: { id: string; displayName: string };
@@ -826,6 +834,12 @@ export const api = {
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/term-results`),
       { drafts },
     ),
+  /** Publishes every unpublished result carrying a value; refused, naming each, while an active roster member has none. */
+  publishTermResults: (schoolId: string, classOfferingId: string) =>
+    request<{
+      publication: { id: string; publishedAt: string; publishedBy: { id: string; displayName: string }; resultCount: number };
+      classOfferingResults: ClassOfferingResults;
+    }>("POST", inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/publications`), {}),
   /** A School Administrator's queue, every request; anyone else's, their own. Pending first, oldest first. */
   correctionRequests: (schoolId: string) =>
     request<{ correctionRequests: CorrectionRequest[] }>("GET", inSchool(schoolId, "/correction-requests")),

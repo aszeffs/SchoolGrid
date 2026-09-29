@@ -25,6 +25,8 @@ export interface TermResult extends TermResultContent {
   scaleVersion: number | null;
   recordedByPersonId: string;
   recordedAt: Date;
+  /** When the Publication that published it was performed; null for a draft. */
+  publishedAt: Date | null;
 }
 
 /** A Class Offering in its School. */
@@ -33,8 +35,12 @@ export interface OfferingKey {
   classOfferingId: string;
 }
 
-/** Why one draft of a save was not applied: changed since it was loaded, or given a value the current scale lacks. */
-export type DraftRefusal = "stale" | "value_not_in_scale";
+/**
+ * Why one draft of a save was not applied: its result is published, and so
+ * changes only through a Correction request; it changed since it was loaded;
+ * or it was given a value the current scale lacks.
+ */
+export type DraftRefusal = "published" | "stale" | "value_not_in_scale";
 
 /** A result with nothing in it: how a Student with no result reads. */
 export const NO_CONTENT: TermResultContent = { value: null, score: null, comment: null };
@@ -47,8 +53,11 @@ export function sameContent(one: TermResultContent, other: TermResultContent): b
 const SELECT_TERM_RESULT = `
   SELECT result.id, result.student_person_id AS "studentPersonId", result.result_value_id AS "resultValueId",
          value.label AS value, version.number AS "scaleVersion", result.score::float8 AS score, result.comment,
-         result.recorded_by_person_id AS "recordedByPersonId", result.recorded_at AS "recordedAt"
+         result.recorded_by_person_id AS "recordedByPersonId", result.recorded_at AS "recordedAt",
+         publication.published_at AS "publishedAt"
   FROM app.term_result result
+  LEFT JOIN app.publication publication
+    ON publication.school_id = result.school_id AND publication.id = result.publication_id
   LEFT JOIN app.result_value value ON value.school_id = result.school_id AND value.id = result.result_value_id
   LEFT JOIN app.result_value_scale_version version
     ON version.school_id = value.school_id AND version.id = value.scale_version_id`;
@@ -132,6 +141,41 @@ export async function currentResultValueIds(database: Queryable, schoolId: strin
   return new Map(rows.map(({ id, label }) => [label, id]));
 }
 
+/** A Publication as it was performed: who published how many of a Class Offering's results, when. */
+export interface Publication {
+  id: string;
+  publishedByPersonId: string;
+  publishedAt: Date;
+  resultCount: number;
+}
+
+/**
+ * Publishes these results of a Class Offering as one Publication by this
+ * Person, and returns it. The caller holds the offering's results, and passes
+ * only unpublished ones carrying a value: at least one.
+ */
+export async function publishTermResults(
+  transaction: Queryable,
+  { schoolId, classOfferingId }: OfferingKey,
+  publishedByPersonId: string,
+  results: readonly TermResult[],
+): Promise<Publication> {
+  const { rows } = await transaction.query<Publication>(
+    `INSERT INTO app.publication (school_id, class_offering_id, published_by_person_id, result_count)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, published_by_person_id AS "publishedByPersonId", published_at AS "publishedAt",
+       result_count AS "resultCount"`,
+    [schoolId, classOfferingId, publishedByPersonId, results.length],
+  );
+  const publication = rows[0]!;
+  await transaction.query(`UPDATE app.term_result SET publication_id = $2 WHERE school_id = $1 AND id = ANY($3)`, [
+    schoolId,
+    publication.id,
+    results.map((result) => result.id),
+  ]);
+  return publication;
+}
+
 /** The School dates one Roster membership runs between; an open one runs to the end of its Term. */
 export interface RosteredBounds {
   firstDate: string;
@@ -156,4 +200,15 @@ export async function rosteredIn(
     rostered.set(studentPersonId, [...(rostered.get(studentPersonId) ?? []), { firstDate, lastDate }]);
   }
   return rostered;
+}
+
+/**
+ * The School date a Student left a Class Offering's roster, when every Roster
+ * membership of theirs in it ended before its Term did; null for an active
+ * roster member, whose latest runs to the Term's end. Publication waits on an
+ * active roster member's value, never on one who left (ADR-0003).
+ */
+export function leftOn(memberships: readonly RosteredBounds[], termLastDate: string): string | null {
+  const last = memberships.map((membership) => membership.lastDate ?? termLastDate).sort().at(-1);
+  return last !== undefined && last < termLastDate ? last : null;
 }

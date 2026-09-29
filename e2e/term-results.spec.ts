@@ -2,16 +2,17 @@ import { arrange, arrangePerson, darken, invitationFor, recordRows, redeem, with
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
- * Draft Term results: a Faculty member recording a class's drafts, a
- * co-teacher's change shown in place rather than overwritten, and the drafts
- * read-only for a School Administrator. Which drafts are refused, and what is
- * audited, is the HTTP suite's to assert; this is about the page doing it and
- * saying what it did.
+ * Draft Term results and their Publication: a Faculty member recording a
+ * class's drafts, a co-teacher's change shown in place rather than
+ * overwritten, the drafts read-only for a School Administrator, a Publication
+ * refused while a Student has no value, and one confirmed. Which drafts and
+ * Publications are refused, and what is audited, is the HTTP suite's to
+ * assert; this is about the page doing it and saying what it did.
  *
  * Arranged in the Attendance specs' own School: see withAttendanceOffering.
  */
 
-test("a Faculty member records a class's draft Term results, and sees a co-teacher's change in place", async ({
+test("a Faculty member records a class's draft Term results, sees a co-teacher's change in place, and publishes them", async ({
   page,
   audit,
   playwright,
@@ -42,6 +43,7 @@ test("a Faculty member records a class's draft Term results, and sees a co-teach
   const score = (name: string) => page.getByLabel(`${name}’s score, 0 to 100`);
   const comment = (name: string) => page.getByLabel(`${name}’s comment`);
   const saved = () => page.getByRole("status").filter({ hasText: "Saved" });
+  const publish = () => page.getByRole("button", { name: "Publish results" });
 
   // The School Administrator reads the drafts, and is told why they cannot record them.
   await page.goto(results);
@@ -73,6 +75,13 @@ test("a Faculty member records a class's draft Term results, and sees a co-teach
   await expect(saved()).toHaveText("Saved.");
   await expect(rows().filter({ hasText: first })).toContainText(teacher);
   await expect(value(second)).toHaveValue("");
+
+  // Publishing now is refused, naming the Student still without a value.
+  await publish().click();
+  await expect(page.getByRole("alert").filter({ hasText: "Not published" })).toHaveText(
+    `Not published: ${second} has no value yet. Every Student still on the roster needs one first.`,
+  );
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // The co-teacher changes that draft after this page read it.
   const path = `/api/schools/${schoolId}/class-offerings/${classOfferingId}/term-results`;
@@ -117,4 +126,31 @@ test("a Faculty member records a class's draft Term results, and sees a co-teach
   await page.reload();
   await expect(value(first)).toHaveValue("A");
   await expect(value(second)).toHaveValue("D");
+
+  // With every Student given a value, the confirmation gives the count, and holds a phone's width in both renditions.
+  await publish().click();
+  const dialog = page.getByRole("dialog", { name: "Publish 2 results?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await expectNoSidewaysScroll(page);
+  await audit(page);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expectNoSidewaysScroll(page);
+  await audit(page);
+
+  // Published from the keyboard: Cancel holds the focus, and the next control publishes.
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Publish 2 results" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Published" })).toHaveText("Published 2 results.");
+  await expect(dialog).toHaveCount(0);
+
+  // Each result now shows as published and read-only.
+  for (const name of [first, second]) {
+    await expect(rows().filter({ hasText: name })).toContainText("Published");
+    await expect(value(name)).toHaveCount(0);
+  }
+  await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
+  await expect(page.getByRole("main")).toContainText("2 results published. Nothing new to publish.");
+  await audit(page);
 });
