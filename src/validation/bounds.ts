@@ -45,6 +45,14 @@ export const MAX_RESULT_VALUE_LABEL_LENGTH = 20;
 export const MAX_RESULT_VALUE_DESCRIPTION_LENGTH = 200;
 
 /**
+ * A Term result's bounds: its score runs from 0 to 100 with at most one
+ * decimal, and its comment to 500 characters. The database holds to both
+ * (migrations/0025), and the web app's fields do too.
+ */
+export const MAX_TERM_RESULT_SCORE = 100;
+export const MAX_TERM_RESULT_COMMENT_LENGTH = 500;
+
+/**
  * Bounds a malformed sign-in rather than an honest one. Credentials longer
  * than these are refused like any other failed attempt, without being hashed.
  */

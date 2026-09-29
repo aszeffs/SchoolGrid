@@ -22,6 +22,7 @@ import { SchoolSettings } from "./SchoolSettings.tsx";
 import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
+import { TermResults } from "./TermResults.tsx";
 import { rememberTrial, START_FAILED, timeLeft, trialHasEnded, useNow, useStartTrial } from "./trial.ts";
 import { YourAttendance } from "./YourAttendance.tsx";
 import { YourClasses } from "./YourClasses.tsx";
@@ -353,6 +354,8 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={null} />;
     case "attendanceOn":
       return <AttendanceSession school={school} classOfferingId={route.classOfferingId} date={route.date} />;
+    case "termResults":
+      return <TermResults school={school} classOfferingId={route.classOfferingId} />;
     case "correctionRequests":
       return <CorrectionRequests school={school} />;
     case "settings":

@@ -1035,6 +1035,29 @@ export function authorizeReadAttendanceOf<O extends { id: string; schoolId: stri
   classOfferingId: string,
   target: O | null,
 ): O {
+  return authorizeReadClassRecordsOf(actor, classOfferingId, target);
+}
+
+/**
+ * Returns the Class Offering whose Term results, drafts included, the actor
+ * may read, and refuses otherwise: a School Administrator, and anyone ever
+ * assigned to teach it, as for its Attendance. A Student and a Guardian never
+ * read a draft; what is published reaches them through the Term report.
+ */
+export function authorizeReadTermResultsOf<O extends { id: string; schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
+  return authorizeReadClassRecordsOf(actor, classOfferingId, target);
+}
+
+/** The one decision on reading what a Class Offering holds about its whole class. */
+function authorizeReadClassRecordsOf<O extends { id: string; schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
   const reason =
     outOfReach(actor, target) ??
     (holds(actor, "school_administrator") || hasTaught(actor, target!) ? null : "forbidden");
@@ -1130,6 +1153,38 @@ export async function authorizeRecordAttendance<O extends { id: string; schoolId
   date: string,
 ): Promise<O> {
   if ((await recordingRefusal(database, actor, offering, date)) !== null) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
+ * Why the actor may not record a Class Offering's draft Term results, or null
+ * when they may: they need a Teaching assignment for it that is active now
+ * (CONTEXT.md: Term result). An open one stays active after the Term ends, so
+ * results due after its last day can still be given. One whose assignment has
+ * ended reads the drafts and records nothing, and so does a School
+ * Administrator: their changes come after Publication, through a Correction
+ * request. Only for an offering the actor has already been permitted to read.
+ */
+export async function termResultsRecordingRefusal(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+): Promise<"not_teaching" | null> {
+  return (await currentTeachingAssignment(database, actor, offering)) === undefined ? "not_teaching" : null;
+}
+
+/**
+ * Returns the Class Offering whose draft Term results the actor may record,
+ * and refuses otherwise: see termResultsRecordingRefusal.
+ */
+export async function authorizeRecordTermResults<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+): Promise<O> {
+  if ((await termResultsRecordingRefusal(database, actor, offering)) !== null) {
     throw new Refused("forbidden", { type: "class_offering", id: offering.id });
   }
   return offering;

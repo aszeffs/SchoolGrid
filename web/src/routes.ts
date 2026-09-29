@@ -30,6 +30,7 @@ const PATHS = {
   classOffering: "/schools/:schoolId/class-offerings/:classOfferingId",
   attendance: "/schools/:schoolId/class-offerings/:classOfferingId/attendance",
   attendanceOn: "/schools/:schoolId/class-offerings/:classOfferingId/attendance/:date",
+  termResults: "/schools/:schoolId/class-offerings/:classOfferingId/term-results",
   correctionRequests: "/schools/:schoolId/correction-requests",
   settings: "/schools/:schoolId/settings",
 } as const;
@@ -107,6 +108,7 @@ const WITHIN = {
   classOffering: "classOfferings",
   attendance: "classOfferings",
   attendanceOn: "classOfferings",
+  termResults: "classOfferings",
 } as const satisfies Partial<Record<SchoolRouteName, SchoolRouteName>>;
 
 /** A page within a School that is a section of its own, reached from the navigation with the School alone. */

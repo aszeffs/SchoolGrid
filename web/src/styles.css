@@ -1222,6 +1222,20 @@ button:disabled {
   gap: var(--step);
 }
 
+/*
+ * A class's Term results, edited in their rows: a score is a few characters
+ * wide, and a comment takes what the row leaves it, down to a phone's width.
+ */
+.term-results__score {
+  width: 6.5rem;
+}
+
+.term-results__comment {
+  width: 100%;
+  min-width: min(14rem, 100%);
+  resize: vertical;
+}
+
 /* ---- Courses and the wall chart -------------------------------------- */
 
 /*
