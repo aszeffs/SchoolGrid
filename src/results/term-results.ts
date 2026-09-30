@@ -112,6 +112,32 @@ export async function recordTermResult(
   return termResult(transaction, rows[0]!.id);
 }
 
+/**
+ * Records these first results, set by set rather than row by row, for a past
+ * a new School starts with: Class Offerings of one School holding no result
+ * yet. Like the rest of this module it checks no recording rule; the caller's
+ * rosters and values must satisfy them.
+ */
+export async function recordTermResults(
+  transaction: Queryable,
+  results: readonly (OfferingKey & Recording & { studentPersonId: string })[],
+): Promise<void> {
+  await transaction.query(
+    `INSERT INTO app.term_result
+       (school_id, class_offering_id, student_person_id, result_value_id, score, comment, recorded_by_person_id)
+     SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::uuid[], $5::numeric[], $6::text[], $7::uuid[])`,
+    [
+      results.map((result) => result.schoolId),
+      results.map((result) => result.classOfferingId),
+      results.map((result) => result.studentPersonId),
+      results.map((result) => result.resultValueId),
+      results.map((result) => result.score),
+      results.map((result) => result.comment),
+      results.map((result) => result.recordedByPersonId),
+    ],
+  );
+}
+
 /** Changes a result's content, now recorded by the one who changed it. */
 export async function changeTermResult(
   transaction: Queryable,

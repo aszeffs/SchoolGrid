@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inventedAttendance, inventedSchool, NO_LABEL } from "../src/trials/invented-school.ts";
+import { inventedAttendance, inventedResults, inventedSchool, NO_LABEL } from "../src/trials/invented-school.ts";
 
 /** The ISO weekday of a date, 1 being Monday. */
 function weekdayOf(date: string): number {
@@ -120,6 +120,69 @@ describe("the Attendance a trial starts with", () => {
   it("is the same for two trials started on the same day", () => {
     const options = { pastDays: PAST_DAYS, today: TODAY, attendanceWindow: WINDOW };
     expect(inventedAttendance(inventedSchool(TODAY), options)).toEqual(inventedAttendance(inventedSchool(TODAY), options));
+  });
+});
+
+describe("the Term results a trial starts with", () => {
+  const school = inventedSchool("2026-10-21");
+  const offerings = school.courses.flatMap((course) =>
+    course.labels.map((label) => ({ course, label: label ?? NO_LABEL, roster: course.rosters[label ?? NO_LABEL]! })),
+  );
+  const { results, published, correctionRequest } = inventedResults(school);
+  const resultsIn = (course: string, label: string) =>
+    results.filter((result) => result.course === course && result.label === label);
+  /** The offerings Publication would wait on: those with an active roster member lacking a value. */
+  const unpublishable = offerings.filter(({ course, label, roster }) =>
+    roster.some((student) => resultsIn(course.code, label).find((result) => result.student === student)?.value == null),
+  );
+
+  it("gives every rostered Student of every offering one result, mostly with values from the default scale", () => {
+    for (const { course, label, roster } of offerings) {
+      expect(resultsIn(course.code, label).map((result) => result.student).sort()).toEqual([...roster].sort());
+    }
+    const valued = results.filter((result) => result.value !== null);
+    expect(valued.length / results.length).toBeGreaterThan(0.9);
+    for (const { value, score, comment } of results) {
+      expect([null, "A", "B", "C", "D", "F"]).toContain(value);
+      if (score !== null) {
+        expect(score).toBeGreaterThanOrEqual(0);
+        expect(score).toBeLessThanOrEqual(100);
+        expect(Number(score.toFixed(1))).toBe(score);
+      }
+      expect((comment ?? "").length).toBeLessThanOrEqual(500);
+    }
+    // Scores and comments are each sometimes left out.
+    expect(results.some((result) => result.score === null)).toBe(true);
+    expect(results.some((result) => result.comment !== null)).toBe(true);
+    expect(results.some((result) => result.comment === null)).toBe(true);
+  });
+
+  it("publishes one offering the Faculty role teaches the Student role in", () => {
+    const offering = offerings.find(({ course, label }) => course.code === published.course && label === published.label)!;
+    expect(offering.course.taughtByRole).toBe(true);
+    expect(offering.roster).toContain(school.rolePersons.student);
+    expect(unpublishable).not.toContain(offering);
+  });
+
+  it("leaves exactly one other offering, one the Faculty role teaches, waiting on one Student's value", () => {
+    expect(unpublishable).toHaveLength(1);
+    const [waiting] = unpublishable;
+    expect(waiting!.course.taughtByRole).toBe(true);
+    expect(resultsIn(waiting!.course.code, waiting!.label).filter((result) => result.value === null)).toHaveLength(1);
+  });
+
+  it("has the Faculty role request a published result be changed", () => {
+    const request = correctionRequest;
+    expect({ course: request.course, label: request.label }).toEqual(published);
+    const target = resultsIn(request.course, request.label).find((result) => result.student === request.student)!;
+    expect(request.before).toEqual({ value: target.value, score: target.score, comment: target.comment });
+    expect(request.after).not.toEqual(request.before);
+    expect(["A", "B", "C", "D", "F"]).toContain(request.after.value);
+    expect(request.reason.length).toBeGreaterThan(0);
+  });
+
+  it("is the same for two trials", () => {
+    expect(inventedResults(inventedSchool("2026-10-21"))).toEqual(inventedResults(inventedSchool("2026-10-21")));
   });
 });
 

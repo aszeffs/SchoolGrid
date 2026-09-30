@@ -25,6 +25,7 @@ const MINUTE = 60_000;
 interface ReachedSchool {
   schoolId: string;
   name: string;
+  personId: string;
   displayName: string;
   roles: string[];
   classOfferingsTaught: number;
@@ -50,6 +51,7 @@ function todayIn(timeZone: string): string {
 
 interface ServedRequest {
   id: string;
+  kind: "attendance" | "term_result";
   state: string;
   student: { id: string; displayName: string };
   classOffering: { id: string };
@@ -85,6 +87,24 @@ async function attendanceOf(school: TestClient, classOfferingId: string) {
       students: { attendance: { date: string; recordedBy: { displayName: string } }[]; totals: Record<string, number> }[];
     };
   }).classOfferingAttendance;
+}
+
+interface ServedTermResult {
+  value: string | null;
+  recordedBy: { displayName: string };
+  publishedAt: string | null;
+}
+
+/** A Class Offering's results as its reader is served them: each Student's, and what a Publication would wait on. */
+async function termResultsOf(school: TestClient, classOfferingId: string) {
+  const response = await school.get(`/class-offerings/${classOfferingId}/term-results`);
+  expect(response.status).toBe(200);
+  return (response.body as {
+    classOfferingResults: {
+      publication: { missingValue: { displayName: string }[] };
+      students: { person: { displayName: string }; termResult: ServedTermResult | null }[];
+    };
+  }).classOfferingResults;
 }
 
 /** The session on a date, or on the School's today given none. */
@@ -224,7 +244,7 @@ describe("Trial Schools", () => {
       expect([...taughtBy].sort()).toEqual(["Priya Okonkwo", "Sam Achterberg"]);
 
       const { correctionRequests } = (await school.get("/correction-requests")).body as { correctionRequests: ServedRequest[] };
-      expect(correctionRequests).toEqual([
+      expect(correctionRequests.filter((request) => request.kind === "attendance")).toEqual([
         expect.objectContaining({
           state: "pending",
           requestedBy: expect.objectContaining({ displayName: "Sam Achterberg" }),
@@ -250,37 +270,94 @@ describe("Trial Schools", () => {
         expect(todays.students).toEqual([]);
       }
       const own = (await faculty.get("/correction-requests")).body as { correctionRequests: ServedRequest[] };
-      expect(own.correctionRequests).toHaveLength(1);
+      expect(own.correctionRequests.filter((request) => request.kind === "attendance")).toHaveLength(1);
     });
 
-    it("lets its only School Administrator approve its Faculty's request, and approve their own as a marked self-approval", async (context) => {
+    it("starts with its Term's results: drafts, one offering published, one that cannot be, and a Pending request on a published result, auditing none of it", async () => {
+      const { client, schoolId } = await server().startTrial();
+      const school = client.inSchool(schoolId);
+      const current = await currentOfferingsOf(school);
+      const served = await Promise.all(current.map(async ({ id }) => ({ id, ...(await termResultsOf(school, id)) })));
+
+      // Every roster member has a result, nearly all with a value.
+      const results = served.flatMap(({ students }) => students.map((student) => student.termResult));
+      expect(results.every((result) => result !== null)).toBe(true);
+      expect(results.filter((result) => result!.value === null)).toHaveLength(1);
+      // One offering is published whole, and no other in part.
+      const published = served.filter(({ students }) => students.every((student) => student.termResult!.publishedAt !== null));
+      expect(published).toHaveLength(1);
+      expect(results.filter((result) => result!.publishedAt !== null)).toHaveLength(published[0]!.students.length);
+      expect(published[0]!.students.map((student) => student.termResult!.recordedBy.displayName)).toContain("Sam Achterberg");
+      // One cannot be published, and says who it waits on.
+      const waiting = served.filter(({ publication }) => publication.missingValue.length > 0);
+      expect(waiting.map(({ publication }) => publication.missingValue.map((student) => student.displayName))).toEqual([
+        ["Jordan Okafor"],
+      ]);
+      const refused = await school.post(`/class-offerings/${waiting[0]!.id}/publications`, {});
+      expect(refused.status).toBe(409);
+      expect(refused.body).toEqual(
+        expect.objectContaining({ conflict: "values_missing", students: [expect.objectContaining({ displayName: "Jordan Okafor" })] }),
+      );
+
+      const { correctionRequests } = (await school.get("/correction-requests")).body as { correctionRequests: ServedRequest[] };
+      expect(correctionRequests.filter((request) => request.kind === "term_result")).toEqual([
+        expect.objectContaining({
+          state: "pending",
+          classOffering: expect.objectContaining({ id: published[0]!.id }),
+          requestedBy: expect.objectContaining({ displayName: "Sam Achterberg" }),
+          before: { value: "C", score: 71.5, comment: null },
+          after: expect.objectContaining({ value: "B" }),
+        }),
+      ]);
+      const { auditRecords } = (await school.get("/audit-records")).body as { auditRecords: { action: string }[] };
+      expect(auditRecords.map((record) => record.action)).toEqual(["trial.started"]);
+
+      // Its Student, and its Guardian, find the published offering's result on the Term report, and no other.
+      let visitor = client;
+      for (const role of ["student", "guardian"] as const) {
+        visitor = await switchRole(visitor, role);
+        const reached = visitor.inSchool(schoolId);
+        const studentId =
+          role === "student"
+            ? (await sessionOf(visitor)).schools[0]!.personId
+            : ((await reached.get("/account")).body as { account: { linkedStudents: { student: { id: string } }[] } }).account
+                .linkedStudents[0]!.student.id;
+        const report = await reached.get(`/persons/${studentId}/term-report`);
+        expect(report.status).toBe(200);
+        const { classOfferings } = (report.body as { termReport: { classOfferings: { id: string; termResult: unknown }[] } })
+          .termReport;
+        expect(classOfferings.filter((offering) => offering.termResult !== null).map((offering) => offering.id)).toEqual([
+          published[0]!.id,
+        ]);
+      }
+    });
+
+    it("lets its only School Administrator approve its Faculty's requests, and approve their own as a marked self-approval", async () => {
       const { client, schoolId } = await server().startTrial();
       const school = client.inSchool(schoolId);
       const { correctionRequests } = (await school.get("/correction-requests")).body as { correctionRequests: ServedRequest[] };
-      if (correctionRequests.length === 0) {
-        return context.skip();
+      // A result's always, and an Attendance one unless the trial started on its Term's first day.
+      expect(correctionRequests.some((request) => request.kind === "term_result")).toBe(true);
+      const approve = async (id: string) => {
+        const approved = await school.patch(`/correction-requests/${id}`, { state: "approved" });
+        expect(approved.status).toBe(200);
+        return (approved.body as { correctionRequest: ServedRequest }).correctionRequest;
+      };
+
+      for (const waiting of correctionRequests) {
+        expect(await approve(waiting.id)).toEqual(expect.objectContaining({ state: "approved", selfApproved: false }));
+
+        const reason = "The record was read wrong.";
+        const raised = await school.post(
+          `/class-offerings/${waiting.classOffering.id}/correction-requests`,
+          waiting.kind === "attendance"
+            ? { kind: "attendance", studentPersonId: waiting.student.id, date: waiting.date, after: "tardy", reason }
+            : { kind: "term_result", studentPersonId: waiting.student.id, after: { value: "A", score: null, comment: null }, reason },
+        );
+        expect(raised.status).toBe(201);
+        const own = (raised.body as { correctionRequest: ServedRequest }).correctionRequest;
+        expect(await approve(own.id)).toEqual(expect.objectContaining({ state: "approved", selfApproved: true }));
       }
-      const [waiting] = correctionRequests;
-
-      const approved = await school.patch(`/correction-requests/${waiting!.id}`, { state: "approved" });
-      expect(approved.status).toBe(200);
-      expect((approved.body as { correctionRequest: ServedRequest }).correctionRequest).toEqual(
-        expect.objectContaining({ state: "approved", selfApproved: false }),
-      );
-
-      const raised = await school.post(`/class-offerings/${waiting!.classOffering.id}/correction-requests`, {
-        kind: "attendance",
-        studentPersonId: waiting!.student.id,
-        date: waiting!.date,
-        after: "tardy",
-        reason: "The register was read wrong.",
-      });
-      expect(raised.status).toBe(201);
-      const own = (raised.body as { correctionRequest: ServedRequest }).correctionRequest;
-      const selfApproved = await school.patch(`/correction-requests/${own.id}`, { state: "approved" });
-      expect((selfApproved.body as { correctionRequest: ServedRequest }).correctionRequest).toEqual(
-        expect.objectContaining({ state: "approved", selfApproved: true }),
-      );
     });
 
     it("starts over in a fresh Trial School, ending the Session the browser held in the last", async () => {
@@ -409,7 +486,7 @@ describe("Trial Schools", () => {
         "person", "school_membership", "enrollment", "guardian_link", "invitation", "audit_record",
         "academic_year", "term", "instructional_day_exception", "course", "class_offering",
         "teaching_assignment", "roster_membership", "attendance_session", "roster_snapshot_member", "attendance",
-        "correction_request",
+        "correction_request", "result_value_scale_version", "result_value", "term_result", "publication",
       ];
       const counts: Record<string, number> = {};
       for (const table of tables) {
@@ -451,7 +528,9 @@ describe("Trial Schools", () => {
       const { schoolId } = await server().startTrial();
       const before = await rowsIn(schoolId);
       expect(before["audit_record"]).toBeGreaterThan(0);
-      expect(before["roster_membership"]).toBeGreaterThan(0);
+      for (const table of ["roster_membership", "result_value_scale_version", "term_result", "publication"]) {
+        expect(before[table]).toBeGreaterThan(0);
+      }
       await server().expireTrialSchool(schoolId);
 
       const { rows } = await server().database.query<{ deleted: boolean }>(

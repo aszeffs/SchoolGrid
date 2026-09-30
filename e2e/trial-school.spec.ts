@@ -90,11 +90,15 @@ test.describe("in a Trial School", () => {
   test("finds Attendance already there in every role, and a request waiting for the School Administrator", async ({ page }) => {
     const schoolId = await startTrial(page);
     const { correctionRequests } = (await (await page.request.get(`/api/schools/${schoolId}/correction-requests`)).json()) as {
-      correctionRequests: { classOffering: { label: string; course: { name: string }; term: { name: string } } }[];
+      correctionRequests: {
+        kind: string;
+        classOffering: { label: string; course: { name: string }; term: { name: string } };
+      }[];
     };
+    const attendanceRequest = correctionRequests.find((request) => request.kind === "attendance");
     // A Term's first day has no day behind it to have been taken.
-    test.skip(correctionRequests.length === 0, "the trial started on its Term's first day");
-    const { classOffering } = correctionRequests[0]!;
+    test.skip(attendanceRequest === undefined, "the trial started on its Term's first day");
+    const { classOffering } = attendanceRequest!;
     const offeringName = `${classOffering.course.name}, ${classOffering.label}`;
     // Class Offering or Student, then Present, Tardy, Excused absence, Unexcused absence, Absent pending review, and Not recorded.
     const pendingReview = (row: ReturnType<typeof recordRows>) => row.getByRole("cell").nth(5);

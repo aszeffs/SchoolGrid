@@ -1,6 +1,8 @@
 import type { Role } from "../access/roles.ts";
 import type { AttendanceStatus } from "../attendance/sessions.ts";
 import type { SchoolDate } from "../calendar/index.ts";
+import type { PublishedContent } from "../correction-requests/index.ts";
+import type { TermResultContent } from "../results/term-results.ts";
 
 /**
  * What a Trial School holds when it starts: invented Persons, and an Academic
@@ -190,6 +192,105 @@ export function inventedAttendance(
       after: "excused_absence",
       reason: "A note from home says it was a medical appointment.",
     },
+  };
+}
+
+/** One invented Student's Term result in one invented Class Offering, named as the invented School names them. */
+export interface InventedResult extends TermResultContent {
+  /** The Course's code, and the offering's label, NO_LABEL for none. */
+  course: string;
+  label: string;
+  student: string;
+}
+
+/** The Term results a Trial School starts with, the one offering of them published, and the request its Faculty role has raised. */
+export interface InventedResults {
+  /** Every result, each recorded by whoever teaches its offering; a value left null is one Publication waits on. */
+  results: InventedResult[];
+  /** The offering whose results are published, by whoever teaches it. */
+  published: { course: string; label: string };
+  /** Pending, raised by the Faculty role, on a result in the published offering. */
+  correctionRequest: Omit<InventedResult, keyof TermResultContent> & {
+    before: PublishedContent;
+    after: PublishedContent;
+    reason: string;
+  };
+}
+
+/** Where Publication is shown: an offering the Faculty role teaches the Student role in, and the classmate whose result they ask to change. */
+const PUBLISHED_COURSE = "BIO";
+const CORRECTED = "Casey Moreau";
+const CORRECTED_BEFORE: PublishedContent ={ value: "C", score: 71.5, comment: null };
+/** Where Publication is refused: the shown Attendance offering, where the same classmate is still owed a value. */
+const UNVALUED: TermResultContent = { value: null, score: null, comment: "Final assessment missed; a make-up is booked." };
+
+/** The default Result value scale's labels, best first, with the lowest score each asks for. */
+const BANDS = [
+  { value: "A", from: 90 },
+  { value: "B", from: 80 },
+  { value: "C", from: 70 },
+  { value: "D", from: 60 },
+  { value: "F", from: 0 },
+] as const;
+
+const COMMENTS = [
+  "Consistent, careful work all Term.",
+  "Strong in class discussion; written work is catching up.",
+  "Good progress since the start of Term.",
+  "Needs to hand work in on time.",
+];
+
+/**
+ * The Term results every invented Class Offering of the current Term holds,
+ * as drafts in the School's default scale: a value for every rostered
+ * Student, mostly with a score and some with a comment, the same for any two
+ * trials.
+ *
+ * The Faculty role has published Biology, which they teach the Student role
+ * in, and asked for a classmate's result there to be raised. In the Class
+ * Offering whose Attendance is shown, the classmate left unmarked there still
+ * has no value, so Publication of it is refused and names them.
+ */
+export function inventedResults(school: InventedSchool): InventedResults {
+  const results: InventedResult[] = [];
+  for (const { code, labels, rosters } of school.courses) {
+    for (const label of labels.map((label) => label ?? NO_LABEL)) {
+      for (const student of rosters[label] ?? []) {
+        const arranged =
+          code === PUBLISHED_COURSE && student === CORRECTED
+            ? CORRECTED_BEFORE
+            : code === SHOWN_COURSE && label === SHOWN_LABEL && student === UNMARKED
+              ? UNVALUED
+              : usualResult(`${code}|${label}|${student}`);
+        results.push({ course: code, label, student, ...arranged });
+      }
+    }
+  }
+  return {
+    results,
+    published: { course: PUBLISHED_COURSE, label: NO_LABEL },
+    correctionRequest: {
+      course: PUBLISHED_COURSE,
+      label: NO_LABEL,
+      student: CORRECTED,
+      before: CORRECTED_BEFORE,
+      after: { value: "B", score: 81.5, comment: "Lab report re-marked from the copy handed in." },
+      reason: "The lab report was marked from an earlier draft, not the copy handed in.",
+    },
+  };
+}
+
+/** A Student's result drawn from the offering and Student alone: a score between 55 and 99.9, and the value it falls in. */
+function usualResult(key: string): TermResultContent {
+  const hash = fnv1a(key);
+  const score = (550 + (hash % 450)) / 10;
+  const { value } = BANDS.find((band) => score >= band.from)!;
+  const roll = (hash >>> 16) % 100;
+  return {
+    value,
+    // A few are given as a value alone.
+    score: roll < 15 ? null : score,
+    comment: roll % 3 === 0 ? COMMENTS[roll % COMMENTS.length]! : null,
   };
 }
 
