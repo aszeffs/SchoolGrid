@@ -20,6 +20,13 @@ import {
 
 export type { AttendanceTarget };
 
+/** One Student's Term result in a Class Offering, in its School. */
+export interface TermResultTarget {
+  schoolId: string;
+  classOfferingId: string;
+  studentPersonId: string;
+}
+
 /**
  * Correction requests (migrations/0023, 0027; CONTEXT.md: Correction request),
  * stored with their invariants held: a proposed change to a record, Pending
@@ -70,7 +77,7 @@ export interface AttendanceCorrectionRequest extends RequestCommon, AttendanceTa
   after: AttendanceStatus;
 }
 
-export interface TermResultCorrectionRequest extends RequestCommon {
+export interface TermResultCorrectionRequest extends RequestCommon, TermResultTarget {
   kind: "term_result";
   /** The published result's content when the request was raised. */
   before: PublishedContent;
@@ -130,7 +137,7 @@ function requestFrom({
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The value an Attendance target holds now, and holds until the transaction ends: its Attendance, or null for none. */
-export async function lockTarget(transaction: Queryable, target: AttendanceTarget): Promise<Attendance | null> {
+export async function lockAttendanceTarget(transaction: Queryable, target: AttendanceTarget): Promise<Attendance | null> {
   // Held first, so a first mark cannot land between reading none and adding one.
   await holdAttendanceOn(transaction, target);
   return lockAttendanceOf(transaction, target);
@@ -143,7 +150,7 @@ export async function lockTarget(transaction: Queryable, target: AttendanceTarge
  */
 export async function lockResultTarget(
   transaction: Queryable,
-  target: { schoolId: string; classOfferingId: string; studentPersonId: string },
+  target: TermResultTarget,
 ): Promise<TermResult | null> {
   const results = await holdTermResults(transaction, target);
   return results.find((result) => result.studentPersonId === target.studentPersonId) ?? null;
@@ -152,14 +159,7 @@ export async function lockResultTarget(
 /** What raising a request stores: its target, before and after, and who raised it why. */
 export type Raising = (
   | (AttendanceTarget & { kind: "attendance"; before: AttendanceStatus | null; after: AttendanceStatus })
-  | {
-      kind: "term_result";
-      schoolId: string;
-      classOfferingId: string;
-      studentPersonId: string;
-      before: PublishedContent;
-      after: PublishedContent;
-    }
+  | (TermResultTarget & { kind: "term_result"; before: PublishedContent; after: PublishedContent })
 ) & { reason: string; requestedByPersonId: string };
 
 /** Raises a Pending request, its before value read from the target as it now stands. */
@@ -265,12 +265,12 @@ export async function decideCorrectionRequest<R extends CorrectionRequest>(
  * since the request was raised. Compared by value: a mark changed and changed
  * back reads as unchanged.
  */
-export async function applyCorrection(
+export async function applyAttendanceCorrection(
   transaction: Queryable,
   request: AttendanceCorrectionRequest,
   { recordedByPersonId }: { recordedByPersonId: string },
 ): Promise<{ before: Attendance | null; after: Attendance } | null> {
-  const current = await lockTarget(transaction, request);
+  const current = await lockAttendanceTarget(transaction, request);
   if ((current?.status ?? null) !== request.before) {
     return null;
   }
@@ -302,20 +302,20 @@ export async function applyResultCorrection(
   request: TermResultCorrectionRequest,
   { recordedByPersonId }: { recordedByPersonId: string },
 ): Promise<{ before: TermResult; after: TermResult } | "target_changed" | "value_not_in_scale"> {
-  const current = await lockResultTarget(transaction, request);
   // Nothing removes a published result, nor unpublishes it.
-  if (!sameContent(current!, request.before)) {
+  const current = (await lockResultTarget(transaction, request))!;
+  if (!sameContent(current, request.before)) {
     return "target_changed";
   }
   const { value, score, comment } = request.after;
-  let resultValueId = current!.resultValueId;
-  if (value !== current!.value) {
+  let resultValueId = current.resultValueId;
+  if (value !== current.value) {
     const bound = (await currentResultValueIds(transaction, request.schoolId)).get(value);
     if (bound === undefined) {
       return "value_not_in_scale";
     }
     resultValueId = bound;
   }
-  const after = await changeTermResult(transaction, current!, { resultValueId, score, comment, recordedByPersonId });
-  return { before: current!, after };
+  const after = await changeTermResult(transaction, current, { resultValueId, score, comment, recordedByPersonId });
+  return { before: current, after };
 }

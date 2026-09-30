@@ -27,14 +27,14 @@ import { findPersons } from "../identity/index.ts";
 import { recordResultChange, termResultContentFrom } from "../results/term-result-routes.ts";
 import { currentResultValueIds, sameContent } from "../results/term-results.ts";
 import {
-  applyCorrection,
+  applyAttendanceCorrection,
   applyResultCorrection,
   correctionRequestsIn,
   decideCorrectionRequest,
   findCorrectionRequest,
   lockCorrectionRequest,
   lockResultTarget,
-  lockTarget,
+  lockAttendanceTarget,
   raiseCorrectionRequest,
   type AttendanceCorrectionRequest,
   type AttendanceTarget,
@@ -228,7 +228,7 @@ async function raiseForAttendance(transaction: Queryable, actor: Actor, offering
   const { studentPersonId, date, after, reason } = parseAttendanceRaise(body);
   const target = { schoolId: offering.schoolId, classOfferingId: offering.id, studentPersonId, date };
   await checkTarget(transaction, offering, target);
-  const before = (await lockTarget(transaction, target))?.status ?? null;
+  const before = (await lockAttendanceTarget(transaction, target))?.status ?? null;
   if (before === after) {
     throw new Conflict({ conflict: "unchanged" });
   }
@@ -277,7 +277,7 @@ async function applyAttendance(transaction: Queryable, actor: Actor, request: At
   // The offering stands while the roster naming its Student does.
   const offering = (await findClassOffering(transaction, request.classOfferingId))!;
   await checkTarget(transaction, offering, request);
-  const applied = await applyCorrection(transaction, request, { recordedByPersonId: actor.person.id });
+  const applied = await applyAttendanceCorrection(transaction, request, { recordedByPersonId: actor.person.id });
   if (applied === null) {
     throw new Conflict({ conflict: "target_changed" });
   }

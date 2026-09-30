@@ -172,8 +172,9 @@ function publicationOutlook(
 /**
  * The offering's results as the actor is served them: why they are read-only
  * for them if they are, whether they may publish them and what a Publication
- * would now do, whether they may request a correction to a published one, the scale a value is chosen from, and every Student ever
- * rostered in it, a withdrawn one too, with their result if they have one.
+ * would now do, whether they may request a correction to a published one, the
+ * scale a value is chosen from, and every Student ever rostered in it, a
+ * withdrawn one too, with their result if they have one.
  */
 async function serveOfferingResults(database: Queryable, actor: Actor, offering: DescribedClassOffering) {
   const key: OfferingKey = { schoolId: offering.schoolId, classOfferingId: offering.id };
