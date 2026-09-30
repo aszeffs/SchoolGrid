@@ -1114,15 +1114,20 @@ export interface TermReportReach {
  */
 export function authorizeReadTermReport(actor: Actor, personId: string, target: Person | null): TermReportReach {
   const unreachable = outOfReach(actor, target);
-  const whole = unreachable === null && (holds(actor, "school_administrator") || target!.id === actor.person.id);
-  const profile = unreachable === null ? standingOf.get(actor)?.linkedStudents.get(target!.id) : undefined;
-  const reach = whole
-    ? { termResults: true, attendanceTotals: true }
-    : { termResults: profile?.resultsRead ?? false, attendanceTotals: profile?.attendanceRead ?? false };
-  if (!reach.termResults && !reach.attendanceTotals) {
+  const reach = unreachable === null ? termReportPartsFor(actor, target!) : null;
+  if (reach === null || (!reach.termResults && !reach.attendanceTotals)) {
     throw new Refused(unreachable ?? "forbidden", { type: "person", id: personId });
   }
   return { student: target!, ...reach };
+}
+
+/** The parts of a Student's Term report in the actor's School the actor may read, by who they are to that Student. */
+function termReportPartsFor(actor: Actor, student: Person): Omit<TermReportReach, "student"> {
+  if (holds(actor, "school_administrator") || student.id === actor.person.id) {
+    return { termResults: true, attendanceTotals: true };
+  }
+  const profile = standingOf.get(actor)?.linkedStudents.get(student.id);
+  return { termResults: profile?.resultsRead ?? false, attendanceTotals: profile?.attendanceRead ?? false };
 }
 
 /**

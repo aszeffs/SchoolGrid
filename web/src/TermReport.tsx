@@ -62,7 +62,7 @@ function ReportSheet({
   const legend = (
     <>
       <h2>Key</h2>
-      <p>{own ? "Your own Term report" : `${student.displayName}'s Term report`}, and nothing about anyone else.</p>
+      <p>{own ? "Your own Term report" : `${student.displayName}’s Term report`}, and nothing about anyone else.</p>
       <dl>
         {shows.termResults && (
           <Key term="Term result">
@@ -124,7 +124,7 @@ function ReportSheet({
             </p>
           )}
           <RecordList
-            label={`${student.displayName}'s Term report for ${term.name}, ${term.academicYear.name}`}
+            label={`${student.displayName}’s Term report for ${term.name}, ${term.academicYear.name}`}
             rows={report.classOfferings}
             keyOf={(offering) => offering.id}
             empty=""
