@@ -220,7 +220,7 @@ export interface InventedResults {
 /** Where Publication is shown: an offering the Faculty role teaches the Student role in, and the classmate whose result they ask to change. */
 const PUBLISHED_COURSE = "BIO";
 const CORRECTED = "Casey Moreau";
-const CORRECTED_BEFORE: PublishedContent ={ value: "C", score: 71.5, comment: null };
+const CORRECTED_BEFORE: PublishedContent = {value: "C", score: 71.5, comment: null };
 /** Where Publication is refused: the shown Attendance offering, where the same classmate is still owed a value. */
 const UNVALUED: TermResultContent = { value: null, score: null, comment: "Final assessment missed; a make-up is booked." };
 

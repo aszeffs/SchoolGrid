@@ -96,11 +96,13 @@ export interface Recording {
   recordedByPersonId: string;
 }
 
+/** A Student's first result in a Class Offering, as recorded. */
+export type FirstRecording = OfferingKey & Recording & { studentPersonId: string };
+
 /** A Student's first result in a Class Offering. */
 export async function recordTermResult(
   transaction: Queryable,
-  { schoolId, classOfferingId, studentPersonId, resultValueId, score, comment, recordedByPersonId }: OfferingKey &
-    Recording & { studentPersonId: string },
+  { schoolId, classOfferingId, studentPersonId, resultValueId, score, comment, recordedByPersonId }: FirstRecording,
 ): Promise<TermResult> {
   const { rows } = await transaction.query<{ id: string }>(
     `INSERT INTO app.term_result
@@ -120,7 +122,7 @@ export async function recordTermResult(
  */
 export async function recordTermResults(
   transaction: Queryable,
-  results: readonly (OfferingKey & Recording & { studentPersonId: string })[],
+  results: readonly FirstRecording[],
 ): Promise<void> {
   await transaction.query(
     `INSERT INTO app.term_result
