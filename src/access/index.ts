@@ -1256,19 +1256,31 @@ export async function authorizePublishTermResults<O extends { id: string; school
 }
 
 /**
+ * Whether the actor may raise a Correction request for a Class Offering's
+ * records: any School Administrator, and a Faculty member currently teaching
+ * it, whatever date or result the request is for (CONTEXT.md: Correction
+ * request). One whose assignment has ended no longer speaks for it; whoever
+ * teaches it now does. Only for an offering the actor has already been
+ * permitted to read the Attendance, or the Term results, of.
+ */
+export async function mayRaiseCorrectionRequest(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+): Promise<boolean> {
+  return holds(actor, "school_administrator") || (await currentTeachingAssignment(database, actor, offering)) !== undefined;
+}
+
+/**
  * Returns the Class Offering the actor may raise a Correction request for,
- * and refuses otherwise: any School Administrator, and a Faculty member
- * currently teaching it, whatever date the request is for (CONTEXT.md:
- * Correction request). One whose assignment has ended no longer speaks for
- * it; whoever teaches it now does. Only for an offering the actor has already
- * been permitted to read the Attendance of.
+ * and refuses otherwise: see mayRaiseCorrectionRequest.
  */
 export async function authorizeRaiseCorrectionRequest<O extends { id: string; schoolId: string }>(
   database: Queryable,
   actor: Actor,
   offering: O,
 ): Promise<O> {
-  if (!holds(actor, "school_administrator") && (await currentTeachingAssignment(database, actor, offering)) === undefined) {
+  if (!(await mayRaiseCorrectionRequest(database, actor, offering))) {
     throw new Refused("forbidden", { type: "class_offering", id: offering.id });
   }
   return offering;

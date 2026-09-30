@@ -5,9 +5,11 @@ import {
   type ApiResult,
   type CorrectionDecision,
   type CorrectionRequest,
+  type PublishedContent,
   type ReachedSchool,
 } from "./api.ts";
-import { correctionConflictMessage, statusOrNone } from "./attendance.ts";
+import { statusOrNone } from "./attendance.ts";
+import { contentText, correctionConflictMessage, partText, RESULT_PARTS } from "./corrections.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
@@ -28,9 +30,11 @@ const STATE_NAMES = { pending: "Pending", approved: "Approved", rejected: "Rejec
  * for anyone else who raises them, their own, each withdrawn here while it is
  * Pending. Which of the two the page is, the server says by what it lists.
  *
- * A request is raised from an Attendance session, beside the Student it is
- * for. Anyone the server refuses sees the one "not available" state
- * (ADR-0002).
+ * A request is raised from an Attendance session, or from a class's Term
+ * results, beside the Student it is for. An Attendance request shows the
+ * status before and after; a Term result request, each of the value, score
+ * and comment before and after. Anyone the server refuses sees the one "not
+ * available" state (ADR-0002).
  */
 export function CorrectionRequests({ school }: { school: ReachedSchool }) {
   const { schoolId } = school;
@@ -87,7 +91,7 @@ function RequestsSheet({
     if (sent.ok) {
       setDone(`${request.student.displayName}’s request is ${STATE_NAMES[decision.state].toLowerCase()}.`);
     } else if (sent.conflict !== undefined) {
-      setProblem(correctionConflictMessage(sent.conflict));
+      setProblem(correctionConflictMessage(sent.conflict, request.kind));
     }
   };
 
@@ -95,13 +99,26 @@ function RequestsSheet({
     { head: "Student", cell: (request) => request.student.displayName },
     {
       head: "Class",
-      cell: (request) => (
-        <Link to={{ name: "attendanceOn", schoolId, classOfferingId: request.classOffering.id, date: request.date }}>
-          {offeringName(request.classOffering)}, {formatSchoolDate(request.date)}
-        </Link>
-      ),
+      cell: (request) =>
+        request.kind === "attendance" ? (
+          <Link to={{ name: "attendanceOn", schoolId, classOfferingId: request.classOffering.id, date: request.date }}>
+            {offeringName(request.classOffering)}, {formatSchoolDate(request.date)}
+          </Link>
+        ) : (
+          <Link to={{ name: "termResults", schoolId, classOfferingId: request.classOffering.id }}>
+            {offeringName(request.classOffering)}, Term result
+          </Link>
+        ),
     },
-    { head: "Change", cell: (request) => `${statusOrNone(request.before)} to ${statusOrNone(request.after)}` },
+    {
+      head: "Change",
+      cell: (request) =>
+        request.kind === "attendance" ? (
+          `${statusOrNone(request.before)} to ${statusOrNone(request.after)}`
+        ) : (
+          <ResultChange before={request.before} after={request.after} />
+        ),
+    },
     { head: "Reason", cell: (request) => request.reason },
     {
       head: "Requested",
@@ -119,12 +136,13 @@ function RequestsSheet({
       </p>
       <dl>
         <Key term="Correction request">
-          A proposed change to one Student’s Attendance on one date, with a reason: after its Attendance window has
-          closed, to settle an Absent, pending review, or to add a mark nobody recorded.
+          A proposed change, with a reason: to one Student’s Attendance on one date, after its Attendance window has
+          closed, to settle an Absent, pending review, or to add a mark nobody recorded; or to one Student’s published
+          Term result.
         </Key>
         <Key term="Pending">Waiting for a School Administrator other than the one who raised it.</Key>
         <Key term="Approved">The change is made, the moment it is approved.</Key>
-        <Key term="Rejected">Turned down, with a reason. The Attendance stays as it was.</Key>
+        <Key term="Rejected">Turned down, with a reason. The Attendance or result stays as it was.</Key>
         <Key term="Withdrawn">Taken back by whoever raised it.</Key>
         <Key term="Self-approved">
           Approved by whoever raised it, as the School’s only School Administrator. The Audit record says so.
@@ -137,7 +155,7 @@ function RequestsSheet({
     <Sheet {...SHEET} legend={legend}>
       <h1>Correction requests</h1>
       <p className="muted">
-        A request is raised from a class’s Attendance session, beside the Student it is for.
+        A request is raised from a class’s Attendance session or its Term results, beside the Student it is for.
         {administers ? " A request you raised is decided by another School Administrator, if the School has one." : ""}
       </p>
 
@@ -268,9 +286,20 @@ function Decide({
 }) {
   const [reason, setReason] = useState("");
   const student = request.student.displayName;
-  const change = `${student}’s Attendance in ${offeringName(request.classOffering)} on ${formatSchoolDate(request.date)}`;
-  const from = statusOrNone(request.before);
-  const to = statusOrNone(request.after);
+  const offering = offeringName(request.classOffering);
+  const { change, from, to } =
+    request.kind === "attendance"
+      ? {
+          change: `${student}’s Attendance in ${offering} on ${formatSchoolDate(request.date)}`,
+          from: statusOrNone(request.before),
+          to: statusOrNone(request.after),
+        }
+      : {
+          change: `${student}’s Term result in ${offering}`,
+          from: contentText(request.before),
+          to: contentText(request.after),
+        };
+  const record = request.kind === "attendance" ? "Attendance" : "result";
 
   switch (state) {
     case "approved":
@@ -329,9 +358,27 @@ function Decide({
           onConfirm={() => onDecide({ state })}
         >
           <p>
-            The request to change {change} from {from} to {to} is taken back. Nothing about the Attendance changes.
+            The request to change {change} from {from} to {to} is taken back. Nothing about the {record} changes.
           </p>
         </ConfirmDialog>
       );
   }
+}
+
+/** A result correction's parts side by side: each before and after, an unchanged one said so. */
+function ResultChange({ before, after }: { before: PublishedContent; after: PublishedContent }) {
+  return (
+    <dl className="correction-change">
+      {RESULT_PARTS.map(({ part, name }) => (
+        <div key={part}>
+          <dt>{name}</dt>
+          <dd className={before[part] === after[part] ? "muted" : undefined}>
+            {before[part] === after[part]
+              ? `${partText(before, part)}, unchanged`
+              : `${partText(before, part)} to ${partText(after, part)}`}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }

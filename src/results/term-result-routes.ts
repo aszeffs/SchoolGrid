@@ -4,6 +4,7 @@ import {
   authorizeReadTermResultsOf,
   authorizeRecordTermResults,
   mayPublishTermResults,
+  mayRaiseCorrectionRequest,
   termResultsRecordingRefusal,
   type Actor,
 } from "../access/index.ts";
@@ -74,7 +75,7 @@ function parseDrafts(body: unknown): Draft[] {
     if (typeof studentPersonId !== "string" || studentPersonId.length === 0) {
       throw new InvalidRequest("each draft's studentPersonId must name a Student");
     }
-    return { studentPersonId, loaded: loaded === null ? null : loadedFrom(loaded), ...contentFrom(fields) };
+    return { studentPersonId, loaded: loaded === null ? null : loadedFrom(loaded), ...termResultContentFrom(fields) };
   });
   if (new Set(parsed.map((draft) => draft.studentPersonId)).size !== parsed.length) {
     throw new InvalidRequest("drafts must name each Student once");
@@ -83,15 +84,15 @@ function parseDrafts(body: unknown): Draft[] {
 }
 
 /**
- * What a draft should now say, each part given, null for none. A value is
- * held to the scale's label bound here and to the current scale when it is
- * applied; a score to 0 to 100 with at most one decimal; a comment to its
- * length, and not blank.
+ * What a result should now say, each part given, null for none: `whose` names
+ * it in a refusal. A value is held to the scale's label bound here and to the
+ * current scale when it is applied; a score to 0 to 100 with at most one
+ * decimal; a comment to its length, and not blank.
  */
-function contentFrom(fields: Record<string, unknown>): TermResultContent {
+export function termResultContentFrom(fields: Record<string, unknown>, whose = "each draft's"): TermResultContent {
   const { value, score, comment } = fields;
   if (value !== null && (typeof value !== "string" || value.length === 0 || [...value].length > MAX_RESULT_VALUE_LABEL_LENGTH)) {
-    throw new InvalidRequest("each draft's value must be a label of the Result value scale, or null");
+    throw new InvalidRequest(`${whose} value must be a label of the Result value scale, or null`);
   }
   if (
     score !== null &&
@@ -99,13 +100,13 @@ function contentFrom(fields: Record<string, unknown>): TermResultContent {
       !(score >= 0 && score <= MAX_TERM_RESULT_SCORE) ||
       Math.abs(score * 10 - Math.round(score * 10)) > 1e-9)
   ) {
-    throw new InvalidRequest(`each draft's score must be a number from 0 to ${MAX_TERM_RESULT_SCORE} with at most one decimal, or null`);
+    throw new InvalidRequest(`${whose} score must be a number from 0 to ${MAX_TERM_RESULT_SCORE} with at most one decimal, or null`);
   }
   if (
     comment !== null &&
     (typeof comment !== "string" || comment.trim().length === 0 || [...comment].length > MAX_TERM_RESULT_COMMENT_LENGTH)
   ) {
-    throw new InvalidRequest(`each draft's comment must be text of at most ${MAX_TERM_RESULT_COMMENT_LENGTH} characters, or null`);
+    throw new InvalidRequest(`${whose} comment must be text of at most ${MAX_TERM_RESULT_COMMENT_LENGTH} characters, or null`);
   }
   // Rounded to the one decimal kept, so 87.3 is stored as 87.3 however the number arrived.
   return { value, score: score === null ? null : Math.round(score * 10) / 10, comment } as TermResultContent;
@@ -171,7 +172,7 @@ function publicationOutlook(
 /**
  * The offering's results as the actor is served them: why they are read-only
  * for them if they are, whether they may publish them and what a Publication
- * would now do, the scale a value is chosen from, and every Student ever
+ * would now do, whether they may request a correction to a published one, the scale a value is chosen from, and every Student ever
  * rostered in it, a withdrawn one too, with their result if they have one.
  */
 async function serveOfferingResults(database: Queryable, actor: Actor, offering: DescribedClassOffering) {
@@ -188,6 +189,7 @@ async function serveOfferingResults(database: Queryable, actor: Actor, offering:
   return {
     classOfferingId: offering.id,
     readOnlyBecause: await termResultsRecordingRefusal(database, actor, offering),
+    mayRequestCorrections: await mayRaiseCorrectionRequest(database, actor, offering),
     publication: {
       mayPublish: await mayPublishTermResults(database, actor, offering),
       missingValue: outlook.missingValue.map(named).sort(byName),
@@ -222,6 +224,26 @@ function auditedResult(result: TermResult, classOfferingId: string) {
     score: result.score,
     comment: result.comment,
   };
+}
+
+/** Writes the Audit record of a change to a result in a Class Offering, made by the actor, for a reason if one was given. */
+export async function recordResultChange(
+  transaction: Queryable,
+  actor: Actor,
+  classOfferingId: string,
+  before: TermResult,
+  after: TermResult,
+  reason: string | null = null,
+): Promise<void> {
+  await appendAuditRecord(transaction, {
+    schoolId: actor.schoolId,
+    actorPersonId: actor.person.id,
+    action: "term_result.changed",
+    target: { type: "term_result", id: before.id },
+    reason,
+    before: auditedResult(before, classOfferingId),
+    after: auditedResult(after, classOfferingId),
+  });
 }
 
 /**
@@ -293,16 +315,7 @@ export function registerTermResultRoutes(app: FastifyInstance, database: Databas
             stored.set(studentPersonId, await recordTermResult(transaction, { ...key, studentPersonId, ...recording }));
             continue;
           }
-          const changed = await changeTermResult(transaction, current, recording);
-          await appendAuditRecord(transaction, {
-            schoolId: offering.schoolId,
-            actorPersonId: actor.person.id,
-            action: "term_result.changed",
-            target: { type: "term_result", id: current.id },
-            reason: null,
-            before: auditedResult(current, offering.id),
-            after: auditedResult(changed, offering.id),
-          });
+          await recordResultChange(transaction, actor, offering.id, current, await changeTermResult(transaction, current, recording));
         }
         const served = await serveOfferingResults(transaction, actor, offering);
         const persons = await findPersons(

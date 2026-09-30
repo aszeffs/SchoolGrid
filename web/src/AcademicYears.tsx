@@ -646,6 +646,8 @@ function conflictMessage(conflict: ConflictDetail, attempt: "create" | "change" 
     case "not_pending":
     case "own_request":
     case "target_changed":
+    case "not_published":
+    case "value_not_in_scale":
     case "values_missing":
     case "nothing_to_publish":
       return "That change could not be made.";

@@ -7,6 +7,7 @@ import {
   type ApiResult,
   type ClassOfferingResults,
   type ConflictDetail,
+  type CorrectionRaising,
   type ReachedSchool,
   type RefusedDraft,
   type TaughtClassOffering as Offering,
@@ -14,11 +15,13 @@ import {
   type TermResultContent,
   type TermResultDraft,
 } from "./api.ts";
+import { correctionConflictMessage } from "./corrections.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
 import { offeringName } from "./offerings.ts";
 import { RecordList } from "./RecordList.tsx";
+import { RequestResultCorrection } from "./RequestCorrection.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 import { formatSchoolDate, MOMENT } from "./standing.ts";
@@ -49,7 +52,8 @@ interface Entry {
  * read the drafts with why they cannot record them said plainly. A School
  * Administrator, and Faculty teaching it now, publish the class's results
  * after a confirmation giving the count, or are told who has no value yet. A
- * published result shows as published and read-only. Anyone else,
+ * published result shows as published and read-only, and whoever may publish
+ * it may request a correction to it beside it. Anyone else,
  * and an offering that does not exist or is another School's, is the one "not
  * available" state (ADR-0002).
  */
@@ -89,6 +93,7 @@ export function TermResults({ school, classOfferingId }: { school: ReachedSchool
           onSave={(drafts) => change(() => api.saveTermResults(schoolId, classOfferingId, drafts))}
           onPublish={() => change(() => api.publishTermResults(schoolId, classOfferingId))}
           onRefresh={() => change(() => api.classOfferingResults(schoolId, classOfferingId))}
+          onRequest={(raising) => change(() => api.raiseCorrectionRequest(schoolId, raising))}
         />
       );
     }
@@ -104,6 +109,7 @@ function ResultsSheet({
   onSave,
   onPublish,
   onRefresh,
+  onRequest,
 }: {
   schoolId: string;
   administers: boolean;
@@ -115,6 +121,7 @@ function ResultsSheet({
   ) => Promise<ApiResult<{ classOfferingResults: ClassOfferingResults; refusedDrafts: RefusedDraft[] }>>;
   onPublish: () => Promise<ApiResult<{ publication: { resultCount: number } }>>;
   onRefresh: () => Promise<ApiResult<{ classOfferingResults: ClassOfferingResults }>>;
+  onRequest: (raising: CorrectionRaising) => Promise<ApiResult<unknown>>;
 }) {
   /** The results edited and not yet saved, by Student. */
   const [entries, setEntries] = useState<ReadonlyMap<string, Entry>>(new Map());
@@ -126,12 +133,34 @@ function ResultsSheet({
   const [confirming, setConfirming] = useState(false);
   /** Why the last Publish was not done, said beside the action until the next. */
   const [publishProblem, setPublishProblem] = useState<string | null>(null);
+  /** The Student a correction is being requested for, while its dialog is open. */
+  const [requesting, setRequesting] = useState<Student | null>(null);
+  /** Whether the last change raised a Correction request, so the way to it is offered beside what it did. */
+  const [raised, setRaised] = useState(false);
+  /** Why the last Correction request was not raised, said until the next. */
+  const [requestProblem, setRequestProblem] = useState<string | null>(null);
   const { resultValueScale: scale, readOnlyBecause, students, publication } = results;
   const recordable = readOnlyBecause === null;
   const { term } = offering;
   /** Whether a Student's result is edited here: a published one changes only through a Correction request. */
   const editable = (student: Student) => recordable && !isPublished(student);
   const publishedCount = students.filter(isPublished).length;
+
+  const request = async (student: Student, raising: CorrectionRaising) => {
+    setRequesting(null);
+    setDone("");
+    setRaised(false);
+    setRequestProblem(null);
+    const sent = await onRequest(raising);
+    if (sent.ok) {
+      setDone(`Your Correction request for ${student.person.displayName} is pending.`);
+      setRaised(true);
+    } else {
+      setRequestProblem(
+        sent.conflict === undefined ? "Requesting a correction is not available." : correctionConflictMessage(sent.conflict, "term_result"),
+      );
+    }
+  };
 
   // Reads the results again, so a value a co-teacher has given since counts,
   // and checks what the server would refuse before asking for a
@@ -173,6 +202,8 @@ function ResultsSheet({
     event.preventDefault();
     setDone("");
     setPublishProblem(null);
+    setRaised(false);
+    setRequestProblem(null);
     const drafts = students.flatMap((student): TermResultDraft[] => {
       const entry = entries.get(student.person.id);
       if (entry === undefined) {
@@ -374,8 +405,33 @@ function ResultsSheet({
                 ),
             },
             { head: "Recorded", cell: (student) => recordedText(student.termResult) },
+            ...(results.mayRequestCorrections && students.some(isPublished)
+              ? [
+                  {
+                    head: "Correction",
+                    actions: true,
+                    cell: (student: Student) =>
+                      isPublished(student) && (
+                        <button
+                          type="button"
+                          className="button-quiet"
+                          disabled={busy}
+                          aria-label={`Request a correction for ${student.person.displayName}`}
+                          onClick={() => setRequesting(student)}
+                        >
+                          Request a correction
+                        </button>
+                      ),
+                  },
+                ]
+              : []),
           ]}
         />
+        {requestProblem !== null && (
+          <p role="alert" className="error">
+            {requestProblem}
+          </p>
+        )}
         {recordable && students.some(editable) && (
           <p className="actions">
             <button type="submit" disabled={busy || entries.size === 0}>
@@ -410,6 +466,23 @@ function ResultsSheet({
       <p className="muted" role="status">
         {done}
       </p>
+      {raised && (
+        <p>
+          <Link to={{ name: "correctionRequests", schoolId }}>Correction requests</Link>
+        </p>
+      )}
+      {requesting !== null && (
+        <RequestResultCorrection
+          classOfferingId={offering.id}
+          student={requesting.person}
+          // Offered only for a published result, which always has a value.
+          current={{ ...contentOf(requesting.termResult)!, value: requesting.termResult!.value! }}
+          values={scale.values.map((value) => value.label)}
+          busy={busy}
+          onCancel={() => setRequesting(null)}
+          onRequest={(raising) => void request(requesting, raising)}
+        />
+      )}
       {confirming && (
         <ConfirmDialog
           title={`Publish ${countOf(publication.ready)}?`}

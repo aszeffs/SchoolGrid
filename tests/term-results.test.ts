@@ -34,6 +34,7 @@ interface TermResult extends Content {
 interface OfferingResults {
   classOfferingId: string;
   readOnlyBecause: "not_teaching" | null;
+  mayRequestCorrections: boolean;
   publication: { mayPublish: boolean; missingValue: Named[]; ready: number };
   resultValueScale: { version: number; values: { label: string; description: string | null }[] };
   students: {
@@ -464,9 +465,11 @@ describe("draft Term results", () => {
 
     expect(byFrankie.readOnlyBecause).toBeNull();
     expect(byFrankie.publication.mayPublish).toBe(true);
+    expect(byFrankie.mayRequestCorrections).toBe(true);
     expect(byEllis).toEqual({
       ...byFrankie,
       readOnlyBecause: "not_teaching",
+      mayRequestCorrections: false,
       publication: { ...byFrankie.publication, mayPublish: false },
     });
     expect(byAlice).toEqual({ ...byFrankie, readOnlyBecause: "not_teaching" });
