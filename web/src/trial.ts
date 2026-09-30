@@ -104,7 +104,7 @@ export const START_FAILED: Record<StartFailure, string> = {
 /** Each provider as its button names it. */
 export const PROVIDER_NAMES: Record<TrialProvider, string> = { github: "GitHub" };
 
-/** Where a sign-in with this provider starts, carrying the browser's timezone so the School's dates look right. */
+/** Where a sign-in with this provider starts. */
 export function startPath(provider: TrialProvider): string {
   return `/api/trials/start/${provider}`;
 }

@@ -84,11 +84,11 @@ export function registerTrialRoutes(
   // Whether to offer a trial at all, and through which providers, for the
   // landing page. Public, and the same answer to everyone: it says nothing
   // about any School.
-  const offered = {
+  const trialsOffered = {
     enabled: settings.enabled,
     providers: settings.enabled ? TRIAL_PROVIDERS.filter((provider) => settings.providers[provider] !== undefined) : [],
   };
-  api.get("/trials", async (_request, reply) => reply.status(200).send(offered));
+  api.get("/trials", async (_request, reply) => reply.status(200).send(trialsOffered));
 
   const redirectUriFor = (provider: TrialProvider) => `${publicOrigin}${CALLBACK_PATH}/${provider}`;
 
@@ -100,6 +100,14 @@ export function registerTrialRoutes(
       const chosen = settings.enabled ? offeredProvider(settings, request.params.provider) : null;
       if (chosen === null) {
         return refused(request, reply, settings.enabled ? "unoffered-provider" : "trials-disabled");
+      }
+      // Only a link on SchoolGrid's own page starts one. From anywhere else, a
+      // visitor who once approved the app would come straight back signed in
+      // to a trial they never asked for, their Session replaced (ADR-0004). A
+      // navigation carries no `Origin`, but its Fetch Metadata says where it
+      // came from, and a browser alone sets it.
+      if (request.headers["sec-fetch-site"] !== "same-origin") {
+        return refused(request, reply, "cross-site");
       }
       const { timezone } = request.query;
       const { location, cookie } = beginSignIn({
@@ -147,8 +155,15 @@ export function registerTrialRoutes(
         return backToLanding(reply, "busy");
       }
 
-      // Starting over drops the Session the browser held before, if it held one.
-      await authenticator.endSession(request);
+      // The Session cookie replaces any the browser held. That one's Session
+      // cannot be ended here: the redirect back began at the provider, so the
+      // browser sent this request no `SameSite=Strict` cookie. It lapses
+      // unused, the browser no longer holding it.
+      //
+      // The redirect into the School is part of that same cross-site chain, so
+      // the page it loads is sent no cookie either. It needs none: the app's
+      // page is the same for everyone, and asks for the Session itself, from
+      // this origin, once loaded.
       return reply
         .status(303)
         .header("set-cookie", [EXPIRED_FLOW_COOKIE, started.session.cookie])

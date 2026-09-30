@@ -68,7 +68,8 @@ function sign(identityKey: string, payload: string): string {
   return createHmac("sha256", keyFor(identityKey, "flow")).update(payload).digest("base64url");
 }
 
-function random(): string {
+/** A secret too long to guess: 32 random bytes, as base64url. */
+function randomToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
@@ -91,7 +92,7 @@ export function beginSignIn({
   timezone: string;
   now?: number;
 }): { location: string; cookie: string } {
-  const flow: Flow = { provider, state: random(), verifier: random(), timezone, expiresAt: now + FLOW_LIFETIME_S * 1000 };
+  const flow: Flow = { provider, state: randomToken(), verifier: randomToken(), timezone, expiresAt: now + FLOW_LIFETIME_S * 1000 };
   const payload = Buffer.from(JSON.stringify(flow)).toString("base64url");
 
   const location = new URL(settings.authorizeUrl);
@@ -124,9 +125,7 @@ function flowOf(cookieHeader: string | undefined, identityKey: string, provider:
   if (payload === undefined || signature === undefined || rest.length > 0) {
     return null;
   }
-  const expected = Buffer.from(sign(identityKey, payload));
-  const given = Buffer.from(signature);
-  if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
+  if (!constantTimeEqual(signature, sign(identityKey, payload))) {
     return null;
   }
   const flow = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Flow;
@@ -168,7 +167,7 @@ export async function completeSignIn({
   // The state binds the redirect to the browser that began the sign-in, so
   // no one can finish theirs in another's (RFC 6749, section 10.12).
   const state = query["state"];
-  if (typeof state !== "string" || !equal(state, flow.state)) {
+  if (typeof state !== "string" || !constantTimeEqual(state, flow.state)) {
     return { status: "failed", reason: "state-mismatch" };
   }
   if (query["error"] === "access_denied") {
@@ -190,7 +189,8 @@ export async function completeSignIn({
   return { status: "signed-in", subject, timezone: flow.timezone };
 }
 
-function equal(given: string, expected: string): boolean {
+/** Whether two strings are the same, taking as long whichever character differs, so a guess learns nothing from the time. */
+function constantTimeEqual(given: string, expected: string): boolean {
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);

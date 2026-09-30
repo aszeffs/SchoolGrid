@@ -235,14 +235,12 @@ export interface TestServer {
    * fake provider, as `subject` (a fresh one unless given), and following the
    * redirect back. Returns a client sending back the Session it was given as
    * its School Administrator. That client sends the public `Origin` too, so it
-   * can change role and make changes as that browser would. `alongside` is a
-   * `Cookie` the browser also sends back to the callback, as one already
-   * holding a Session does.
+   * can change role and make changes as that browser would.
    */
-  startTrial(options?: { timezone?: string; subject?: string; alongside?: string }): Promise<StartedTrial>;
+  startTrial(options?: { timezone?: string; subject?: string }): Promise<StartedTrial>;
   /**
-   * Begins a trial sign-in, as the front page's button does, and returns where
-   * it sent the browser and the flow cookie it set.
+   * Begins a trial sign-in, as following the front page's link does, and
+   * returns where it sent the browser and the flow cookie it set.
    */
   beginTrialSignIn(options?: { timezone?: string; client?: TestClient }): Promise<TrialSignIn>;
   /**
@@ -389,8 +387,6 @@ export const TEST_IDENTITY_KEY = "test-identity-key-".padEnd(48, "0");
 /** A Trial School started through the API, and the browser that started it. */
 export interface StartedTrial {
   client: TestClient;
-  /** The Session's cookie, as the browser sends it back. */
-  cookie: string;
   schoolId: string;
   expiresAt: string;
 }
@@ -502,7 +498,8 @@ export function useTestServer({
     const client = buildClient(app);
 
     const beginTrialSignIn: TestServer["beginTrialSignIn"] = async ({ timezone, client: browser = client } = {}) => {
-      const response = await browser.get(
+      // What a browser says of a link followed on the public origin.
+      const response = await browser.withHeader("sec-fetch-site", "same-origin").get(
         `/api/trials/start/github${timezone === undefined ? "" : `?timezone=${encodeURIComponent(timezone)}`}`,
       );
       if (response.status !== 303) {
@@ -587,20 +584,18 @@ export function useTestServer({
           [invitationId, account.id],
         );
       },
-      startTrial: async ({ timezone, subject, alongside } = {}) => {
+      startTrial: async ({ timezone, subject } = {}) => {
         const signIn = await beginTrialSignIn(timezone === undefined ? {} : { timezone });
         const callback = await answerAtProvider(signIn, { decision: "approve", ...(subject === undefined ? {} : { subject }) });
-        const cookie = alongside === undefined ? signIn.flowCookie : `${signIn.flowCookie}; ${alongside}`;
-        const response = await client.withCookie(cookie).get(callback);
+        const response = await client.withCookie(signIn.flowCookie).get(callback);
         const schoolId = /^\/schools\/([^/]+)\/persons$/.exec(String(response.headers.location))?.[1];
         const session = setCookiesOf(response).find((cookie) => cookie.startsWith("__Host-session="));
         if (response.status !== 303 || schoolId === undefined || session === undefined) {
           throw new Error(`startTrial expected a Trial School but was sent to ${String(response.headers.location)}`);
         }
-        const sentBack = session.split(";")[0]!;
-        const started = client.withOrigin(PUBLIC_ORIGIN).withCookie(sentBack);
+        const started = client.withOrigin(PUBLIC_ORIGIN).withCookie(session.split(";")[0]!);
         const { schools } = (await started.get("/api/session")).body as { schools: { trialExpiresAt: string }[] };
-        return { client: started, cookie: sentBack, schoolId, expiresAt: schools[0]!.trialExpiresAt };
+        return { client: started, schoolId, expiresAt: schools[0]!.trialExpiresAt };
       },
       beginTrialSignIn,
       answerAtProvider,

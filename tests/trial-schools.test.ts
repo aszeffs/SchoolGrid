@@ -367,16 +367,6 @@ describe("Trial Schools", () => {
       }
     });
 
-    it("starts over in a fresh Trial School, ending the Session the browser held in the last", async () => {
-      const { client, cookie, schoolId } = await server().startTrial();
-      const next = await server().startTrial({ alongside: cookie });
-
-      expect((await client.get("/api/session")).body).toEqual(REFUSED);
-      const { schools } = await sessionOf(next.client);
-      expect(schools).toEqual([expect.objectContaining({ viewingAs: "school_administrator" })]);
-      expect(schools[0]!.schoolId).not.toBe(schoolId);
-    });
-
     it("refuses a role that is not a School role, and a caller in no Trial School", async () => {
       const { client } = await server().startTrial();
       for (const body of [{ role: "platform_administrator" }, { role: 7 }, {}]) {
@@ -504,7 +494,7 @@ describe("Trial Schools", () => {
         code_challenge_method: "S256",
       });
       expect(flowCookie).toMatch(/^__Secure-trial-sign-in=/);
-      const response = await server().client.get("/api/trials/start/github");
+      const response = await server().client.withHeader("sec-fetch-site", "same-origin").get("/api/trials/start/github");
       expect(setCookiesOf(response)).toEqual([
         expect.stringMatching(/; Path=\/api\/trials\/callback; Secure; HttpOnly; SameSite=Lax; Max-Age=600$/),
       ]);
@@ -602,6 +592,16 @@ describe("Trial Schools", () => {
 
       expect((await browser.get(callback)).headers.location).toBe("/?trial=failed");
       expect(await schoolCount()).toBe(1);
+    });
+
+    it("refuses a start another site sent the browser to, or that no page of its own did", async () => {
+      for (const site of [undefined, "cross-site", "same-site", "none"]) {
+        const client = site === undefined ? server().client : server().client.withHeader("sec-fetch-site", site);
+        const response = await client.get("/api/trials/start/github");
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual(REFUSED);
+        expect(response.headers["set-cookie"]).toBeUndefined();
+      }
     });
 
     it("refuses a provider it does not offer", async () => {

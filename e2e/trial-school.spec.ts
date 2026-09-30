@@ -19,13 +19,13 @@ const ROLES = [
 ] as const;
 
 /**
- * Starts a Trial School from the front page's button, from the keyboard,
+ * Starts a Trial School from the front page's link, from the keyboard,
  * signing in at the stand-in provider scripts/smoke-test.sh runs as a fresh
  * visitor, and opens it. The visitor lands in it as its School Administrator.
  */
 async function startTrial(page: Page): Promise<string> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Continue with GitHub" }).focus();
+  await page.getByRole("link", { name: "Continue with GitHub" }).focus();
   await page.keyboard.press("Enter");
   await approveAtProvider(page);
   return new URL(page.url()).pathname.split("/")[2]!;
@@ -67,12 +67,12 @@ test.describe("in a Trial School", () => {
     await expect(page.getByRole("alert")).toHaveText("SchoolGrid is busy right now. Try again in a little while.");
     // Said once: the address no longer says it.
     await expect(page).toHaveURL("/");
-    await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+    await expect(page.getByRole("link", { name: "Continue with GitHub" })).toBeVisible();
   });
 
   test("a visitor who cancels at the provider is back on the front page, told so, with no trial", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Continue with GitHub" }).click();
+    await page.getByRole("link", { name: "Continue with GitHub" }).click();
 
     await page.getByRole("button", { name: "Cancel" }).click();
 
@@ -162,7 +162,7 @@ test.describe("in a Trial School", () => {
 
     // Back to the time the server keeps, which the new trial's two hours are counted from.
     await page.clock.setSystemTime(Date.now());
-    await page.getByRole("button", { name: "Continue with GitHub" }).click();
+    await page.getByRole("link", { name: "Continue with GitHub" }).click();
     await approveAtProvider(page);
     await expect(banner(page)).toContainText(BANNER);
   });
@@ -193,7 +193,7 @@ test.describe("in a Trial School", () => {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width: 360, height: 800 });
       await page.goto("/");
-      await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Continue with GitHub" })).toBeVisible();
       await expectNoSidewaysScroll(page);
       await audit(page);
 

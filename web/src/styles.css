@@ -920,7 +920,8 @@ fieldset > button {
   justify-self: start;
 }
 
-button {
+button,
+.start-trial a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -944,7 +945,8 @@ button {
 }
 
 @media (hover: hover) {
-  button:hover:not(:disabled) {
+  button:hover:not(:disabled),
+  .start-trial a:hover {
     background: var(--action-strong);
     border-color: var(--action-strong);
   }
@@ -987,7 +989,8 @@ button {
   }
 }
 
-button:active:not(:disabled) {
+button:active:not(:disabled),
+.start-trial a:active {
   transform: translateY(1px);
 }
 
@@ -1683,15 +1686,18 @@ dialog.slip::backdrop {
   margin: 0;
 }
 
-/* A sign-in button for each provider, side by side while they fit. */
+/*
+ * A sign-in for each provider, side by side while they fit. Each is a link,
+ * since it leaves for the provider, struck as the primary button.
+ */
 .start-trial {
   display: flex;
   flex-wrap: wrap;
   gap: var(--step);
 }
 
-.start-trial form {
-  margin: 0;
+.start-trial a {
+  text-decoration: none;
 }
 
 .landing__trust {
