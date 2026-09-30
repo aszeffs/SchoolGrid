@@ -476,6 +476,8 @@ export interface ClassOfferingResults {
   classOfferingId: string;
   /** Null when the actor may record drafts. */
   readOnlyBecause: "not_teaching" | null;
+  /** Whether the actor may request a correction to a published result. */
+  mayRequestCorrections: boolean;
   /**
    * Whether the actor may publish, and what a Publication would now do: how
    * many results it would publish, and the active roster members without a
@@ -506,20 +508,28 @@ export interface RefusedDraft {
 
 export type CorrectionRequestState = "pending" | "approved" | "rejected" | "withdrawn";
 
+/** What a published Term result says, as a Correction request proposes to change it: it always has a value. */
+export interface PublishedContent extends TermResultContent {
+  value: string;
+}
+
 /**
- * A proposed change to one Student's Attendance in one Class Offering on one
- * School date, as a School Administrator or its requester reads it. `before`
- * is null when none was recorded when it was raised.
+ * A proposed change, as a School Administrator or its requester reads it: to
+ * one Student's Attendance in one Class Offering on one School date, `before`
+ * null when none was recorded when it was raised; or to one Student's
+ * published Term result in one Class Offering.
  */
-export interface CorrectionRequest {
+export type CorrectionRequest = CorrectionRequestCommon &
+  (
+    | { kind: "attendance"; date: string; before: AttendanceStatus | null; after: AttendanceStatus }
+    | { kind: "term_result"; before: PublishedContent; after: PublishedContent }
+  );
+
+interface CorrectionRequestCommon {
   id: string;
-  kind: "attendance";
   state: CorrectionRequestState;
   student: { id: string; displayName: string };
   classOffering: ClassOffering;
-  date: string;
-  before: AttendanceStatus | null;
-  after: AttendanceStatus;
   reason: string;
   requestedBy: { id: string; displayName: string };
   raisedAt: string;
@@ -530,6 +540,12 @@ export interface CorrectionRequest {
   /** Approved by its requester as the School's only School Administrator. */
   selfApproved: boolean;
 }
+
+/** What raising a Correction request for one Student in one Class Offering proposes, and why. */
+export type CorrectionRaising = { classOfferingId: string; studentPersonId: string; reason: string } & (
+  | { kind: "attendance"; date: string; after: AttendanceStatus }
+  | { kind: "term_result"; after: PublishedContent }
+);
 
 /** Where a Pending Correction request is taken: rejecting needs a reason. */
 export type CorrectionDecision =
@@ -874,21 +890,12 @@ export const api = {
   /** A School Administrator's queue, every request; anyone else's, their own. Pending first, oldest first. */
   correctionRequests: (schoolId: string) =>
     request<{ correctionRequests: CorrectionRequest[] }>("GET", inSchool(schoolId, "/correction-requests")),
-  /** Proposes a change to one Student's Attendance, with a reason, whatever the date. */
-  raiseCorrectionRequest: (
-    schoolId: string,
-    { classOfferingId, ...raising }: {
-      classOfferingId: string;
-      studentPersonId: string;
-      date: string;
-      after: AttendanceStatus;
-      reason: string;
-    },
-  ) =>
+  /** Proposes a change, with a reason: to one Student's Attendance whatever the date, or to their published Term result. */
+  raiseCorrectionRequest: (schoolId: string, { classOfferingId, ...raising }: CorrectionRaising) =>
     request<{ correctionRequest: CorrectionRequest }>(
       "POST",
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/correction-requests`),
-      { kind: "attendance", ...raising },
+      raising,
     ),
   /** Approves, rejects, or withdraws a Pending request. Approval applies its change at once. */
   decideCorrectionRequest: (schoolId: string, correctionRequestId: string, decision: CorrectionDecision) =>

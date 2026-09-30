@@ -267,13 +267,23 @@ describe("migrations", () => {
   describe("giving Schools a Result value scale", () => {
     const MIGRATION = "0024_result_value_scale.sql";
 
-    // The Term results that bind to a scale's values came after it, and their Publication after them.
-    const LATER = ["0025_term_results.sql", "0026_publication.sql"];
+    // The Term results that bind to a scale's values came after it, then
+    // their Publication, then Correction requests for them.
+    const LATER = ["0025_term_results.sql", "0026_publication.sql", "0027_term_result_corrections.sql"];
 
     // Returns the database to where it stood before the migration, when a
     // School had no Result value scale, and so no Term results either.
     async function undoMigration() {
       const owner = server().ownerDatabase;
+      // Dropping the columns drops the checks naming them.
+      await owner.query(
+        `ALTER TABLE app.correction_request
+           DROP COLUMN before_score, DROP COLUMN after_score, DROP COLUMN before_comment, DROP COLUMN after_comment,
+           DROP CONSTRAINT correction_request_kind_known,
+           ADD CONSTRAINT correction_request_kind_known CHECK (target_kind IN ('attendance')),
+           ADD CONSTRAINT correction_request_changes_something CHECK (before_value IS DISTINCT FROM after_value),
+           ALTER COLUMN date SET NOT NULL`,
+      );
       await owner.query(`DROP TABLE app.term_result`);
       await owner.query(`DROP FUNCTION app.term_result_publication_is_final()`);
       await owner.query(`DROP TABLE app.publication`);

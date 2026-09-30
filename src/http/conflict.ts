@@ -69,6 +69,10 @@ export type ConflictDetail =
   | { conflict: "own_request" }
   /** The Correction request's target no longer holds its before value: approving it would overwrite a newer one. */
   | { conflict: "target_changed" }
+  /** A Term result Correction request names a result that is a draft, or none: a draft is changed by saving it. */
+  | { conflict: "not_published" }
+  /** A Term result would be given a value the School's current Result value scale does not hold. */
+  | { conflict: "value_not_in_scale" }
   /**
    * Publication waits while these active roster members of the Class Offering
    * have no value, each named so the publisher knows whose to give.

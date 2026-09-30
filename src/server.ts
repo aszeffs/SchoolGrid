@@ -10,12 +10,12 @@ import {
 } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAcademicStructureRoutes } from "./academic-structure/routes.ts";
-import { registerCorrectionRequestRoutes } from "./attendance/correction-request-routes.ts";
 import { registerAttendanceRoutes } from "./attendance/routes.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { createAuthenticator, registerAuthenticationRoutes } from "./authentication/index.ts";
 import { registerCalendarRoutes } from "./calendar/routes.ts";
+import { registerCorrectionRequestRoutes } from "./correction-requests/routes.ts";
 import type { Database } from "./db/pool.ts";
 import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";

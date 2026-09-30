@@ -9,7 +9,7 @@ import {
   ROLES,
   type Role,
 } from "../access/index.ts";
-import { raiseCorrectionRequest } from "../attendance/correction-requests.ts";
+import { raiseCorrectionRequest } from "../correction-requests/index.ts";
 import { recordTakenSessions, type TakenSession } from "../attendance/sessions.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import type { UserAccount } from "../authentication/index.ts";
@@ -200,6 +200,7 @@ export async function startTrialSchool(
   if (correctionRequest !== null) {
     const { course, label, student, ...request } = correctionRequest;
     await raiseCorrectionRequest(transaction, {
+      kind: "attendance",
       schoolId: school.id,
       classOfferingId: current.get(offeringKey(course, label))!.classOfferingId,
       studentPersonId: students.get(student)!.id,

@@ -6,11 +6,14 @@ import {
   authorizeReadAttendanceOf,
   authorizeReadCorrectionRequest,
   authorizeReadCorrectionRequests,
+  authorizeReadTermResultsOf,
   authorizeWithdrawCorrectionRequest,
   type Actor,
 } from "../access/index.ts";
 import { presentOffering } from "../academic-structure/course-routes.ts";
 import { classOfferingsInSchool, findClassOffering, type DescribedClassOffering } from "../academic-structure/courses.ts";
+import { recordChange } from "../attendance/routes.ts";
+import { ATTENDANCE_STATUSES, dateProblem, isAttendanceStatus, studentProblem, type AttendanceStatus } from "../attendance/sessions.ts";
 import { appendAuditRecord, type AuditValues } from "../audit/index.ts";
 import type { Authenticator } from "../authentication/index.ts";
 import { schoolDateAt, type SchoolDate } from "../calendar/index.ts";
@@ -21,42 +24,75 @@ import { InvalidRequest } from "../http/invalid-request.ts";
 import { fieldsOf, reasonFrom, schoolDateFrom } from "../http/request-body.ts";
 import { registerSchoolScope } from "../http/school-scope.ts";
 import { findPersons } from "../identity/index.ts";
+import { recordResultChange, termResultContentFrom } from "../results/term-result-routes.ts";
+import { currentResultValueIds, sameContent } from "../results/term-results.ts";
 import {
-  applyCorrection,
+  applyAttendanceCorrection,
+  applyResultCorrection,
   correctionRequestsIn,
   decideCorrectionRequest,
   findCorrectionRequest,
   lockCorrectionRequest,
-  lockTarget,
+  lockResultTarget,
+  lockAttendanceTarget,
   raiseCorrectionRequest,
+  type AttendanceCorrectionRequest,
   type AttendanceTarget,
   type CorrectionRequest,
-} from "./correction-requests.ts";
-import { recordChange } from "./routes.ts";
-import { ATTENDANCE_STATUSES, dateProblem, isAttendanceStatus, studentProblem, type AttendanceStatus } from "./sessions.ts";
-
-const RAISE_FIELDS = ["kind", "studentPersonId", "date", "after", "reason"];
+  type PublishedContent,
+  type TermResultCorrectionRequest,
+} from "./index.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Validation below runs only once the Access decision has permitted the
 // caller: see InvalidRequest.
 
-function parseRaise(body: unknown): { studentPersonId: string; date: SchoolDate; after: AttendanceStatus; reason: string } {
-  const fields = fieldsOf(body, RAISE_FIELDS);
-  if (fields["kind"] !== "attendance") {
-    throw new InvalidRequest("kind must be attendance");
-  }
-  const studentPersonId = fields["studentPersonId"];
-  if (typeof studentPersonId !== "string" || !UUID.test(studentPersonId)) {
+/**
+ * Which kind of target a body names, read on its own and leniently: which
+ * records the caller must be permitted to read depends on it, so it is read
+ * before the rest of the body, and anything else is taken for Attendance.
+ * Both kinds are read by the same actors, so the answer never tells a caller
+ * more than the other would.
+ */
+function raisingKind(body: unknown): "attendance" | "term_result" {
+  return typeof body === "object" && body !== null && (body as Record<string, unknown>)["kind"] === "term_result"
+    ? "term_result"
+    : "attendance";
+}
+
+function studentFrom(value: unknown): string {
+  if (typeof value !== "string" || !UUID.test(value)) {
     throw new InvalidRequest("studentPersonId must name a Student");
+  }
+  return value;
+}
+
+function parseAttendanceRaise(body: unknown): { studentPersonId: string; date: SchoolDate; after: AttendanceStatus; reason: string } {
+  const fields = fieldsOf(body, ["kind", "studentPersonId", "date", "after", "reason"]);
+  if (fields["kind"] !== "attendance") {
+    throw new InvalidRequest("kind must be attendance or term_result");
   }
   const date = schoolDateFrom(fields["date"], "date");
   const after = fields["after"];
   if (!isAttendanceStatus(after)) {
     throw new InvalidRequest(`after must be one of ${ATTENDANCE_STATUSES.join(", ")}`);
   }
-  return { studentPersonId, date, after, reason: requiredReason(reasonFrom(fields["reason"])) };
+  return { studentPersonId: studentFrom(fields["studentPersonId"]), date, after, reason: requiredReason(reasonFrom(fields["reason"])) };
+}
+
+/** A Term result request: its Student, and the whole content the result should say, a value included. */
+function parseResultRaise(body: unknown): { studentPersonId: string; after: PublishedContent; reason: string } {
+  const fields = fieldsOf(body, ["kind", "studentPersonId", "after", "reason"]);
+  const after = termResultContentFrom(fieldsOf(fields["after"], ["value", "score", "comment"]), "after's");
+  if (after.value === null) {
+    throw new InvalidRequest("after's value must be a label of the Result value scale: a published result keeps one");
+  }
+  return {
+    studentPersonId: studentFrom(fields["studentPersonId"]),
+    after: after as PublishedContent,
+    reason: requiredReason(reasonFrom(fields["reason"])),
+  };
 }
 
 /**
@@ -95,9 +131,9 @@ function requiredReason(reason: string | null): string {
 }
 
 /**
- * Refuses a target that could have no Attendance: the recording rule's date
- * and roster conditions, all but the window, which a Correction request is
- * not bound by (CONTEXT.md: Correction request).
+ * Refuses an Attendance target that could have no Attendance: the recording
+ * rule's date and roster conditions, all but the window, which a Correction
+ * request is not bound by (CONTEXT.md: Correction request).
  */
 async function checkTarget(database: Queryable, offering: DescribedClassOffering, target: AttendanceTarget): Promise<void> {
   const today = (await schoolDateAt(database, { schoolId: offering.schoolId, at: await transactionTime(database) }))!;
@@ -111,16 +147,20 @@ async function checkTarget(database: Queryable, offering: DescribedClassOffering
 
 /** A request as written to the Audit record: its target, values, and state. */
 function valuesOf(request: CorrectionRequest): AuditValues {
-  return {
-    kind: request.kind,
-    studentPersonId: request.studentPersonId,
-    classOfferingId: request.classOfferingId,
-    date: request.date,
-    beforeValue: request.before,
-    afterValue: request.after,
-    state: request.state,
-    selfApproved: request.selfApproved,
-  };
+  const target = { kind: request.kind, studentPersonId: request.studentPersonId, classOfferingId: request.classOfferingId };
+  const decision = { state: request.state, selfApproved: request.selfApproved };
+  return request.kind === "attendance"
+    ? { ...target, date: request.date, beforeValue: request.before, afterValue: request.after, ...decision }
+    : {
+        ...target,
+        beforeValue: request.before.value,
+        beforeScore: request.before.score,
+        beforeComment: request.before.comment,
+        afterValue: request.after.value,
+        afterScore: request.after.score,
+        afterComment: request.after.comment,
+        ...decision,
+      };
 }
 
 async function recordTransition(
@@ -142,7 +182,12 @@ async function recordTransition(
   });
 }
 
-/** Requests as their readers are served them: each Person named by display name, and each Class Offering described. */
+/**
+ * Requests as their readers are served them: each Person named by display
+ * name, and each Class Offering described. An Attendance request names its
+ * date and statuses; a Term result request, the result's content before and
+ * after.
+ */
 async function serveRequests(database: Queryable, schoolId: string, requests: readonly CorrectionRequest[]) {
   const persons = await findPersons(
     database,
@@ -161,9 +206,9 @@ async function serveRequests(database: Queryable, schoolId: string, requests: re
     student: named(request.studentPersonId),
     // Nothing deletes a Class Offering a request names while its roster stands.
     classOffering: presentOffering(offerings.get(request.classOfferingId)!),
-    date: request.date,
-    before: request.before,
-    after: request.after,
+    ...(request.kind === "attendance"
+      ? { date: request.date, before: request.before, after: request.after }
+      : { before: request.before, after: request.after }),
     reason: request.reason,
     requestedBy: named(request.requestedByPersonId),
     raisedAt: request.raisedAt.toISOString(),
@@ -178,21 +223,93 @@ async function serveRequest(database: Queryable, request: CorrectionRequest) {
   return { correctionRequest: (await serveRequests(database, request.schoolId, [request]))[0]! };
 }
 
+/** Raises a request for one Student's Attendance, its before value the target's as it stands: none, when nothing was recorded. */
+async function raiseForAttendance(transaction: Queryable, actor: Actor, offering: DescribedClassOffering, body: unknown) {
+  const { studentPersonId, date, after, reason } = parseAttendanceRaise(body);
+  const target = { schoolId: offering.schoolId, classOfferingId: offering.id, studentPersonId, date };
+  await checkTarget(transaction, offering, target);
+  const before = (await lockAttendanceTarget(transaction, target))?.status ?? null;
+  if (before === after) {
+    throw new Conflict({ conflict: "unchanged" });
+  }
+  return raiseCorrectionRequest(transaction, {
+    kind: "attendance",
+    ...target,
+    before,
+    after,
+    reason,
+    requestedByPersonId: actor.person.id,
+  });
+}
+
 /**
- * Correction requests for Attendance (CONTEXT.md: Correction request): a
- * proposed change to one Student's Attendance in one Class Offering on one
- * School date, with a reason, raised at any time.
+ * Raises a request for one Student's published Term result, its before
+ * content the result's as it stands. A draft, or no result, is refused: a
+ * draft is changed by saving it. A new value must be on the current scale.
+ */
+async function raiseForTermResult(transaction: Queryable, actor: Actor, offering: DescribedClassOffering, body: unknown) {
+  const { studentPersonId, after, reason } = parseResultRaise(body);
+  const target = { schoolId: offering.schoolId, classOfferingId: offering.id, studentPersonId };
+  const current = await lockResultTarget(transaction, target);
+  if (current === null || current.publishedAt === null) {
+    throw new Conflict({ conflict: "not_published" });
+  }
+  // A published result always carries a value.
+  const before = { value: current.value!, score: current.score, comment: current.comment };
+  if (sameContent(before, after)) {
+    throw new Conflict({ conflict: "unchanged" });
+  }
+  if (after.value !== before.value && !(await currentResultValueIds(transaction, offering.schoolId)).has(after.value)) {
+    throw new Conflict({ conflict: "value_not_in_scale" });
+  }
+  return raiseCorrectionRequest(transaction, {
+    kind: "term_result",
+    ...target,
+    before,
+    after,
+    reason,
+    requestedByPersonId: actor.person.id,
+  });
+}
+
+/** Applies an approved Attendance request, and audits the Attendance it changed; a first mark carries its own recorder. */
+async function applyAttendance(transaction: Queryable, actor: Actor, request: AttendanceCorrectionRequest): Promise<void> {
+  // The offering stands while the roster naming its Student does.
+  const offering = (await findClassOffering(transaction, request.classOfferingId))!;
+  await checkTarget(transaction, offering, request);
+  const applied = await applyAttendanceCorrection(transaction, request, { recordedByPersonId: actor.person.id });
+  if (applied === null) {
+    throw new Conflict({ conflict: "target_changed" });
+  }
+  if (applied.before !== null) {
+    await recordChange(transaction, actor, applied.before, applied.after, request.reason);
+  }
+}
+
+/** Applies an approved Term result request, and audits the result it changed. */
+async function applyTermResult(transaction: Queryable, actor: Actor, request: TermResultCorrectionRequest): Promise<void> {
+  const applied = await applyResultCorrection(transaction, request, { recordedByPersonId: actor.person.id });
+  if (typeof applied === "string") {
+    throw new Conflict({ conflict: applied });
+  }
+  await recordResultChange(transaction, actor, request.classOfferingId, applied.before, applied.after, request.reason);
+}
+
+/**
+ * Correction requests (CONTEXT.md: Correction request): a proposed change,
+ * with a reason, raised at any time, to one Student's Attendance in one Class
+ * Offering on one School date, or to one Student's published Term result in
+ * one Class Offering.
  *
  * Raised by a Faculty member currently teaching the offering or any School
  * Administrator; approved or rejected, with a reason, by a School
  * Administrator other than the requester, unless the School has only the one;
  * withdrawn by its requester alone; and each only while Pending, the one
- * change a request takes. Approval
- * applies the change in the same transaction, and is refused once the target
- * no longer holds the request's before value. Read by School Administrators,
- * every one, and by any other requester, their own. Every decision on who may
- * is the Access module's, asked before anything else about the request is
- * looked at.
+ * change a request takes. Approval applies the change in the same
+ * transaction, and is refused once the target no longer holds the request's
+ * before value. Read by School Administrators, every one, and by any other
+ * requester, their own. Every decision on who may is the Access module's,
+ * asked before anything else about the request is looked at.
  */
 export function registerCorrectionRequestRoutes(app: FastifyInstance, database: Database, authenticator: Authenticator): void {
   registerSchoolScope(app, database, authenticator, (scope) => {
@@ -202,28 +319,20 @@ export function registerCorrectionRequestRoutes(app: FastifyInstance, database: 
       return { correctionRequests: await serveRequests(database, actor.schoolId, await correctionRequestsIn(database, whose)) };
     });
 
-    // Raises a request for one Student's Attendance in the offering, its
-    // before value the target's as it stands: none, when nothing was recorded.
+    // Raises a request for one Student in the offering, its before value
+    // the target's as it stands.
     scope.post("/class-offerings/:classOfferingId/correction-requests", async (actor, { params, body }) => {
       const classOfferingId = params["classOfferingId"]!;
-      const readable = authorizeReadAttendanceOf(actor, classOfferingId, await findClassOffering(database, classOfferingId));
+      const kind = raisingKind(body);
+      const authorizeRead = kind === "term_result" ? authorizeReadTermResultsOf : authorizeReadAttendanceOf;
+      const readable = authorizeRead(actor, classOfferingId, await findClassOffering(database, classOfferingId));
       return withTransaction(database, async (transaction) => {
         const offering = await authorizeRaiseCorrectionRequest(transaction, actor, readable);
-        const { studentPersonId, date, after, reason } = parseRaise(body);
-        const target = { schoolId: offering.schoolId, classOfferingId: offering.id, studentPersonId, date };
-        await checkTarget(transaction, offering, target);
-        const before = (await lockTarget(transaction, target))?.status ?? null;
-        if (before === after) {
-          throw new Conflict({ conflict: "unchanged" });
-        }
-        const raised = await raiseCorrectionRequest(transaction, {
-          ...target,
-          before,
-          after,
-          reason,
-          requestedByPersonId: actor.person.id,
-        });
-        await recordTransition(transaction, actor, "raised", null, raised, reason);
+        const raised =
+          kind === "term_result"
+            ? await raiseForTermResult(transaction, actor, offering, body)
+            : await raiseForAttendance(transaction, actor, offering, body);
+        await recordTransition(transaction, actor, "raised", null, raised, raised.reason);
         return serveRequest(transaction, raised);
       });
     });
@@ -254,12 +363,10 @@ export function registerCorrectionRequestRoutes(app: FastifyInstance, database: 
         const decided = { decidedByPersonId: actor.person.id };
         switch (decision.state) {
           case "approved": {
-            // The offering stands while the roster naming its Student does.
-            const offering = (await findClassOffering(transaction, request.classOfferingId))!;
-            await checkTarget(transaction, offering, request);
-            const applied = await applyCorrection(transaction, request, { recordedByPersonId: actor.person.id });
-            if (applied === null) {
-              throw new Conflict({ conflict: "target_changed" });
+            if (request.kind === "attendance") {
+              await applyAttendance(transaction, actor, request);
+            } else {
+              await applyTermResult(transaction, actor, request);
             }
             const approved = await decideCorrectionRequest(transaction, request, {
               state: decision.state,
@@ -267,9 +374,6 @@ export function registerCorrectionRequestRoutes(app: FastifyInstance, database: 
               selfApproved: standing === "sole_administrator",
             });
             await recordTransition(transaction, actor, "approved", request, approved, null);
-            if (applied.before !== null) {
-              await recordChange(transaction, actor, applied.before, applied.after, request.reason);
-            }
             return serveRequest(transaction, approved);
           }
           case "rejected": {

@@ -2203,3 +2203,29 @@ td[aria-selected="true"] > .day {
     display: none !important;
   }
 }
+
+/*
+ * A Term result correction's parts, each named beside what it was and what it
+ * would be, one part to a line at any width.
+ */
+.correction-change {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: calc(var(--step) * 0.5) calc(var(--step) * 2);
+  margin: 0;
+}
+
+.correction-change div {
+  display: contents;
+}
+
+.correction-change dt {
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 650;
+}
+
+.correction-change dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
