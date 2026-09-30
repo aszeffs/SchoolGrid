@@ -323,7 +323,10 @@ describe("Platform Administrator", () => {
           "POST /api/platform/schools",
           "GET /api/trials",
           "HEAD /api/trials",
-          "POST /api/trials",
+          "GET /api/trials/start/:provider",
+          "HEAD /api/trials/start/:provider",
+          "GET /api/trials/callback/:provider",
+          "HEAD /api/trials/callback/:provider",
           "POST /api/trials/role",
         ].sort(),
       );

@@ -267,7 +267,10 @@ describe("Browser sessions", () => {
       "POST /api/invitations/redeem-signed-in",
       "GET /api/trials",
       "HEAD /api/trials",
-      "POST /api/trials",
+      "GET /api/trials/start/:provider",
+      "HEAD /api/trials/start/:provider",
+      "GET /api/trials/callback/:provider",
+      "HEAD /api/trials/callback/:provider",
       "POST /api/trials/role",
     ];
     const routes = server().routes.filter(({ method, url }) => !notAuthenticated.includes(`${method} ${url}`));

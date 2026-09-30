@@ -8,6 +8,7 @@ import type {
   UnmarkableBecause,
 } from "../../src/attendance/sessions.ts";
 import type { Weekday } from "../../src/calendar/index.ts";
+import type { TrialProvider } from "../../src/config.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
 import type { ResultValue, ResultValueScale } from "../../src/results/index.ts";
 import type { DraftRefusal, TermResultContent } from "../../src/results/term-results.ts";
@@ -604,43 +605,14 @@ async function redeemInvitation(credentials: {
   return { status: "refused" };
 }
 
-/** A Trial School just started: the School to open, and when it will be deleted. */
-export interface StartedTrial {
-  schoolId: string;
-  expiresAt: string;
-}
-
-/**
- * Starting a Trial School has one outcome beyond the generic refusal: busy,
- * when this deployment holds as many trials as it may or this browser has
- * started as many as it may this hour. It is no refusal of anything, so it is
- * said plainly, and a visitor told to try again later is not left thinking
- * the site is broken.
- */
-async function startTrial(
-  timezone: string,
-): Promise<{ status: "started"; trial: StartedTrial } | { status: "busy" } | { status: "refused" }> {
-  const sent = await send("POST", "/trials", { timezone });
-  const body = sent?.body as { status?: unknown; trial?: StartedTrial } | undefined;
-  if (sent?.status === 201 && body?.trial !== undefined) {
-    return { status: "started", trial: body.trial };
-  }
-  if (body?.status === "busy") {
-    return { status: "busy" };
-  }
-  return { status: "refused" };
-}
-
 export const api = {
   buildInfo: () => request<BuildInfo>("GET", "/build-info"),
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
-  /** Whether this deployment offers Trial Schools at all. */
-  trials: () => request<{ enabled: boolean }>("GET", "/trials"),
-  /** Starts a Trial School in this timezone, ending whatever Session the browser held. */
-  startTrial,
+  /** Whether this deployment offers Trial Schools at all, and which providers a visitor signs in with to start one. */
+  trials: () => request<{ enabled: boolean; providers: TrialProvider[] }>("GET", "/trials"),
   /** Ends this Trial School Session and starts one for the role's account in the same School. */
   switchRole: (role: Role) => request<{ expiresAt: string }>("POST", "/trials/role", { role }),
   account: (schoolId: string) => request<{ account: OwnAccount }>("GET", inSchool(schoolId, "/account")),

@@ -556,7 +556,7 @@ body {
 
 /*
  * A Trial School's strip across the top of the sheet: what this School is and
- * how long it has left, with the way to a fresh one at its right.
+ * how long it has left.
  */
 .trial-banner {
   display: flex;
@@ -585,11 +585,6 @@ body {
   font-family: var(--type-figures);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-}
-
-.trial-banner .error {
-  flex-basis: 100%;
-  order: 1;
 }
 
 /*
@@ -925,7 +920,8 @@ fieldset > button {
   justify-self: start;
 }
 
-button {
+button,
+.start-trial a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -949,7 +945,8 @@ button {
 }
 
 @media (hover: hover) {
-  button:hover:not(:disabled) {
+  button:hover:not(:disabled),
+  .start-trial a:hover {
     background: var(--action-strong);
     border-color: var(--action-strong);
   }
@@ -992,7 +989,8 @@ button {
   }
 }
 
-button:active:not(:disabled) {
+button:active:not(:disabled),
+.start-trial a:active {
   transform: translateY(1px);
 }
 
@@ -1686,6 +1684,20 @@ dialog.slip::backdrop {
 
 .landing__trial p {
   margin: 0;
+}
+
+/*
+ * A sign-in for each provider, side by side while they fit. Each is a link,
+ * since it leaves for the provider, struck as the primary button.
+ */
+.start-trial {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step);
+}
+
+.start-trial a {
+  text-decoration: none;
 }
 
 .landing__trust {

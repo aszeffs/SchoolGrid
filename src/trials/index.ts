@@ -57,15 +57,17 @@ export async function deleteExpiredTrialSchools(database: Queryable): Promise<nu
 
 /**
  * Starts a Trial School of invented data in the School's own timezone, with a
- * role account for each School role, or returns null, starting nothing, when
- * `liveCap` Trial Schools are live already.
+ * role account for each School role, for the Trial visitor this identity
+ * names (ADR-0013), or returns null, starting nothing, when `liveCap` Trial
+ * Schools are live already. `visitor` is the keyed hash `visitorIdentity`
+ * makes, never the subject itself.
  *
  * Everything is built in the caller's transaction, so a trial exists whole or
  * not at all.
  */
 export async function startTrialSchool(
   transaction: Queryable,
-  { timezone, liveCap }: { timezone: string; liveCap: number },
+  { timezone, liveCap, visitor }: { timezone: string; liveCap: number; visitor: Buffer },
 ): Promise<StartedTrial | null> {
   await transaction.query(`SELECT pg_advisory_xact_lock($1)`, [TRIAL_START_LOCK]);
   const { rows } = await transaction.query<{ live: number }>(
@@ -77,7 +79,12 @@ export async function startTrialSchool(
 
   const now = await transactionTime(transaction);
   const expiresAt = new Date(now.getTime() + TRIAL_LIFETIME_MS);
-  const school = await createSchool(transaction, { name: INVENTED_SCHOOL_NAME, timezone, trialExpiresAt: expiresAt });
+  const school = await createSchool(transaction, {
+    name: INVENTED_SCHOOL_NAME,
+    timezone,
+    trialExpiresAt: expiresAt,
+    trialVisitorId: await trialVisitorFor(transaction, visitor),
+  });
   // Built around today as the School sees it, so its dates look right to the visitor.
   const today = (await schoolDateAt(transaction, { schoolId: school.id, at: now }))!;
   const invented = inventedSchool(today);
@@ -245,6 +252,17 @@ export async function startTrialSchool(
   });
 
   return { school, expiresAt, schoolAdministrator: accounts.get("school_administrator")! };
+}
+
+/** The Trial visitor with this identity, recorded now if they are not already. */
+async function trialVisitorFor(transaction: Queryable, identity: Buffer): Promise<string> {
+  await transaction.query(`INSERT INTO app.trial_visitor (identity) VALUES ($1) ON CONFLICT (identity) DO NOTHING`, [
+    identity,
+  ]);
+  const { rows } = await transaction.query<{ id: string }>(`SELECT id FROM app.trial_visitor WHERE identity = $1`, [
+    identity,
+  ]);
+  return rows[0]!.id;
 }
 
 /** One invented Class Offering's key: its Course's code and its label, NO_LABEL for none. */

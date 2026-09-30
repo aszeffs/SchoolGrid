@@ -6,7 +6,7 @@ Built as a practice ground for DevSecOps. The domain is deliberately security-he
 
 ## Security pipeline
 
-Live at **<https://schoolgrid-phi.vercel.app>**, running the current `main`. Its landing page offers **Start a trial**: a private Trial School of invented data, seen as its School Administrator, Faculty, Student or Guardian with no password, and deleted two hours later. The ["How this was built" page](https://schoolgrid-phi.vercel.app/how-this-was-built) shows the commit and image digest the site is serving, with the command to verify them yourself.
+Live at **<https://schoolgrid-phi.vercel.app>**, running the current `main`. Its landing page offers a trial, started by signing in with GitHub: a private Trial School of invented data, seen as its School Administrator, Faculty, Student or Guardian with no password, and deleted two hours later. The ["How this was built" page](https://schoolgrid-phi.vercel.app/how-this-was-built) shows the commit and image digest the site is serving, with the command to verify them yourself.
 
 Nothing reaches that URL by hand. A commit takes the path below, and from the image build onwards each step has to pass before the next one runs.
 

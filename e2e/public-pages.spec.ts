@@ -64,7 +64,7 @@ test("the landing page says what SchoolGrid is, how it holds records, and that i
   await expect(page.locator("body")).not.toContainText(/learn|practice|portfolio|DevSecOps/i);
 
   // This deployment offers no trial, so the page offers none.
-  await expect(main.getByRole("button", { name: "Start a trial" })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: /^Continue with / })).toHaveCount(0);
   await main.getByRole("link", { name: "Sign in" }).click();
   await expect(page).toHaveURL("/sign-in");
 });

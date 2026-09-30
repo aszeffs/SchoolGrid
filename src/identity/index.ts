@@ -47,13 +47,18 @@ const SCHOOL_SETTINGS_COLUMNS = `timezone, timezone_fixed AS "timezoneFixed", at
  */
 export async function createSchool(
   database: Queryable,
-  { name, timezone, trialExpiresAt = null }: { name: string; timezone: string; trialExpiresAt?: Date | null },
+  {
+    name,
+    timezone,
+    trialExpiresAt = null,
+    trialVisitorId = null,
+  }: { name: string; timezone: string; trialExpiresAt?: Date | null; trialVisitorId?: string | null },
 ): Promise<School & SchoolSettings> {
   const { rows } = await database.query<School & SchoolSettings>(
-    `INSERT INTO app.school (name, timezone, trial_expires_at)
-     VALUES ($1, $2, $3)
+    `INSERT INTO app.school (name, timezone, trial_expires_at, trial_visitor_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING id, name, ${SCHOOL_SETTINGS_COLUMNS}`,
-    [name, timezone, trialExpiresAt],
+    [name, timezone, trialExpiresAt, trialVisitorId],
   );
   return rows[0]!;
 }

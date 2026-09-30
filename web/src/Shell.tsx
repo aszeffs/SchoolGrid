@@ -24,7 +24,7 @@ import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
 import { TermResults } from "./TermResults.tsx";
 import { TermReport } from "./TermReport.tsx";
-import { rememberTrial, START_FAILED, timeLeft, trialHasEnded, useNow, useStartTrial } from "./trial.ts";
+import { rememberTrial, timeLeft, trialHasEnded, useNow } from "./trial.ts";
 import { YourAttendance } from "./YourAttendance.tsx";
 import { YourClasses } from "./YourClasses.tsx";
 
@@ -201,12 +201,7 @@ export function SignedIn({ route }: { route: Extract<Route, { name: "schools" }>
     ...(school.trialExpiresAt === undefined
       ? {}
       : {
-          banner: (
-            <TrialBanner
-              expiresAt={school.trialExpiresAt}
-              onStarted={({ schoolId }) => readAgainAt(landing(schoolId, ["school_administrator"]))}
-            />
-          ),
+          banner: <TrialBanner expiresAt={school.trialExpiresAt} />,
         }),
     nav: (
       <nav aria-label={school.name} className="shell-nav">
@@ -431,16 +426,9 @@ function RoleSwitcher({ viewingAs, onChoose }: { viewingAs: Role; onChoose: (rol
  * moves them to the page saying the trial has ended, on the minute, whether or
  * not they do anything.
  */
-function TrialBanner({
-  expiresAt,
-  onStarted,
-}: {
-  expiresAt: string;
-  onStarted: (trial: { schoolId: string }) => void;
-}) {
+function TrialBanner({ expiresAt }: { expiresAt: string }) {
   const now = useNow();
   const ended = Date.parse(expiresAt) <= now;
-  const { start, starting, failure } = useStartTrial(onStarted);
 
   useEffect(() => {
     if (ended) {
@@ -454,14 +442,6 @@ function TrialBanner({
         <strong>Trial School</strong> · invented data · deleted in{" "}
         <time dateTime={expiresAt}>{timeLeft(expiresAt, now)}</time>
       </p>
-      {failure !== null && (
-        <p role="alert" className="error">
-          {START_FAILED[failure]}
-        </p>
-      )}
-      <button type="button" className="button-quiet" disabled={starting} onClick={() => void start()}>
-        Start over
-      </button>
     </section>
   );
 }

@@ -234,24 +234,97 @@ describe("loadConfig trials", () => {
     vi.stubEnv("PUBLIC_ORIGIN", "https://schoolgrid.example");
     vi.stubEnv("TRIALS_ENABLED", undefined);
     vi.stubEnv("TRIAL_LIVE_CAP", undefined);
-    vi.stubEnv("TRIAL_PER_IP_HOUR", undefined);
+    for (const name of GITHUB) {
+      vi.stubEnv(name, undefined);
+    }
+    vi.stubEnv("TRIAL_IDENTITY_KEY", undefined);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("offers no trials, and caps them at 30 live and 2 an hour per client, when nothing is set", () => {
-    expect(loadConfig().trials).toEqual({ enabled: false, liveCap: 30, perClientPerHour: 2 });
+  const GITHUB = [
+    "TRIAL_GITHUB_CLIENT_ID",
+    "TRIAL_GITHUB_CLIENT_SECRET",
+    "TRIAL_GITHUB_AUTHORIZE_URL",
+    "TRIAL_GITHUB_TOKEN_URL",
+    "TRIAL_GITHUB_USER_URL",
+  ];
+  const KEY = "k".repeat(32);
+
+  it("offers no trials, and caps them at 30 live, when nothing is set", () => {
+    expect(loadConfig().trials).toEqual({ enabled: false, liveCap: 30, identityKey: "", providers: {} });
   });
 
-  it("reads each from the environment", () => {
+  it("reads each from the environment, taking GitHub's own endpoints unless told otherwise", () => {
     vi.stubEnv("TRIALS_ENABLED", "true");
     vi.stubEnv("TRIAL_LIVE_CAP", "5");
-    vi.stubEnv("TRIAL_PER_IP_HOUR", "500");
+    vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
+    vi.stubEnv("TRIAL_GITHUB_CLIENT_ID", "client");
+    vi.stubEnv("TRIAL_GITHUB_CLIENT_SECRET", "secret");
 
-    expect(loadConfig().trials).toEqual({ enabled: true, liveCap: 5, perClientPerHour: 500 });
+    expect(loadConfig().trials).toEqual({
+      enabled: true,
+      liveCap: 5,
+      identityKey: KEY,
+      providers: {
+        github: {
+          clientId: "client",
+          clientSecret: "secret",
+          authorizeUrl: "https://github.com/login/oauth/authorize",
+          tokenUrl: "https://github.com/login/oauth/access_token",
+          userUrl: "https://api.github.com/user",
+        },
+      },
+    });
+
+    vi.stubEnv("TRIAL_GITHUB_AUTHORIZE_URL", "http://localhost:4000/authorize");
+    vi.stubEnv("TRIAL_GITHUB_TOKEN_URL", "http://fake-provider:4000/token");
+    vi.stubEnv("TRIAL_GITHUB_USER_URL", "http://fake-provider:4000/user");
+    expect(loadConfig().trials.providers.github).toEqual(
+      expect.objectContaining({
+        authorizeUrl: "http://localhost:4000/authorize",
+        tokenUrl: "http://fake-provider:4000/token",
+        userUrl: "http://fake-provider:4000/user",
+      }),
+    );
   });
+
+  it("offers no provider whose OAuth app is not configured", () => {
+    vi.stubEnv("TRIALS_ENABLED", "true");
+    vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
+
+    expect(loadConfig().trials.providers).toEqual({});
+  });
+
+  it.each([undefined, "k".repeat(31)])("refuses to start trials with an identity key of %j", (key) => {
+    vi.stubEnv("TRIALS_ENABLED", "true");
+    vi.stubEnv("TRIAL_IDENTITY_KEY", key);
+
+    expect(() => loadConfig()).toThrow(/TRIAL_IDENTITY_KEY must be a secret of at least 32 characters/);
+  });
+
+  it.each(["TRIAL_GITHUB_CLIENT_ID", "TRIAL_GITHUB_CLIENT_SECRET"])("refuses to start with only %s set", (name) => {
+    vi.stubEnv("TRIALS_ENABLED", "true");
+    vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
+    vi.stubEnv(name, "set");
+
+    expect(() => loadConfig()).toThrow(/TRIAL_GITHUB_CLIENT_ID and TRIAL_GITHUB_CLIENT_SECRET must be set together/);
+  });
+
+  it.each(["github.com/login", "javascript:alert(1)", "ftp://example.com/"])(
+    "refuses to start with an endpoint of %j",
+    (value) => {
+      vi.stubEnv("TRIALS_ENABLED", "true");
+      vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
+      vi.stubEnv("TRIAL_GITHUB_CLIENT_ID", "client");
+      vi.stubEnv("TRIAL_GITHUB_CLIENT_SECRET", "secret");
+      vi.stubEnv("TRIAL_GITHUB_TOKEN_URL", value);
+
+      expect(() => loadConfig()).toThrow(/TRIAL_GITHUB_TOKEN_URL must be an http or https URL/);
+    },
+  );
 
   // Trials let anyone create a School, so only an exact `true` turns them on.
   it.each(["1", "yes", "TRUE", "on"])("refuses to start when TRIALS_ENABLED is %j", (value) => {
@@ -262,7 +335,7 @@ describe("loadConfig trials", () => {
 
   it.each([
     ["TRIAL_LIVE_CAP", "0"],
-    ["TRIAL_PER_IP_HOUR", "many"],
+    ["TRIAL_LIVE_CAP", "many"],
   ])("refuses to start when %s is %j", (name, value) => {
     vi.stubEnv(name, value);
 

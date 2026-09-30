@@ -1,40 +1,59 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { isRole } from "../access/roles.ts";
 import { recordAuthenticationAttempt } from "../audit/index.ts";
-import { fromPublicOrigin, startBrowserSession, type Authenticator } from "../authentication/index.ts";
+import { startBrowserSession, type Authenticator } from "../authentication/index.ts";
 import { isKnownTimezone } from "../calendar/index.ts";
-import type { PublicOrigin, TrialSettings } from "../config.ts";
+import {
+  TRIAL_PROVIDERS,
+  type PublicOrigin,
+  type TrialProvider,
+  type TrialProviderSettings,
+  type TrialSettings,
+} from "../config.ts";
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { refuse } from "../http/refusal.ts";
 import { deleteExpiredTrialSchools, roleAccountFor, startTrialSchool } from "./index.ts";
+import { beginSignIn, CALLBACK_PATH, completeSignIn, EXPIRED_FLOW_COOKIE, visitorIdentity } from "./sign-in.ts";
 
 /**
- * The body served when no trial can be started right now: this deployment
- * holds as many live Trial Schools as it may, or this client has started as
- * many as it may this hour. Not a refusal in the ADR-0002 sense, since it
- * reveals nothing about any record, and kept distinct so the page can say
- * plainly to try again later.
+ * Where a sign-in that started no trial sends the visitor back: the front
+ * page, told why in one word it turns into a sentence. Busy is when this
+ * deployment holds as many live Trial Schools as it may; cancelled when the
+ * visitor turned the provider down; failed for anything else, whose reason is
+ * logged and never shown. None is a refusal in the ADR-0002 sense, since none
+ * reveals anything about any record.
  */
-const BUSY = { status: "busy" } as const;
+type Unstarted = "busy" | "cancelled" | "failed";
 
-const HOUR_MS = 60 * 60 * 1000;
+function backToLanding(reply: FastifyReply, why: Unstarted): FastifyReply {
+  return reply.status(303).header("set-cookie", EXPIRED_FLOW_COOKIE).header("location", `/?trial=${why}`).send();
+}
 
 /**
- * One field of a body, or undefined for a body that is no object. Read leniently:
- * a start never fails on its body, and a malformed change of role is refused
- * like any other.
+ * One field of an object, or undefined for anything that is no object. Read
+ * leniently: a malformed change of role is refused like any other.
  */
 function fieldOf(body: unknown, field: string): unknown {
   return typeof body === "object" && body !== null ? (body as Record<string, unknown>)[field] : undefined;
 }
 
+/** The longest timezone name carried through a sign-in: longer than any the database knows. */
+const MAX_TIMEZONE_LENGTH = 64;
+
 /** The timezone a trial was asked for, when the database knows it, or UTC: starting one never fails on it. */
-async function timezoneOrUtc(database: Queryable, body: unknown): Promise<string> {
-  const timezone = fieldOf(body, "timezone");
-  return typeof timezone === "string" && timezone.length <= 64 && (await isKnownTimezone(database, timezone))
-    ? timezone
-    : "UTC";
+async function timezoneOrUtc(database: Queryable, timezone: string): Promise<string> {
+  return timezone !== "" && (await isKnownTimezone(database, timezone)) ? timezone : "UTC";
+}
+
+/** The provider a path names, when it is one this deployment offers, with its settings. */
+function offeredProvider(
+  settings: TrialSettings,
+  name: unknown,
+): { provider: TrialProvider; settings: TrialProviderSettings } | null {
+  const provider = TRIAL_PROVIDERS.find((candidate) => candidate === name);
+  const offered = provider === undefined ? undefined : settings.providers[provider];
+  return provider === undefined || offered === undefined ? null : { provider, settings: offered };
 }
 
 function refused(request: FastifyRequest, reply: FastifyReply, reason: string): FastifyReply {
@@ -43,13 +62,15 @@ function refused(request: FastifyRequest, reply: FastifyReply, reason: string): 
 }
 
 /**
- * Starting a Trial School, and changing role within one (ADR-0012). Neither is
- * School-scoped: a visitor starting one is in no School yet, and one changing
- * role is known by the Session the trial issued them.
+ * Starting a Trial School by signing in with an outside identity, and
+ * changing role within one (ADR-0012, ADR-0013). None is School-scoped: a
+ * visitor starting one is in no School yet, and one changing role is known by
+ * the Session the trial issued them.
  *
  * Registered whatever the settings, so every server has the same routes. With
- * trials off, as everywhere but the public showcase, both refuse. Whether
- * trials are on is itself public, answered to anyone, for the front page.
+ * trials off, as everywhere but the public showcase, all refuse. Whether
+ * trials are on, and with which providers, is itself public, answered to
+ * anyone, for the front page.
  */
 export function registerTrialRoutes(
   api: FastifyInstance,
@@ -60,53 +81,96 @@ export function registerTrialRoutes(
     settings,
   }: { database: Database; authenticator: Authenticator; publicOrigin: PublicOrigin; settings: TrialSettings },
 ): void {
-  // Counted in the same process memory as the server-wide limit, and keyed on
-  // the same client address.
-  const startsThisHour = api.createRateLimit({ max: settings.perClientPerHour, timeWindow: HOUR_MS });
+  // Whether to offer a trial at all, and through which providers, for the
+  // landing page. Public, and the same answer to everyone: it says nothing
+  // about any School.
+  const trialsOffered = {
+    enabled: settings.enabled,
+    providers: settings.enabled ? TRIAL_PROVIDERS.filter((provider) => settings.providers[provider] !== undefined) : [],
+  };
+  api.get("/trials", async (_request, reply) => reply.status(200).send(trialsOffered));
 
-  // Whether to offer a trial at all, for the landing page. Public, and the
-  // same answer to everyone: it says nothing about any School.
-  const offered = { enabled: settings.enabled };
-  api.get("/trials", async (_request, reply) => reply.status(200).send(offered));
+  const redirectUriFor = (provider: TrialProvider) => `${publicOrigin}${CALLBACK_PATH}/${provider}`;
 
-  api.post("/trials", async (request, reply) => {
-    if (!settings.enabled) {
-      return refused(request, reply, "trials-disabled");
-    }
-    // It answers with a browser Session, which a page on another site must not
-    // be able to plant, exactly as a sign-in from one may not (ADR-0004).
-    if (!fromPublicOrigin(request, publicOrigin)) {
-      return refused(request, reply, "cross-origin");
-    }
-    const limit = await startsThisHour(request);
-    if (!limit.isAllowed && limit.isExceeded) {
-      request.log.info("busy: this client has started as many trials as it may this hour");
-      return reply.status(429).header("retry-after", String(limit.ttlInSeconds)).send(BUSY);
-    }
-
-    const timezone = await timezoneOrUtc(database, request.body);
-    // Expired trials go first, so the ones they held count no longer.
-    await deleteExpiredTrialSchools(database);
-    const started = await withTransaction(database, async (transaction) => {
-      const trial = await startTrialSchool(transaction, { timezone, liveCap: settings.liveCap });
-      return trial === null ? null : { trial, session: await startBrowserSession(transaction, trial.schoolAdministrator) };
-    });
-    if (started === null) {
-      request.log.info("busy: as many Trial Schools are live as may be");
-      return reply.status(503).send(BUSY);
-    }
-
-    // Starting over drops the Session the browser held before, if it held one.
-    await authenticator.endSession(request);
-    const { trial, session } = started;
-    return reply
-      .status(201)
-      .header("set-cookie", session.cookie)
-      .send({
-        expiresAt: session.expiresAt,
-        trial: { schoolId: trial.school.id, expiresAt: trial.expiresAt.toISOString() },
+  // A top-level navigation, not a fetch: the visitor leaves for the provider,
+  // carrying the timezone their School should keep.
+  api.get<{ Params: { provider: string }; Querystring: { timezone?: unknown } }>(
+    "/trials/start/:provider",
+    async (request, reply) => {
+      const chosen = settings.enabled ? offeredProvider(settings, request.params.provider) : null;
+      if (chosen === null) {
+        return refused(request, reply, settings.enabled ? "unoffered-provider" : "trials-disabled");
+      }
+      // Only a link on SchoolGrid's own page starts one. From anywhere else, a
+      // visitor who once approved the app would come straight back signed in
+      // to a trial they never asked for, their Session replaced (ADR-0004). A
+      // navigation carries no `Origin`, but its Fetch Metadata says where it
+      // came from, and a browser alone sets it.
+      if (request.headers["sec-fetch-site"] !== "same-origin") {
+        return refused(request, reply, "cross-site");
+      }
+      const { timezone } = request.query;
+      const { location, cookie } = beginSignIn({
+        ...chosen,
+        identityKey: settings.identityKey,
+        redirectUri: redirectUriFor(chosen.provider),
+        timezone: typeof timezone === "string" && timezone.length <= MAX_TIMEZONE_LENGTH ? timezone : "",
       });
-  });
+      return reply.status(303).header("set-cookie", cookie).header("location", location).send();
+    },
+  );
+
+  // The provider's redirect back. Only a sign-in this browser began, checked
+  // by its state, starts anything, so no other site can start a trial in the
+  // visitor's browser or plant its Session there.
+  api.get<{ Params: { provider: string }; Querystring: Record<string, unknown> }>(
+    `/trials/callback/:provider`,
+    async (request, reply) => {
+      const chosen = settings.enabled ? offeredProvider(settings, request.params.provider) : null;
+      if (chosen === null) {
+        return refused(request, reply, settings.enabled ? "unoffered-provider" : "trials-disabled");
+      }
+      const outcome = await completeSignIn({
+        ...chosen,
+        identityKey: settings.identityKey,
+        redirectUri: redirectUriFor(chosen.provider),
+        query: request.query,
+        cookieHeader: request.headers.cookie,
+      });
+      if (outcome.status !== "signed-in") {
+        request.log.info({ outcome }, "trial sign-in started no trial");
+        return backToLanding(reply, outcome.status);
+      }
+
+      const timezone = await timezoneOrUtc(database, outcome.timezone);
+      const visitor = visitorIdentity(settings.identityKey, chosen.provider, outcome.subject);
+      // Expired trials go first, so the ones they held count no longer.
+      await deleteExpiredTrialSchools(database);
+      const started = await withTransaction(database, async (transaction) => {
+        const trial = await startTrialSchool(transaction, { timezone, liveCap: settings.liveCap, visitor });
+        return trial === null ? null : { trial, session: await startBrowserSession(transaction, trial.schoolAdministrator) };
+      });
+      if (started === null) {
+        request.log.info("busy: as many Trial Schools are live as may be");
+        return backToLanding(reply, "busy");
+      }
+
+      // The Session cookie replaces any the browser held. That one's Session
+      // cannot be ended here: the redirect back began at the provider, so the
+      // browser sent this request no `SameSite=Strict` cookie. It lapses
+      // unused, the browser no longer holding it.
+      //
+      // The redirect into the School is part of that same cross-site chain, so
+      // the page it loads is sent no cookie either. It needs none: the app's
+      // page is the same for everyone, and asks for the Session itself, from
+      // this origin, once loaded.
+      return reply
+        .status(303)
+        .header("set-cookie", [EXPIRED_FLOW_COOKIE, started.session.cookie])
+        .header("location", `/schools/${started.trial.school.id}/persons`)
+        .send();
+    },
+  );
 
   api.post("/trials/role", async (request, reply) => {
     if (!settings.enabled) {
