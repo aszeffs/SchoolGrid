@@ -1753,16 +1753,6 @@ dialog.slip::backdrop {
   transform: rotate(45deg);
 }
 
-.not-built {
-  margin-top: calc(var(--step) * 6);
-  padding-top: calc(var(--step) * 2);
-  border-top: 1px solid var(--rule-strong);
-}
-
-.not-built h2 {
-  margin-top: 0;
-}
-
 /* A record's identifier, set in figures under the name it is given. */
 .identifier {
   display: block;
@@ -2168,5 +2158,48 @@ td[aria-selected="true"] > .day {
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none !important;
+  }
+}
+
+/* ---- A Term report's controls --------------------------------------- */
+
+.report-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: calc(var(--step) * 2);
+}
+
+/* ---- Print ----------------------------------------------------------- */
+
+/*
+ * A page printed from the browser, as a Term report is meant to be: the
+ * record alone, in ink on white paper. The shell, its navigation, the key and
+ * every control stay on screen.
+ */
+@media print {
+  body,
+  .sheet {
+    background: #fff;
+    color: #000;
+    min-height: 0;
+  }
+
+  .sheet,
+  .sheet--school,
+  .sheet__main,
+  .sheet__body {
+    display: block;
+  }
+
+  .sheet__head,
+  .trial-banner,
+  .legend,
+  .foot,
+  .report-controls,
+  button,
+  select,
+  form {
+    display: none !important;
   }
 }

@@ -18,7 +18,9 @@ const PATHS = {
   account: "/schools/:schoolId/account",
   classes: "/schools/:schoolId/classes",
   yourAttendance: "/schools/:schoolId/attendance",
+  yourTermReport: "/schools/:schoolId/term-report",
   persons: "/schools/:schoolId/persons",
+  termReport: "/schools/:schoolId/persons/:personId/term-report",
   invitations: "/schools/:schoolId/invitations",
   memberships: "/schools/:schoolId/memberships",
   enrollments: "/schools/:schoolId/enrollments",
@@ -109,6 +111,7 @@ const WITHIN = {
   attendance: "classOfferings",
   attendanceOn: "classOfferings",
   termResults: "classOfferings",
+  termReport: "persons",
 } as const satisfies Partial<Record<SchoolRouteName, SchoolRouteName>>;
 
 /** A page within a School that is a section of its own, reached from the navigation with the School alone. */
@@ -138,6 +141,7 @@ export const SECTIONS: readonly Section[] = [
   { name: "account", label: "Your account", reachedBy: null },
   { name: "classes", label: "Your classes", reachedBy: ["faculty", "student"], reachedByTaught: true },
   { name: "yourAttendance", label: "Your attendance", reachedBy: ["student"] },
+  { name: "yourTermReport", label: "Your Term report", reachedBy: ["student"] },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
   { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },
