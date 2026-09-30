@@ -10,13 +10,14 @@ import {
   type Role,
 } from "../access/index.ts";
 import { raiseCorrectionRequest } from "../correction-requests/index.ts";
+import { currentResultValueIds, publishTermResults, recordTermResults, termResultsIn } from "../results/term-results.ts";
 import { recordTakenSessions, type TakenSession } from "../attendance/sessions.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import type { UserAccount } from "../authentication/index.ts";
 import { instructionalDaysBetween, schoolDateAt, schoolDatePlus } from "../calendar/index.ts";
 import { transactionTime, type Queryable } from "../db/transaction.ts";
 import { createPerson, createSchool, schoolSettingsOf, type Person, type School } from "../identity/index.ts";
-import { INVENTED_SCHOOL_NAME, inventedAttendance, inventedSchool, NO_LABEL } from "./invented-school.ts";
+import { INVENTED_SCHOOL_NAME, inventedAttendance, inventedResults, inventedSchool, NO_LABEL } from "./invented-school.ts";
 
 /**
  * The Trials module starts Trial Schools, lets their visitor change role
@@ -208,6 +209,40 @@ export async function startTrialSchool(
       requestedByPersonId: faculty.id,
     });
   }
+
+  // Recorded as drafts by whoever teaches each offering, in the School's
+  // first scale, and one offering published by them, unaudited as above.
+  const results = inventedResults(invented);
+  const valueIds = await currentResultValueIds(transaction, school.id);
+  await recordTermResults(
+    transaction,
+    results.results.map(({ course, label, student, value, score, comment }) => {
+      const { classOfferingId, assigned } = current.get(offeringKey(course, label))!;
+      return {
+        schoolId: school.id,
+        classOfferingId,
+        studentPersonId: students.get(student)!.id,
+        resultValueId: value === null ? null : valueIds.get(value)!,
+        score,
+        comment,
+        recordedByPersonId: assigned.id,
+      };
+    }),
+  );
+  const published = current.get(offeringKey(results.published.course, results.published.label))!;
+  const publishedKey = { schoolId: school.id, classOfferingId: published.classOfferingId };
+  await publishTermResults(transaction, publishedKey, published.assigned.id, await termResultsIn(transaction, publishedKey));
+  const resultRequest = results.correctionRequest;
+  await raiseCorrectionRequest(transaction, {
+    kind: "term_result",
+    schoolId: school.id,
+    classOfferingId: current.get(offeringKey(resultRequest.course, resultRequest.label))!.classOfferingId,
+    studentPersonId: students.get(resultRequest.student)!.id,
+    before: resultRequest.before,
+    after: resultRequest.after,
+    reason: resultRequest.reason,
+    requestedByPersonId: faculty.id,
+  });
 
   return { school, expiresAt, schoolAdministrator: accounts.get("school_administrator")! };
 }
