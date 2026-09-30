@@ -212,3 +212,40 @@ export function leftOn(memberships: readonly RosteredBounds[], termLastDate: str
   const last = memberships.map((membership) => membership.lastDate ?? termLastDate).sort().at(-1);
   return last !== undefined && last < termLastDate ? last : null;
 }
+
+/** A published result as its Student and permitted readers are served it: what it says, and when it was published. */
+export interface PublishedTermResult extends TermResultContent {
+  value: string;
+  publishedAt: Date;
+}
+
+/** Each of these Class Offerings' published results for one Student, by offering. A draft is never among them. */
+export async function publishedTermResultsOf(
+  database: Queryable,
+  { schoolId, studentPersonId, classOfferingIds }: { schoolId: string; studentPersonId: string; classOfferingIds: readonly string[] },
+): Promise<Map<string, PublishedTermResult>> {
+  const { rows } = await database.query<PublishedTermResult & { classOfferingId: string }>(
+    `SELECT result.class_offering_id AS "classOfferingId", value.label AS value, result.score::float8 AS score,
+            result.comment, publication.published_at AS "publishedAt"
+     FROM app.term_result result
+     JOIN app.publication publication
+       ON publication.school_id = result.school_id AND publication.id = result.publication_id
+     JOIN app.result_value value ON value.school_id = result.school_id AND value.id = result.result_value_id
+     WHERE result.school_id = $1 AND result.student_person_id = $2 AND result.class_offering_id = ANY($3)`,
+    [schoolId, studentPersonId, classOfferingIds],
+  );
+  return new Map(rows.map(({ classOfferingId, ...published }) => [classOfferingId, published]));
+}
+
+/** The Class Offerings a Student was ever rostered in. */
+export async function classOfferingsRosteredIn(
+  database: Queryable,
+  { schoolId, studentPersonId }: { schoolId: string; studentPersonId: string },
+): Promise<Set<string>> {
+  const { rows } = await database.query<{ classOfferingId: string }>(
+    `SELECT DISTINCT class_offering_id AS "classOfferingId" FROM app.roster_membership
+     WHERE school_id = $1 AND student_person_id = $2`,
+    [schoolId, studentPersonId],
+  );
+  return new Set(rows.map((row) => row.classOfferingId));
+}

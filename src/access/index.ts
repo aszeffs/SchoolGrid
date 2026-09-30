@@ -1094,6 +1094,42 @@ export function authorizeReadAttendanceOfStudent(actor: Actor, personId: string,
   return target!;
 }
 
+/** Whose Term report the actor may read, and which of its parts. */
+export interface TermReportReach {
+  student: Person;
+  termResults: boolean;
+  attendanceTotals: boolean;
+}
+
+/**
+ * Returns the Person whose Term report the actor may read, with the parts
+ * they may read of it, and refuses otherwise (CONTEXT.md: Term report).
+ *
+ * A Student reads their own in full whatever their Enrollment: it holds only
+ * published results and Attendance, both theirs after departure. A School
+ * Administrator reads any in the School in full. A Guardian reads a linked
+ * Student's while the link is in force, each part only as its Access profile
+ * grants, and is refused when it grants neither. Faculty read results by the
+ * Class Offering they taught, never one Student's across offerings.
+ */
+export function authorizeReadTermReport(actor: Actor, personId: string, target: Person | null): TermReportReach {
+  const unreachable = outOfReach(actor, target);
+  const reach = unreachable === null ? termReportPartsFor(actor, target!) : null;
+  if (reach === null || (!reach.termResults && !reach.attendanceTotals)) {
+    throw new Refused(unreachable ?? "forbidden", { type: "person", id: personId });
+  }
+  return { student: target!, ...reach };
+}
+
+/** The parts of a Student's Term report in the actor's School the actor may read, by who they are to that Student. */
+function termReportPartsFor(actor: Actor, student: Person): Omit<TermReportReach, "student"> {
+  if (holds(actor, "school_administrator") || student.id === actor.person.id) {
+    return { termResults: true, attendanceTotals: true };
+  }
+  const profile = standingOf.get(actor)?.linkedStudents.get(student.id);
+  return { termResults: profile?.resultsRead ?? false, attendanceTotals: profile?.attendanceRead ?? false };
+}
+
 /**
  * The actor's Teaching assignment for this Class Offering that is active on
  * the School's today, if they hold the Faculty role and one.

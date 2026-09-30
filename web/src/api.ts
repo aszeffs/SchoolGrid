@@ -418,6 +418,28 @@ export interface StudentAttendance {
   })[];
 }
 
+/**
+ * One Student's Term report: the Terms they were rostered in, the latest
+ * first, and one of them with each Class Offering they were rostered in. An
+ * offering carries its published Term result and its Attendance totals only
+ * where `shows` says the reader may read that part; nothing stands in for a
+ * part withheld. A draft never appears.
+ */
+export interface TermReport {
+  student: { id: string; displayName: string };
+  /** The School's today, in its own timezone. */
+  today: string;
+  shows: { termResults: boolean; attendanceTotals: boolean };
+  terms: ClassOffering["term"][];
+  /** Null for a Student rostered in no Class Offering. */
+  term: ClassOffering["term"] | null;
+  classOfferings: (ClassOffering & {
+    /** Null while none is published. */
+    termResult?: { value: string; score: number | null; comment: string | null; publishedAt: string } | null;
+    attendanceTotals?: AttendanceTotals;
+  })[];
+}
+
 /** One mark a save refused while the rest applied, with the Attendance as it now stands. */
 export interface RefusedMark {
   studentPersonId: string;
@@ -793,6 +815,15 @@ export const api = {
     request<{ studentAttendance: StudentAttendance }>(
       "GET",
       inSchool(schoolId, `/persons/${encodeURIComponent(personId)}/attendance`),
+    ),
+  /** A Student's Term report for this Term, or for the one the server picks when none is named. */
+  termReport: (schoolId: string, personId: string, termId: string | null) =>
+    request<{ termReport: TermReport }>(
+      "GET",
+      inSchool(
+        schoolId,
+        `/persons/${encodeURIComponent(personId)}/term-report${termId === null ? "" : `?termId=${encodeURIComponent(termId)}`}`,
+      ),
     ),
   /** The session on this date, or on the School's today when none is named. */
   attendanceSession: (schoolId: string, classOfferingId: string, date: string | null) =>

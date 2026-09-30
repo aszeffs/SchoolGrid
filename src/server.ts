@@ -29,6 +29,7 @@ import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
 import { registerResultRoutes } from "./results/routes.ts";
 import { registerTermResultRoutes } from "./results/term-result-routes.ts";
+import { registerTermReportRoutes } from "./results/term-report-routes.ts";
 import { registerTrialRoutes } from "./trials/routes.ts";
 
 export interface ServerOptions {
@@ -170,6 +171,7 @@ export function buildServer({
       registerCorrectionRequestRoutes(api, database, authenticator);
       registerResultRoutes(api, database, authenticator);
       registerTermResultRoutes(api, database, authenticator);
+      registerTermReportRoutes(api, database, authenticator);
       registerPlatformRoutes(api, database, authenticator);
       registerTrialRoutes(api, { database, authenticator, publicOrigin, settings: trials });
     },

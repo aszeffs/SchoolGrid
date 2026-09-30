@@ -23,6 +23,7 @@ import { Schools } from "./Schools.tsx";
 import { ShellContext, type ShellChrome } from "./ShellContext.ts";
 import { Sheet } from "./Sheet.tsx";
 import { TermResults } from "./TermResults.tsx";
+import { TermReport } from "./TermReport.tsx";
 import { rememberTrial, START_FAILED, timeLeft, trialHasEnded, useNow, useStartTrial } from "./trial.ts";
 import { YourAttendance } from "./YourAttendance.tsx";
 import { YourClasses } from "./YourClasses.tsx";
@@ -262,6 +263,7 @@ const SECTION_GROUP: Record<ReturnType<typeof sectionsFor>[number]["name"], (typ
   account: "You",
   classes: "You",
   yourAttendance: "You",
+  yourTermReport: "You",
   persons: "People",
   invitations: "People",
   memberships: "People",
@@ -280,6 +282,7 @@ const SECTION_ICONS: Record<keyof typeof SECTION_GROUP, string> = {
   account: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
   classes: "M4 19.5V5a2 2 0 0 1 2-2h14v14H6a2 2 0 0 0-2 2zm0 0A2 2 0 0 0 6 21h14M9 7h7",
   yourAttendance: "M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8.5 13.5l2.5 2.5 4.5-5",
+  yourTermReport: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h4",
   persons: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5",
   invitations: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm0 0 9 6 9-6",
   memberships: "M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z",
@@ -330,8 +333,12 @@ function SchoolScreen({ route, school }: { route: SchoolRoute; school: ReachedSc
       return <YourClasses school={school} />;
     case "yourAttendance":
       return <YourAttendance school={school} />;
+    case "yourTermReport":
+      return <TermReport school={school} personId={school.personId} />;
     case "persons":
       return <Persons school={school} />;
+    case "termReport":
+      return <TermReport school={school} personId={route.personId} />;
     case "invitations":
       return <Invitations school={school} />;
     case "memberships":

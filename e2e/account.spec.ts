@@ -31,14 +31,6 @@ function linkedStudents(page: Page) {
   return page.getByRole("table", { name: "Students you are linked to" }).getByRole("row");
 }
 
-/** A Guardian landing here is told what is not built, in the glossary's own terms: Term results, and no longer Attendance. */
-async function expectSaysWhatIsNotBuilt(page: Page): Promise<void> {
-  const notBuilt = page.getByRole("main").locator(".not-built");
-  await expect(notBuilt).toBeVisible();
-  await expect(notBuilt).toContainText("Term results");
-  await expect(notBuilt).not.toContainText("Attendance");
-}
-
 test("a Student lands on their account, which names their School, their role and their Enrollment", async ({
   page,
   audit,
@@ -94,7 +86,9 @@ test("a Guardian sees each Student they are linked to, and what that link lets t
   await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
   // Holding no Student membership, they are told nothing about an Enrollment.
   await expect(page.getByRole("heading", { name: "Your Enrollment" })).toHaveCount(0);
-  await expectSaysWhatIsNotBuilt(page);
+  // Term results are built, so the note on what is not is gone; the link grants attendance read, so the report is offered.
+  await expect(page.getByRole("main").getByText(/not built yet/)).toHaveCount(0);
+  await expect(page.getByRole("link", { name: `${student.displayName}’s Term report` })).toBeVisible();
   await audit(page);
 });
 
@@ -135,7 +129,7 @@ test("a Person holding several roles sees all of them on the one page", async ({
   });
   // What the second role holds is on the same sheet as the first.
   await expect(linkedStudents(page).filter({ hasText: student.displayName })).toHaveCount(1);
-  await expectSaysWhatIsNotBuilt(page);
+  await expect(page.getByRole("main").getByText(/not built yet/)).toHaveCount(0);
   await audit(page);
 });
 

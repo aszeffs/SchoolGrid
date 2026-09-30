@@ -120,6 +120,11 @@ function EnrollmentsSheet({
     </>
   );
 
+  // Each Student's name opens their Term report, which outlasts their Enrollment.
+  const reportOf = (personId: string) => (
+    <Link to={{ name: "termReport", schoolId, personId }}>{nameOf(personId)}</Link>
+  );
+
   // Named for the sheet it opens, which the navigation lists as Roles.
   const roles = <Link to={{ name: "memberships", schoolId }}>School memberships</Link>;
 
@@ -132,7 +137,7 @@ function EnrollmentsSheet({
         keyOf={(enrollment) => enrollment.id}
         empty="No Student is enrolled in this School. Start the first Enrollment below."
         columns={[
-          { head: "Student", cell: (enrollment) => nameOf(enrollment.studentPersonId) },
+          { head: "Student", cell: (enrollment) => reportOf(enrollment.studentPersonId) },
           { head: "Started", cell: (enrollment) => DAY.format(new Date(enrollment.startedAt)) },
           { head: "State", cell: () => <span className="mark mark--open">Open</span> },
           {
@@ -193,7 +198,7 @@ function EnrollmentsSheet({
           keyOf={(enrollment) => enrollment.id}
           empty="No Enrollment in this School has ended."
           columns={[
-            { head: "Student", cell: (enrollment) => nameOf(enrollment.studentPersonId) },
+            { head: "Student", cell: (enrollment) => reportOf(enrollment.studentPersonId) },
             { head: "Started", cell: (enrollment) => DAY.format(new Date(enrollment.startedAt)) },
             { head: "Ended", cell: (enrollment) => DAY.format(new Date(enrollment.endedAt!)) },
             { head: "Reason", cell: (enrollment) => enrollment.endReason },
