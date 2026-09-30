@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { OutgoingHttpHeaders } from "node:http";
-import { afterEach, beforeEach, inject } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, inject } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import { appendAuditRecord, type AuditEntry } from "../../src/audit/index.ts";
 import { toConnectionString } from "../../src/db/connection-string.ts";
@@ -25,6 +25,7 @@ import {
 } from "../../src/config.ts";
 import { loadWebApp } from "../../src/http/web-app.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
+import { startFakeOAuthProvider, type FakeOAuthProvider } from "./fake-oauth-provider.ts";
 
 /** The origin every test server is configured to be served from. */
 const PUBLIC_ORIGIN = parsePublicOrigin("https://schoolgrid.test");
@@ -230,12 +231,28 @@ export interface TestServer {
    */
   markInvitationRedeemed(invitationId: string, account: UserAccount): Promise<void>;
   /**
-   * Starts a Trial School through the API, as a browser on the public origin
-   * does, and returns a client sending back the Session it was given as its
-   * School Administrator. That client sends the public `Origin` too, so it can
-   * change role and make changes as that browser would.
+   * Starts a Trial School as a browser does: signing in with GitHub through the
+   * fake provider, as `subject` (a fresh one unless given), and following the
+   * redirect back. Returns a client sending back the Session it was given as
+   * its School Administrator. That client sends the public `Origin` too, so it
+   * can change role and make changes as that browser would. `alongside` is a
+   * `Cookie` the browser also sends back to the callback, as one already
+   * holding a Session does.
    */
-  startTrial(options?: { timezone?: string; from?: string }): Promise<StartedTrial>;
+  startTrial(options?: { timezone?: string; subject?: string; alongside?: string }): Promise<StartedTrial>;
+  /**
+   * Begins a trial sign-in, as the front page's button does, and returns where
+   * it sent the browser and the flow cookie it set.
+   */
+  beginTrialSignIn(options?: { timezone?: string; client?: TestClient }): Promise<TrialSignIn>;
+  /**
+   * Answers the fake provider's consent page as a visitor would, approving as
+   * `subject` or cancelling, and returns the callback path and query it sends
+   * the browser back to.
+   */
+  answerAtProvider(signIn: TrialSignIn, answer: { decision: "approve" | "cancel"; subject?: string }): Promise<string>;
+  /** Where the fake provider listens, only when this server offers trials. */
+  fakeProvider: FakeOAuthProvider | null;
   /**
    * Arranges a Trial School as past its expiry, as if its two hours were up.
    * As the schema owner: the application may not change when a trial expires.
@@ -357,9 +374,23 @@ function buildClient(app: FastifyInstance, identity: ClientIdentity = { headers:
   };
 }
 
+/** A trial sign-in begun: where the browser was sent, and what `Cookie` it sends back to the callback. */
+export interface TrialSignIn {
+  location: URL;
+  flowCookie: string;
+}
+
+/** The OAuth app every test server with trials is configured with, at the fake provider. */
+const FAKE_CLIENT = { clientId: "schoolgrid-test", clientSecret: "fake-client-secret" };
+
+/** The identity key every test server with trials is configured with. */
+export const TEST_IDENTITY_KEY = "test-identity-key-".padEnd(48, "0");
+
 /** A Trial School started through the API, and the browser that started it. */
 export interface StartedTrial {
   client: TestClient;
+  /** The Session's cookie, as the browser sends it back. */
+  cookie: string;
   schoolId: string;
   expiresAt: string;
 }
@@ -407,6 +438,16 @@ export function useTestServer({
   let pool: Database;
   let ownerPool: Database;
   let databaseName: string;
+  let fakeProvider: FakeOAuthProvider | null = null;
+
+  if (trials !== undefined) {
+    beforeAll(async () => {
+      fakeProvider = await startFakeOAuthProvider(FAKE_CLIENT);
+    });
+    afterAll(async () => {
+      await fakeProvider?.close();
+    });
+  }
 
   /**
    * What a browser sends back for a Session started for this account. The
@@ -436,13 +477,55 @@ export function useTestServer({
       webApp: await loadWebApp(WEB_APP_FIXTURE),
       ...(rateLimit === undefined ? {} : { rateLimit }),
       ...(buildInfo === undefined ? {} : { buildInfo }),
-      ...(trials === undefined ? {} : { trials: { ...DEFAULT_TRIAL_SETTINGS, ...trials } }),
+      ...(trials === undefined
+        ? {}
+        : {
+            trials: {
+              ...DEFAULT_TRIAL_SETTINGS,
+              identityKey: TEST_IDENTITY_KEY,
+              providers: {
+                github: {
+                  ...FAKE_CLIENT,
+                  authorizeUrl: `${fakeProvider!.url}/authorize`,
+                  tokenUrl: `${fakeProvider!.url}/token`,
+                  userUrl: `${fakeProvider!.url}/user`,
+                },
+              },
+              ...trials,
+            },
+          }),
       onRoute: (route) => routes.push(route),
     });
     addRoutes?.(app);
     await app.ready();
 
     const client = buildClient(app);
+
+    const beginTrialSignIn: TestServer["beginTrialSignIn"] = async ({ timezone, client: browser = client } = {}) => {
+      const response = await browser.get(
+        `/api/trials/start/github${timezone === undefined ? "" : `?timezone=${encodeURIComponent(timezone)}`}`,
+      );
+      if (response.status !== 303) {
+        throw new Error(`beginTrialSignIn expected a redirect but received status ${response.status}`);
+      }
+      return { location: new URL(String(response.headers.location)), flowCookie: cookieSentBackFor(response) };
+    };
+
+    const answerAtProvider: TestServer["answerAtProvider"] = async ({ location }, { decision, subject }) => {
+      const form = new URLSearchParams({ decision, ...(subject === undefined ? {} : { subject }) });
+      for (const name of ["client_id", "redirect_uri", "state", "code_challenge"]) {
+        form.set(name, location.searchParams.get(name) ?? "");
+      }
+      const response = await fetch(`${fakeProvider!.url}/authorize`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+        redirect: "manual",
+      });
+      const back = new URL(response.headers.get("location")!);
+      return `${back.pathname}${back.search}`;
+    };
+
     context = {
       client,
       routes,
@@ -504,18 +587,24 @@ export function useTestServer({
           [invitationId, account.id],
         );
       },
-      startTrial: async ({ timezone, from } = {}) => {
-        const browser = client.withOrigin(PUBLIC_ORIGIN);
-        const response = await (from === undefined ? browser : browser.fromAddress(from)).post(
-          "/api/trials",
-          timezone === undefined ? undefined : { timezone },
-        );
-        const trial = (response.body as { trial?: { schoolId: string; expiresAt: string } } | undefined)?.trial;
-        if (response.status !== 201 || trial === undefined) {
-          throw new Error(`startTrial expected a Trial School but received status ${response.status}`);
+      startTrial: async ({ timezone, subject, alongside } = {}) => {
+        const signIn = await beginTrialSignIn(timezone === undefined ? {} : { timezone });
+        const callback = await answerAtProvider(signIn, { decision: "approve", ...(subject === undefined ? {} : { subject }) });
+        const cookie = alongside === undefined ? signIn.flowCookie : `${signIn.flowCookie}; ${alongside}`;
+        const response = await client.withCookie(cookie).get(callback);
+        const schoolId = /^\/schools\/([^/]+)\/persons$/.exec(String(response.headers.location))?.[1];
+        const session = setCookiesOf(response).find((cookie) => cookie.startsWith("__Host-session="));
+        if (response.status !== 303 || schoolId === undefined || session === undefined) {
+          throw new Error(`startTrial expected a Trial School but was sent to ${String(response.headers.location)}`);
         }
-        return { client: browser.withCookie(cookieSentBackFor(response)), ...trial };
+        const sentBack = session.split(";")[0]!;
+        const started = client.withOrigin(PUBLIC_ORIGIN).withCookie(sentBack);
+        const { schools } = (await started.get("/api/session")).body as { schools: { trialExpiresAt: string }[] };
+        return { client: started, cookie: sentBack, schoolId, expiresAt: schools[0]!.trialExpiresAt };
       },
+      beginTrialSignIn,
+      answerAtProvider,
+      fakeProvider,
       expireTrialSchool: async (schoolId) => {
         await ownerPool.query(
           `UPDATE app.school SET trial_expires_at = now() - interval '1 second' WHERE id = $1`,

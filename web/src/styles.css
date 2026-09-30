@@ -556,7 +556,7 @@ body {
 
 /*
  * A Trial School's strip across the top of the sheet: what this School is and
- * how long it has left, with the way to a fresh one at its right.
+ * how long it has left.
  */
 .trial-banner {
   display: flex;
@@ -585,11 +585,6 @@ body {
   font-family: var(--type-figures);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-}
-
-.trial-banner .error {
-  flex-basis: 100%;
-  order: 1;
 }
 
 /*
@@ -1685,6 +1680,17 @@ dialog.slip::backdrop {
 }
 
 .landing__trial p {
+  margin: 0;
+}
+
+/* A sign-in button for each provider, side by side while they fit. */
+.start-trial {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step);
+}
+
+.start-trial form {
   margin: 0;
 }
 

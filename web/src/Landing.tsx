@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
-import { api } from "./api.ts";
 import { Link } from "./Link.tsx";
 import { Key, Sheet } from "./Sheet.tsx";
 import { StartTrial } from "./StartTrial.tsx";
+import { useTrialProviders } from "./trial.ts";
 
 const REPOSITORY_URL = "https://github.com/aszeffs/SchoolGrid";
 
@@ -11,27 +10,17 @@ const REPOSITORY_URL = "https://github.com/aszeffs/SchoolGrid";
  * it, and how seriously it holds a School's records. Public, like sign-in,
  * and the same for everyone, signed in or not.
  *
- * The trial is offered only where the deployment offers one (ADR-0012).
- * Until the server says so, and if it cannot be asked, there is no button:
- * one that could only fail would be worse than none.
+ * The trial is offered only where the deployment offers one, with a provider
+ * to sign in with (ADR-0012, ADR-0013). Until the server says so, and if it
+ * cannot be asked, there is no button: one that could only fail would be
+ * worse than none.
  *
  * It sells only what is built. What is not yet, such as Attendance and Term
  * results, it does not name.
  */
 export function Landing() {
-  const [trialsOffered, setTrialsOffered] = useState(false);
-
-  useEffect(() => {
-    let current = true;
-    void api.trials().then((trials) => {
-      if (current && trials.ok) {
-        setTrialsOffered(trials.body.enabled);
-      }
-    });
-    return () => {
-      current = false;
-    };
-  }, []);
+  const providers = useTrialProviders();
+  const trialsOffered = providers.length > 0;
 
   const legend = (
     <>
@@ -78,7 +67,11 @@ export function Landing() {
             Try it in a School of your own, filled with invented Persons and Class Offerings. View it as each School role,
             and after two hours it ends and is deleted.
           </p>
-          <StartTrial label="Start a trial" />
+          <p className="muted">
+            Signing in proves you are a person, not a script. SchoolGrid keeps no name, email or token from it, only a
+            keyed hash of your account&apos;s id, and forgets that once your trial is deleted.
+          </p>
+          <StartTrial providers={providers} />
         </div>
       )}
 

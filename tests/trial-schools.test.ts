@@ -1,10 +1,17 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { cookieSentBackFor, observable, useTestServer, type TestClient } from "./support/harness.ts";
+import {
+  cookieSentBackFor,
+  observable,
+  setCookiesOf,
+  TEST_IDENTITY_KEY,
+  useTestServer,
+  type TestClient,
+} from "./support/harness.ts";
 
 const ROLES = ["school_administrator", "faculty", "student", "guardian"] as const;
 
 const REFUSED = { status: "refused" };
-const BUSY = { status: "busy" };
 
 const INVENTED_PERSONS = [
   "Alex Lindqvist",
@@ -118,13 +125,13 @@ async function attendanceSessionOf(school: TestClient, classOfferingId: string, 
 
 describe("Trial Schools", () => {
   describe("with trials on", () => {
-    const server = useTestServer({ trials: { enabled: true, perClientPerHour: 1000 } });
+    const server = useTestServer({ trials: { enabled: true } });
 
-    it("says trials are offered, to anyone, with no Session", async () => {
+    it("says trials are offered, and through which providers, to anyone, with no Session", async () => {
       const response = await server().client.get("/api/trials");
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ enabled: true });
+      expect(response.body).toEqual({ enabled: true, providers: ["github"] });
     });
 
     it("starts a private School of invented data, around the visitor's today, as its School Administrator", async () => {
@@ -361,12 +368,11 @@ describe("Trial Schools", () => {
     });
 
     it("starts over in a fresh Trial School, ending the Session the browser held in the last", async () => {
-      const { client, schoolId } = await server().startTrial();
-      const started = await client.post("/api/trials", {});
-      expect(started.status).toBe(201);
+      const { client, cookie, schoolId } = await server().startTrial();
+      const next = await server().startTrial({ alongside: cookie });
 
       expect((await client.get("/api/session")).body).toEqual(REFUSED);
-      const { schools } = await sessionOf(client.withCookie(cookieSentBackFor(started)));
+      const { schools } = await sessionOf(next.client);
       expect(schools).toEqual([expect.objectContaining({ viewingAs: "school_administrator" })]);
       expect(schools[0]!.schoolId).not.toBe(schoolId);
     });
@@ -466,19 +472,160 @@ describe("Trial Schools", () => {
       await server().createAccount(credentials);
     });
 
-    it("refuses a start from another site, which could plant its Session in the visitor's browser", async () => {
-      for (const client of [server().client, server().client.withOrigin("https://attacker.example")]) {
-        const response = await client.post("/api/trials", {});
-        expect(response.body).toEqual(REFUSED);
-        expect(response.headers["set-cookie"]).toBeUndefined();
+    it("offers no way to start one without signing in", async () => {
+      const browser = server().client.withOrigin(server().publicOrigin);
+      expect((await browser.post("/api/trials", {})).body).toEqual(REFUSED);
+      const { rows } = await server().database.query("SELECT 1 FROM app.school");
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  // ADR-0013: the visitor proves an outside identity, and SchoolGrid keeps
+  // nothing of it but a keyed hash.
+  describe("signing in to start one", () => {
+    const server = useTestServer({ trials: { enabled: true } });
+
+    /** How many Schools there are: a sign-in that should start nothing must leave none. */
+    async function schoolCount(): Promise<number> {
+      const { rows } = await server().ownerDatabase.query<{ count: number }>("SELECT count(*)::integer AS count FROM app.school");
+      return rows[0]!.count;
+    }
+
+    it("sends the visitor to the provider with a state and a PKCE challenge, remembering the flow in a short-lived cookie", async () => {
+      const { location, flowCookie } = await server().beginTrialSignIn({ timezone: "Europe/Oslo" });
+
+      expect(`${location.origin}${location.pathname}`).toBe(`${server().fakeProvider!.url}/authorize`);
+      expect(Object.fromEntries(location.searchParams)).toEqual({
+        response_type: "code",
+        client_id: "schoolgrid-test",
+        redirect_uri: `${server().publicOrigin}/api/trials/callback/github`,
+        state: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+        code_challenge: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+        code_challenge_method: "S256",
+      });
+      expect(flowCookie).toMatch(/^__Secure-trial-sign-in=/);
+      const response = await server().client.get("/api/trials/start/github");
+      expect(setCookiesOf(response)).toEqual([
+        expect.stringMatching(/; Path=\/api\/trials\/callback; Secure; HttpOnly; SameSite=Lax; Max-Age=600$/),
+      ]);
+      // Two sign-ins never share a state.
+      expect((await server().beginTrialSignIn()).location.searchParams.get("state")).not.toBe(location.searchParams.get("state"));
+    });
+
+    it("lands the visitor in their new School, signed in, and forgets the flow", async () => {
+      const signIn = await server().beginTrialSignIn();
+      const callback = await server().answerAtProvider(signIn, { decision: "approve" });
+
+      const response = await server().client.withCookie(signIn.flowCookie).get(callback);
+
+      expect(response.status).toBe(303);
+      expect(response.headers.location).toMatch(/^\/schools\/[0-9a-f-]{36}\/persons$/);
+      expect(setCookiesOf(response)).toEqual([
+        "__Secure-trial-sign-in=; Path=/api/trials/callback; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+        expect.stringMatching(/^__Host-session=[A-Za-z0-9_-]+; Path=\/; Secure; HttpOnly; SameSite=Strict$/),
+      ]);
+    });
+
+    it("keeps only a keyed hash of the provider and subject, one Trial visitor for each identity", async () => {
+      const subject = "583231";
+      await server().startTrial({ subject });
+      await server().startTrial({ subject });
+      await server().startTrial({ subject: "9001" });
+
+      const { rows } = await server().ownerDatabase.query<{ identity: Buffer; schools: number }>(
+        `SELECT visitor.identity, count(school.id)::integer AS schools
+         FROM app.trial_visitor visitor JOIN app.school school ON school.trial_visitor_id = visitor.id
+         GROUP BY visitor.identity ORDER BY schools DESC`,
+      );
+      expect(rows.map((row) => row.schools)).toEqual([2, 1]);
+      const expected = createHmac("sha256", createHmac("sha256", TEST_IDENTITY_KEY).update("schoolgrid-trial-identity").digest())
+        .update(`github:${subject}`)
+        .digest();
+      expect(rows[0]!.identity.equals(expected)).toBe(true);
+      for (const { identity } of rows) {
+        expect(identity.toString("latin1")).not.toContain(subject);
+        expect(identity.toString("latin1")).not.toContain("github");
       }
+    });
+
+    it("sends a visitor who cancels at the provider back to the front page, starting nothing", async () => {
+      const signIn = await server().beginTrialSignIn();
+      const callback = await server().answerAtProvider(signIn, { decision: "cancel" });
+
+      const response = await server().client.withCookie(signIn.flowCookie).get(callback);
+
+      expect(response.status).toBe(303);
+      expect(response.headers.location).toBe("/?trial=cancelled");
+      expect(setCookiesOf(response)).toEqual([expect.stringMatching(/^__Secure-trial-sign-in=; .*Max-Age=0$/)]);
+      expect(await schoolCount()).toBe(0);
+    });
+
+    it("starts nothing for a redirect back this browser did not begin, or with the wrong verifier", async () => {
+      const signIn = await server().beginTrialSignIn();
+      const other = await server().beginTrialSignIn();
+      const callback = await server().answerAtProvider(signIn, { decision: "approve" });
+      const [payload, signature] = signIn.flowCookie.slice(signIn.flowCookie.indexOf("=") + 1).split(".");
+      const tampered = Buffer.from(
+        JSON.stringify({ ...JSON.parse(Buffer.from(payload!, "base64url").toString()), expiresAt: Date.now() + 3_600_000 }),
+      ).toString("base64url");
+      const withState = (state: string) => callback.replace(/state=[^&]+/, `state=${state}`);
+      // Signed as the server signs, so only the verifier is wrong: the provider refuses it.
+      const flowKey = createHmac("sha256", TEST_IDENTITY_KEY).update("schoolgrid-trial-flow").digest();
+      const wrongVerifier = Buffer.from(
+        JSON.stringify({ ...JSON.parse(Buffer.from(payload!, "base64url").toString()), verifier: "x".repeat(43) }),
+      ).toString("base64url");
+      const resigned = `__Secure-trial-sign-in=${wrongVerifier}.${createHmac("sha256", flowKey).update(wrongVerifier).digest("base64url")}`;
+
+      for (const [cookie, path] of [
+        [resigned, callback],
+        [undefined, callback],
+        [other.flowCookie, callback],
+        [signIn.flowCookie, withState(other.location.searchParams.get("state")!)],
+        [signIn.flowCookie, withState("")],
+        [`__Secure-trial-sign-in=${tampered}.${signature}`, callback],
+        [`${signIn.flowCookie}; ${other.flowCookie}`, callback],
+        [signIn.flowCookie, callback.replace(/code=[^&]+/, "code=forged")],
+      ] as const) {
+        const client = cookie === undefined ? server().client : server().client.withCookie(cookie);
+        const response = await client.get(path);
+        expect(response.headers.location).toBe("/?trial=failed");
+        expect(setCookiesOf(response).some((set) => set.startsWith("__Host-session="))).toBe(false);
+      }
+      expect(await schoolCount()).toBe(0);
+    });
+
+    it("starts nothing for a code already used", async () => {
+      const signIn = await server().beginTrialSignIn();
+      const callback = await server().answerAtProvider(signIn, { decision: "approve" });
+      const browser = server().client.withCookie(signIn.flowCookie);
+      expect((await browser.get(callback)).headers.location).toMatch(/^\/schools\//);
+
+      expect((await browser.get(callback)).headers.location).toBe("/?trial=failed");
+      expect(await schoolCount()).toBe(1);
+    });
+
+    it("refuses a provider it does not offer", async () => {
+      for (const path of ["/api/trials/start/google", "/api/trials/callback/google", "/api/trials/start/nobody"]) {
+        const response = await server().client.get(path);
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual(REFUSED);
+      }
+    });
+  });
+
+  describe("with trials on and no provider configured", () => {
+    const server = useTestServer({ trials: { enabled: true, providers: {} } });
+
+    it("offers no provider, and refuses a sign-in with one", async () => {
+      expect((await server().client.get("/api/trials")).body).toEqual({ enabled: true, providers: [] });
+      expect((await server().client.get("/api/trials/start/github")).body).toEqual(REFUSED);
     });
   });
 
   // The one way a School or an Audit record is ever deleted, fenced in the
   // database rather than the application (ADR-0012).
   describe("deletion, as the application's database role", () => {
-    const server = useTestServer({ trials: { enabled: true, perClientPerHour: 1000 } });
+    const server = useTestServer({ trials: { enabled: true } });
 
     /** Every School-scoped table, and how many rows each holds for this School. */
     async function rowsIn(schoolId: string): Promise<Record<string, number>> {
@@ -544,6 +691,39 @@ describe("Trial Schools", () => {
       expect(accounts.rows).toHaveLength(0);
       const schools = await server().ownerDatabase.query("SELECT 1 FROM app.school");
       expect(schools.rows).toHaveLength(0);
+      const visitors = await server().ownerDatabase.query("SELECT 1 FROM app.trial_visitor");
+      expect(visitors.rows).toHaveLength(0);
+    });
+
+    it("forgets a Trial visitor only once no Trial School of theirs remains", async () => {
+      const expired = await server().startTrial({ subject: "kept" });
+      await server().startTrial({ subject: "kept" });
+      const alone = await server().startTrial({ subject: "forgotten" });
+      await server().expireTrialSchool(expired.schoolId);
+      await server().expireTrialSchool(alone.schoolId);
+
+      await server().database.query("SELECT app.delete_expired_trial_schools()");
+
+      const { rows } = await server().ownerDatabase.query<{ schools: number }>(
+        `SELECT count(school.id)::integer AS schools
+         FROM app.trial_visitor visitor LEFT JOIN app.school school ON school.trial_visitor_id = visitor.id
+         GROUP BY visitor.id`,
+      );
+      expect(rows).toEqual([{ schools: 1 }]);
+    });
+
+    it("cannot change whose a Trial School is, or name a visitor for a real School", async () => {
+      const { schoolId } = await server().startTrial();
+      await expect(server().database.query("UPDATE app.school SET trial_visitor_id = NULL WHERE id = $1", [schoolId])).rejects.toThrow(
+        /permission denied for table school/,
+      );
+      await expect(server().database.query("DELETE FROM app.trial_visitor")).rejects.toThrow(
+        /permission denied for table trial_visitor/,
+      );
+      const { rows } = await server().database.query<{ id: string }>("SELECT id FROM app.trial_visitor");
+      await expect(
+        server().database.query("INSERT INTO app.school (name, timezone, trial_visitor_id) VALUES ('Real', 'UTC', $1)", [rows[0]!.id]),
+      ).rejects.toThrow(/school_trial_visitor_only_on_trials/);
     });
 
     it("cannot give a role account a password, or stop it being one", async () => {
@@ -562,36 +742,21 @@ describe("Trial Schools", () => {
   });
 
   describe("at most so many live at once", () => {
-    const server = useTestServer({ trials: { enabled: true, liveCap: 2, perClientPerHour: 1000 } });
+    const server = useTestServer({ trials: { enabled: true, liveCap: 2 } });
 
-    it("answers busy once the cap is reached, and starts again once one has expired", async () => {
+    it("sends the visitor back to say it is busy once the cap is reached, and starts again once one has expired", async () => {
       const first = await server().startTrial();
       await server().startTrial();
 
-      const browser = server().client.withOrigin(server().publicOrigin);
-      const busy = await browser.post("/api/trials", {});
-      expect(busy.status).toBe(503);
-      expect(busy.body).toEqual(BUSY);
-      expect(busy.headers["set-cookie"]).toBeUndefined();
+      const signIn = await server().beginTrialSignIn();
+      const callback = await server().answerAtProvider(signIn, { decision: "approve" });
+      const busy = await server().client.withCookie(signIn.flowCookie).get(callback);
+      expect(busy.status).toBe(303);
+      expect(busy.headers.location).toBe("/?trial=busy");
+      expect(setCookiesOf(busy)).toEqual([expect.stringMatching(/^__Secure-trial-sign-in=; .*Max-Age=0$/)]);
 
       await server().expireTrialSchool(first.schoolId);
-      expect((await browser.post("/api/trials", {})).status).toBe(201);
-    });
-  });
-
-  describe("at most so many started per client an hour", () => {
-    const server = useTestServer({ trials: { enabled: true, perClientPerHour: 2 } });
-
-    it("answers busy to a client over the limit, and not to another", async () => {
-      await server().startTrial({ from: "203.0.113.7" });
-      await server().startTrial({ from: "203.0.113.7" });
-
-      const busy = await server().client.withOrigin(server().publicOrigin).fromAddress("203.0.113.7").post("/api/trials", {});
-      expect(busy.status).toBe(429);
-      expect(busy.body).toEqual(BUSY);
-      expect(Number(busy.headers["retry-after"])).toBeGreaterThan(0);
-
-      await server().startTrial({ from: "203.0.113.8" });
+      await server().startTrial();
     });
   });
 
@@ -602,18 +767,20 @@ describe("Trial Schools", () => {
       const response = await server().client.get("/api/trials");
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ enabled: false });
+      expect(response.body).toEqual({ enabled: false, providers: [] });
     });
 
     it("refuses to start one, or to change role", async () => {
       const browser = server().client.withOrigin(server().publicOrigin);
-      for (const [path, body] of [
-        ["/api/trials", { timezone: "UTC" }],
-        ["/api/trials/role", { role: "faculty" }],
+      for (const [method, path] of [
+        ["GET", "/api/trials/start/github"],
+        ["GET", "/api/trials/callback/github?code=x&state=y"],
+        ["POST", "/api/trials/role"],
       ] as const) {
-        const response = await browser.post(path, body);
+        const response = await browser.request(method, path, method === "POST" ? { role: "faculty" } : undefined);
         expect(response.status).toBe(404);
         expect(response.body).toEqual(REFUSED);
+        expect(response.headers["set-cookie"]).toBeUndefined();
       }
       const { rows } = await server().database.query("SELECT 1 FROM app.school");
       expect(rows).toHaveLength(0);

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Link } from "./Link.tsx";
 import { Sheet } from "./Sheet.tsx";
 import { StartTrial } from "./StartTrial.tsx";
-import { rememberTrial } from "./trial.ts";
+import { rememberTrial, useTrialProviders } from "./trial.ts";
 
 /**
  * Where a Trial School's visitor lands once it has expired. It is no error
@@ -14,6 +14,7 @@ import { rememberTrial } from "./trial.ts";
 export function TrialEnded() {
   // Said once. Reloaded later, or reached by its path, it still says the same.
   useEffect(() => rememberTrial(null), []);
+  const providers = useTrialProviders();
 
   return (
     <Sheet
@@ -29,7 +30,7 @@ export function TrialEnded() {
         <p>
           Its two hours are up. Every Person, record and Audit record in it was invented, and none of it remains.
         </p>
-        <StartTrial label="Start a new trial" />
+        <StartTrial providers={providers} />
       </div>
     </Sheet>
   );

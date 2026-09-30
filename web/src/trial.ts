@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type StartedTrial } from "./api.ts";
+import type { TrialProvider } from "../../src/config.ts";
+import { api } from "./api.ts";
 
 /**
  * What the browser keeps about the Trial School it is in: when that School
@@ -51,39 +52,59 @@ export function useNow(): number {
   return now;
 }
 
-/** Why a trial could not be started: busy is said as busy, and anything else the one way. */
-export type StartFailure = "busy" | "failed";
+/**
+ * The providers a visitor can sign in with to start a Trial School, none
+ * until the server has said, and none if it cannot be asked: a button that
+ * could only fail would be worse than none (ADR-0013).
+ */
+export function useTrialProviders(): readonly TrialProvider[] {
+  const [providers, setProviders] = useState<readonly TrialProvider[]>([]);
+  useEffect(() => {
+    let current = true;
+    void api.trials().then((trials) => {
+      if (current && trials.ok && trials.body.enabled) {
+        setProviders(trials.body.providers);
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
+  return providers;
+}
+
+/** Why a sign-in started no trial, as the server sends the visitor back to say: `/?trial=busy`. */
+export type StartFailure = "busy" | "cancelled" | "failed";
+
+const START_FAILURES: readonly StartFailure[] = ["busy", "cancelled", "failed"];
 
 /**
- * Starting a Trial School from a button, in the browser's own timezone so its
- * dates look right to the visitor. The server falls back to UTC for one it
- * does not know. `onStarted` is given the new School once its Session is the
- * browser's.
+ * Why the sign-in this page was sent back from started no trial, if it was,
+ * taken off the address once read, so a reload or a shared link does not say
+ * it again.
  */
-export function useStartTrial(onStarted: (trial: StartedTrial) => void): {
-  start: () => Promise<void>;
-  starting: boolean;
-  failure: StartFailure | null;
-} {
-  const [starting, setStarting] = useState(false);
-  const [failure, setFailure] = useState<StartFailure | null>(null);
-  const start = async () => {
-    setStarting(true);
-    setFailure(null);
-    const started = await api.startTrial(Intl.DateTimeFormat().resolvedOptions().timeZone);
-    setStarting(false);
-    if (started.status === "started") {
-      rememberTrial(started.trial.expiresAt);
-      onStarted(started.trial);
-    } else {
-      setFailure(started.status === "busy" ? "busy" : "failed");
-    }
-  };
-  return { start, starting, failure };
+export function takeStartFailure(): StartFailure | null {
+  const url = new URL(window.location.href);
+  const why = url.searchParams.get("trial");
+  if (why === null) {
+    return null;
+  }
+  url.searchParams.delete("trial");
+  history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  return START_FAILURES.find((failure) => failure === why) ?? null;
 }
 
 /** What a visitor is told when a trial could not be started. */
 export const START_FAILED: Record<StartFailure, string> = {
   busy: "SchoolGrid is busy right now. Try again in a little while.",
+  cancelled: "Sign-in was cancelled, so no trial was started.",
   failed: "A new trial could not be started. Try again.",
 };
+
+/** Each provider as its button names it. */
+export const PROVIDER_NAMES: Record<TrialProvider, string> = { github: "GitHub" };
+
+/** Where a sign-in with this provider starts, carrying the browser's timezone so the School's dates look right. */
+export function startPath(provider: TrialProvider): string {
+  return `/api/trials/start/${provider}`;
+}

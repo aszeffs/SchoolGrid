@@ -25,7 +25,40 @@ export interface RateLimit {
 
 export const DEFAULT_RATE_LIMIT: RateLimit = { max: 100, windowMs: 60_000 };
 
-/** Whether this deployment offers Trial Schools, and how many (ADR-0012). */
+/** The outside identities a Trial visitor can prove (ADR-0013). */
+export const TRIAL_PROVIDERS = ["github"] as const;
+
+export type TrialProvider = (typeof TRIAL_PROVIDERS)[number];
+
+/**
+ * One provider's OAuth app, and where its endpoints are. The endpoints are the
+ * provider's own unless overridden, which is how a test signs in through a
+ * stand-in: the authorize endpoint is the one the visitor's browser reaches,
+ * and the token and user endpoints the ones this server does.
+ */
+export interface TrialProviderSettings {
+  clientId: string;
+  clientSecret: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  userUrl: string;
+}
+
+type Endpoints = Pick<TrialProviderSettings, "authorizeUrl" | "tokenUrl" | "userUrl">;
+
+/** Each provider's own endpoints. */
+export const TRIAL_PROVIDER_ENDPOINTS: Record<TrialProvider, Endpoints> = {
+  github: {
+    authorizeUrl: "https://github.com/login/oauth/authorize",
+    tokenUrl: "https://github.com/login/oauth/access_token",
+    userUrl: "https://api.github.com/user",
+  },
+};
+
+/**
+ * Whether this deployment offers Trial Schools, how many, and how a visitor
+ * signs in to start one (ADR-0012, ADR-0013).
+ */
 export interface TrialSettings {
   /**
    * Off unless set. A deployment that offers trials lets anyone create a
@@ -35,13 +68,18 @@ export interface TrialSettings {
   /** The most Trial Schools live at once: the hard bound on what trials may hold. */
   liveCap: number;
   /**
-   * The most trials one client address may start in an hour. Counted per
-   * instance, as the rate limit is, so it is only a first line.
+   * The secret a Trial visitor's identity is hashed with, and a sign-in's flow
+   * cookie signed with. Required when trials are on.
    */
-  perClientPerHour: number;
+  identityKey: string;
+  /** The providers a visitor may sign in with: each one whose OAuth app is configured. */
+  providers: Partial<Record<TrialProvider, TrialProviderSettings>>;
 }
 
-export const DEFAULT_TRIAL_SETTINGS: TrialSettings = { enabled: false, liveCap: 30, perClientPerHour: 2 };
+export const DEFAULT_TRIAL_SETTINGS: TrialSettings = { enabled: false, liveCap: 30, identityKey: "", providers: {} };
+
+/** The shortest identity key accepted: 32 characters, as a 256-bit key written out is at least. */
+export const MIN_TRIAL_IDENTITY_KEY_LENGTH = 32;
 
 export interface Config extends Partial<MigrationConfig> {
   /** The application's own least-privilege role. See docs/database-roles.md. */
@@ -223,10 +261,71 @@ export function loadConfig(): Config {
     },
     publicOrigin: parsePublicOrigin(requireEnv("PUBLIC_ORIGIN")),
     buildInfo: loadBuildInfo(),
-    trials: {
-      enabled: booleanEnv("TRIALS_ENABLED"),
-      liveCap: positiveIntegerEnv("TRIAL_LIVE_CAP", DEFAULT_TRIAL_SETTINGS.liveCap),
-      perClientPerHour: positiveIntegerEnv("TRIAL_PER_IP_HOUR", DEFAULT_TRIAL_SETTINGS.perClientPerHour),
-    },
+    trials: loadTrialSettings(),
   };
+}
+
+/**
+ * Trials, off unless TRIALS_ENABLED. On, they need an identity key, and offer
+ * each provider whose client id and secret are both set.
+ */
+function loadTrialSettings(): TrialSettings {
+  const enabled = booleanEnv("TRIALS_ENABLED");
+  const liveCap = positiveIntegerEnv("TRIAL_LIVE_CAP", DEFAULT_TRIAL_SETTINGS.liveCap);
+  if (!enabled) {
+    return { ...DEFAULT_TRIAL_SETTINGS, liveCap };
+  }
+  const identityKey = optionalEnv("TRIAL_IDENTITY_KEY");
+  if (identityKey === undefined || identityKey.length < MIN_TRIAL_IDENTITY_KEY_LENGTH) {
+    throw new Error(
+      `TRIAL_IDENTITY_KEY must be a secret of at least ${MIN_TRIAL_IDENTITY_KEY_LENGTH} characters when TRIALS_ENABLED is true`,
+    );
+  }
+  const providers: TrialSettings["providers"] = {};
+  for (const provider of TRIAL_PROVIDERS) {
+    const settings = loadTrialProvider(provider);
+    if (settings !== null) {
+      providers[provider] = settings;
+    }
+  }
+  return { enabled, liveCap, identityKey, providers };
+}
+
+/** One provider's settings, from `TRIAL_<PROVIDER>_*`, or null when its OAuth app is not configured. */
+function loadTrialProvider(provider: TrialProvider): TrialProviderSettings | null {
+  const prefix = `TRIAL_${provider.toUpperCase()}_`;
+  const clientId = optionalEnv(`${prefix}CLIENT_ID`);
+  const clientSecret = optionalEnv(`${prefix}CLIENT_SECRET`);
+  if (clientId === undefined && clientSecret === undefined) {
+    return null;
+  }
+  if (clientId === undefined || clientSecret === undefined) {
+    throw new Error(`${prefix}CLIENT_ID and ${prefix}CLIENT_SECRET must be set together`);
+  }
+  const endpoints = TRIAL_PROVIDER_ENDPOINTS[provider];
+  return {
+    clientId,
+    clientSecret,
+    authorizeUrl: httpUrlEnv(`${prefix}AUTHORIZE_URL`, endpoints.authorizeUrl),
+    tokenUrl: httpUrlEnv(`${prefix}TOKEN_URL`, endpoints.tokenUrl),
+    userUrl: httpUrlEnv(`${prefix}USER_URL`, endpoints.userUrl),
+  };
+}
+
+/** An http or https URL, or the fallback when unset. */
+function httpUrlEnv(name: string, fallback: string): string {
+  const raw = optionalEnv(name);
+  if (raw === undefined) {
+    return fallback;
+  }
+  let url: URL | null = null;
+  try {
+    url = new URL(raw);
+  } catch {
+    // Reported below, as any other URL that is not one.
+  }
+  if (url === null || (url.protocol !== "https:" && url.protocol !== "http:")) {
+    throw new Error(`${name} must be an http or https URL, received: ${JSON.stringify(raw)}`);
+  }
+  return url.href;
 }
