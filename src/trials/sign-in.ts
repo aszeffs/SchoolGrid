@@ -21,6 +21,9 @@ const PROVIDERS: Record<TrialProvider, { scope: string | null; subjectOf: (user:
   // No scope reads only what is public. The numeric id, unlike the login,
   // outlives a change of username.
   github: { scope: null, subjectOf: (user) => user["id"] },
+  // `openid` alone is the least Google grants: the userinfo endpoint then
+  // answers the subject, and no name or email.
+  google: { scope: "openid", subjectOf: (user) => user["sub"] },
 };
 
 /** Where every provider sends the visitor back, each under its own name: `/api/trials/callback/github`. */

@@ -26,7 +26,7 @@ export interface RateLimit {
 export const DEFAULT_RATE_LIMIT: RateLimit = { max: 100, windowMs: 60_000 };
 
 /** The outside identities a Trial visitor can prove (ADR-0013). */
-export const TRIAL_PROVIDERS = ["github"] as const;
+export const TRIAL_PROVIDERS = ["github", "google"] as const;
 
 export type TrialProvider = (typeof TRIAL_PROVIDERS)[number];
 
@@ -52,6 +52,11 @@ export const TRIAL_PROVIDER_ENDPOINTS: Record<TrialProvider, Endpoints> = {
     authorizeUrl: "https://github.com/login/oauth/authorize",
     tokenUrl: "https://github.com/login/oauth/access_token",
     userUrl: "https://api.github.com/user",
+  },
+  google: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    userUrl: "https://openidconnect.googleapis.com/v1/userinfo",
   },
 };
 

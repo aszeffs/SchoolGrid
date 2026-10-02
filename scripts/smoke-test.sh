@@ -30,9 +30,9 @@
 #
 # Before that command, the image is started once more as the public showcase
 # runs it: without the owner's credentials and with TRIALS_ENABLED on, its
-# visitors signing in with GitHub at a stand-in OAuth provider this script runs
-# on the host. SCHOOLGRID_TRIALS_ORIGIN tells the command where. The first
-# container keeps trials off, as every other deployment does.
+# visitors signing in with GitHub or Google at a stand-in OAuth provider this
+# script runs on the host. SCHOOLGRID_TRIALS_ORIGIN tells the command where.
+# The first container keeps trials off, as every other deployment does.
 #
 # On the way out, pass or fail, it prints the most /api requests each of those
 # two containers was sent in any one minute, against the rate limit it ran with.
@@ -276,19 +276,30 @@ start_image() {
   if [ "$mode" = "with-owner" ]; then
     args+=(--env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}")
   elif [ "$mode" = "trials" ]; then
-    # GitHub sign-in, at the stand-in provider: the browser reaches its
-    # consent page on this host, and the container its token and user
-    # endpoints through the same host-gateway name it reaches Postgres by.
+    # GitHub and Google sign-in, both at the stand-in provider: the browser
+    # reaches its consent page on this host, and the container its token and
+    # user endpoints through the same host-gateway name it reaches Postgres by.
+    # It names the subject as each provider does, GitHub's `id` at /user and
+    # Google's `sub` at /userinfo.
     local provider="http://${CONTAINER_POSTGRES_HOST}:${FAKE_PROVIDER_PORT}"
     args+=(
       --env "TRIALS_ENABLED=true"
       --env "TRIAL_IDENTITY_KEY=smoke-test-identity-key-not-a-secret"
-      --env "TRIAL_GITHUB_CLIENT_ID=${FAKE_PROVIDER_CLIENT_ID}"
-      --env "TRIAL_GITHUB_CLIENT_SECRET=${FAKE_PROVIDER_CLIENT_SECRET}"
-      --env "TRIAL_GITHUB_AUTHORIZE_URL=http://localhost:${FAKE_PROVIDER_PORT}/authorize"
-      --env "TRIAL_GITHUB_TOKEN_URL=${provider}/token"
-      --env "TRIAL_GITHUB_USER_URL=${provider}/user"
     )
+    local name user_path
+    for name in GITHUB GOOGLE; do
+      case "$name" in
+        GITHUB) user_path=/user ;;
+        GOOGLE) user_path=/userinfo ;;
+      esac
+      args+=(
+        --env "TRIAL_${name}_CLIENT_ID=${FAKE_PROVIDER_CLIENT_ID}"
+        --env "TRIAL_${name}_CLIENT_SECRET=${FAKE_PROVIDER_CLIENT_SECRET}"
+        --env "TRIAL_${name}_AUTHORIZE_URL=http://localhost:${FAKE_PROVIDER_PORT}/authorize"
+        --env "TRIAL_${name}_TOKEN_URL=${provider}/token"
+        --env "TRIAL_${name}_USER_URL=${provider}${user_path}"
+      )
+    done
   fi
 
   local id

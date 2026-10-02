@@ -131,7 +131,7 @@ describe("Trial Schools", () => {
       const response = await server().client.get("/api/trials");
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ enabled: true, providers: ["github"] });
+      expect(response.body).toEqual({ enabled: true, providers: ["github", "google"] });
     });
 
     it("starts a private School of invented data, around the visitor's today, as its School Administrator", async () => {
@@ -565,6 +565,42 @@ describe("Trial Schools", () => {
       ]);
     });
 
+    it("sends a Google visitor to Google asking only for `openid`, to come back to Google's own callback", async () => {
+      const { location } = await server().beginTrialSignIn({ provider: "google" });
+
+      expect(Object.fromEntries(location.searchParams)).toEqual(
+        expect.objectContaining({ scope: "openid", redirect_uri: `${server().publicOrigin}/api/trials/callback/google` }),
+      );
+      // GitHub reads only what is public, so it is asked for no scope at all.
+      expect((await server().beginTrialSignIn()).location.searchParams.has("scope")).toBe(false);
+    });
+
+    it("starts a trial for a Google visitor, and returns them to it, as for a GitHub one", async () => {
+      const first = await server().startTrial({ provider: "google", subject: "110248495921238986420" });
+
+      const again = await server().startTrial({ provider: "google", subject: "110248495921238986420" });
+
+      expect(again.schoolId).toBe(first.schoolId);
+      expect(await schoolCount()).toBe(1);
+      const { rows } = await server().ownerDatabase.query<{ identity: Buffer }>("SELECT identity FROM app.trial_visitor");
+      const expected = createHmac("sha256", createHmac("sha256", TEST_IDENTITY_KEY).update("schoolgrid-trial-identity").digest())
+        .update("google:110248495921238986420")
+        .digest();
+      expect(rows.map((row) => row.identity.equals(expected))).toEqual([true]);
+    });
+
+    it("counts the same subject at GitHub and at Google as two Trial visitors, with two Schools", async () => {
+      const github = await server().startTrial({ provider: "github", subject: "583231" });
+      const google = await server().startTrial({ provider: "google", subject: "583231" });
+
+      expect(google.schoolId).not.toBe(github.schoolId);
+      expect(await schoolCount()).toBe(2);
+      const { rows } = await server().ownerDatabase.query<{ count: number }>(
+        "SELECT count(*)::integer AS count FROM app.trial_visitor",
+      );
+      expect(rows[0]!.count).toBe(2);
+    });
+
     it("starts a new School at once for a visitor whose trial has expired", async () => {
       const first = await server().startTrial({ subject: "583231" });
       await server().expireTrialSchool(first.schoolId);
@@ -657,17 +693,32 @@ describe("Trial Schools", () => {
       }
     });
 
-    it("refuses a provider it does not offer", async () => {
-      for (const path of ["/api/trials/start/google", "/api/trials/callback/google", "/api/trials/start/nobody"]) {
-        const response = await server().client.get(path);
+    it("refuses a provider it does not know", async () => {
+      for (const path of ["/api/trials/start/nobody", "/api/trials/callback/nobody"]) {
+        const response = await server().client.withHeader("sec-fetch-site", "same-origin").get(path);
         expect(response.status).toBe(404);
         expect(response.body).toEqual(REFUSED);
       }
     });
   });
 
+  describe("with trials on and only one provider configured", () => {
+    const server = useTestServer({ trials: { enabled: true, providers: ["google"] } });
+
+    it("offers only that one, and refuses a sign-in with the other", async () => {
+      expect((await server().client.get("/api/trials")).body).toEqual({ enabled: true, providers: ["google"] });
+      for (const path of ["/api/trials/start/github", "/api/trials/callback/github?code=x&state=y"]) {
+        const response = await server().client.withHeader("sec-fetch-site", "same-origin").get(path);
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual(REFUSED);
+        expect(response.headers["set-cookie"]).toBeUndefined();
+      }
+      expect((await server().startTrial({ provider: "google" })).schoolId).toEqual(expect.any(String));
+    });
+  });
+
   describe("with trials on and no provider configured", () => {
-    const server = useTestServer({ trials: { enabled: true, providers: {} } });
+    const server = useTestServer({ trials: { enabled: true, providers: [] } });
 
     it("offers no provider, and refuses a sign-in with one", async () => {
       expect((await server().client.get("/api/trials")).body).toEqual({ enabled: true, providers: [] });

@@ -29,6 +29,9 @@ export interface FakeOAuthProviderOptions {
   port?: number;
 }
 
+/** Each endpoint naming who signed in, and the field it names them in. */
+const USER_ENDPOINTS: Record<string, string> = { "/user": "id", "/userinfo": "sub" };
+
 interface Grant {
   subject: string;
   clientId: string;
@@ -60,11 +63,14 @@ export async function startFakeOAuthProvider({
     if (url.pathname === "/token" && request.method === "POST") {
       return exchange(request, response, await formOf(request));
     }
-    if (url.pathname === "/user" && request.method === "GET") {
+    // GitHub names its subject `id` at its user endpoint, Google `sub` at its
+    // userinfo endpoint. Each is answered only where its provider answers it,
+    // so a provider read through the other's field finds no subject.
+    const field = request.method === "GET" ? USER_ENDPOINTS[url.pathname] : undefined;
+    if (field !== undefined) {
       const token = /^Bearer (.+)$/i.exec(request.headers.authorization ?? "")?.[1];
       const subject = token === undefined ? undefined : tokens.get(token);
-      // GitHub names its subject `id`, Google `sub`: both are given.
-      return subject === undefined ? send(response, 401, { error: "invalid_token" }) : send(response, 200, { id: subject, sub: subject });
+      return subject === undefined ? send(response, 401, { error: "invalid_token" }) : send(response, 200, { [field]: subject });
     }
     send(response, 404, { error: "not_found" });
   }

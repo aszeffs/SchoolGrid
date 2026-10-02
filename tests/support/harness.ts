@@ -18,9 +18,11 @@ import { provisionSchool, type ProvisionedSchool } from "../../src/platform/inde
 import {
   DEFAULT_TRIAL_SETTINGS,
   parsePublicOrigin,
+  TRIAL_PROVIDERS,
   type BuildInfo,
   type PublicOrigin,
   type RateLimit,
+  type TrialProvider,
   type TrialSettings,
 } from "../../src/config.ts";
 import { loadWebApp } from "../../src/http/web-app.ts";
@@ -231,18 +233,19 @@ export interface TestServer {
    */
   markInvitationRedeemed(invitationId: string, account: UserAccount): Promise<void>;
   /**
-   * Starts a Trial School as a browser does: signing in with GitHub through the
-   * fake provider, as `subject` (a fresh one unless given), and following the
-   * redirect back. Returns a client sending back the Session it was given as
-   * its School Administrator. That client sends the public `Origin` too, so it
-   * can change role and make changes as that browser would.
+   * Starts a Trial School as a browser does: signing in with `provider`
+   * (GitHub unless given) through the fake provider, as `subject` (a fresh one
+   * unless given), and following the redirect back. Returns a client sending
+   * back the Session it was given as its School Administrator. That client
+   * sends the public `Origin` too, so it can change role and make changes as
+   * that browser would.
    */
-  startTrial(options?: { timezone?: string; subject?: string }): Promise<StartedTrial>;
+  startTrial(options?: { timezone?: string; subject?: string; provider?: TrialProvider }): Promise<StartedTrial>;
   /**
    * Begins a trial sign-in, as following the front page's link does, and
    * returns where it sent the browser and the flow cookie it set.
    */
-  beginTrialSignIn(options?: { timezone?: string; client?: TestClient }): Promise<TrialSignIn>;
+  beginTrialSignIn(options?: { timezone?: string; client?: TestClient; provider?: TrialProvider }): Promise<TrialSignIn>;
   /**
    * Answers the fake provider's consent page as a visitor would, approving as
    * `subject` or cancelling, and returns the callback path and query it sends
@@ -381,6 +384,9 @@ export interface TrialSignIn {
 /** The OAuth app every test server with trials is configured with, at the fake provider. */
 const FAKE_CLIENT = { clientId: "schoolgrid-test", clientSecret: "fake-client-secret" };
 
+/** Where the fake provider answers who signed in, as each provider would: GitHub's `id`, Google's `sub`. */
+const FAKE_USER_PATHS: Record<TrialProvider, string> = { github: "/user", google: "/userinfo" };
+
 /** The identity key every test server with trials is configured with. */
 export const TEST_IDENTITY_KEY = "test-identity-key-".padEnd(48, "0");
 
@@ -398,9 +404,10 @@ export interface TestServerOptions {
   buildInfo?: BuildInfo;
   /**
    * Whether the server offers Trial Schools, and how many. Unless given, it
-   * offers none; given, any setting left out is the default.
+   * offers none; given, any setting left out is the default. `providers` are
+   * those configured, each at the fake provider: both unless given.
    */
-  trials?: Partial<TrialSettings>;
+  trials?: Partial<Omit<TrialSettings, "providers">> & { providers?: readonly TrialProvider[] };
   /**
    * Adds routes to the built server before it starts, for a test of what the
    * server does to any route's response, whatever the route does itself.
@@ -479,15 +486,18 @@ export function useTestServer({
             trials: {
               ...DEFAULT_TRIAL_SETTINGS,
               identityKey: TEST_IDENTITY_KEY,
-              providers: {
-                github: {
-                  ...FAKE_CLIENT,
-                  authorizeUrl: `${fakeProvider!.url}/authorize`,
-                  tokenUrl: `${fakeProvider!.url}/token`,
-                  userUrl: `${fakeProvider!.url}/user`,
-                },
-              },
               ...trials,
+              providers: Object.fromEntries(
+                (trials.providers ?? TRIAL_PROVIDERS).map((provider) => [
+                  provider,
+                  {
+                    ...FAKE_CLIENT,
+                    authorizeUrl: `${fakeProvider!.url}/authorize`,
+                    tokenUrl: `${fakeProvider!.url}/token`,
+                    userUrl: `${fakeProvider!.url}${FAKE_USER_PATHS[provider]}`,
+                  },
+                ]),
+              ),
             },
           }),
       onRoute: (route) => routes.push(route),
@@ -497,10 +507,10 @@ export function useTestServer({
 
     const client = buildClient(app);
 
-    const beginTrialSignIn: TestServer["beginTrialSignIn"] = async ({ timezone, client: browser = client } = {}) => {
+    const beginTrialSignIn: TestServer["beginTrialSignIn"] = async ({ timezone, client: browser = client, provider = "github" } = {}) => {
       // What a browser says of a link followed on the public origin.
       const response = await browser.withHeader("sec-fetch-site", "same-origin").get(
-        `/api/trials/start/github${timezone === undefined ? "" : `?timezone=${encodeURIComponent(timezone)}`}`,
+        `/api/trials/start/${provider}${timezone === undefined ? "" : `?timezone=${encodeURIComponent(timezone)}`}`,
       );
       if (response.status !== 303) {
         throw new Error(`beginTrialSignIn expected a redirect but received status ${response.status}`);
@@ -584,8 +594,11 @@ export function useTestServer({
           [invitationId, account.id],
         );
       },
-      startTrial: async ({ timezone, subject } = {}) => {
-        const signIn = await beginTrialSignIn(timezone === undefined ? {} : { timezone });
+      startTrial: async ({ timezone, subject, provider } = {}) => {
+        const signIn = await beginTrialSignIn({
+          ...(timezone === undefined ? {} : { timezone }),
+          ...(provider === undefined ? {} : { provider }),
+        });
         const callback = await answerAtProvider(signIn, { decision: "approve", ...(subject === undefined ? {} : { subject }) });
         const response = await client.withCookie(signIn.flowCookie).get(callback);
         const schoolId = /^\/schools\/([^/]+)\/persons$/.exec(String(response.headers.location))?.[1];
