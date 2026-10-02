@@ -5,7 +5,7 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
  * School settings: where a School Administrator reads and corrects the
- * School's timezone and its Attendance window. Which School date an instant
+ * School's timezone, its Attendance window, and its Result value scale. Which School date an instant
  * falls on, and which dates a window change opens or closes, are the HTTP
  * suite's to assert; this is about the page.
  *
@@ -18,17 +18,28 @@ function timezoneShown(page: Page) {
   return page.getByRole("main").locator(".facts dd").first();
 }
 
-/** A School Administrator on the second School's settings, with its timezone and window put back to the seeded ones. */
+/**
+ * A School Administrator on the second School's settings, with its timezone
+ * and window put back to the seeded ones, and its Result value scale to A to F.
+ * A scale is never put back as such: A to F is saved again as a new version,
+ * unless it is what the School already holds.
+ */
 async function onSettings(page: Page): Promise<{ schoolId: string }> {
   const { schoolAdministrator, schools } = seeded();
   await signIn(page, schoolAdministrator);
   await openSchool(page, schools[1]!);
   const schoolId = await schoolIdOf(page, schools[1]!);
+  const headers = { origin: new URL(page.url()).origin };
   const restored = await page.request.patch(`/api/schools/${schoolId}/settings`, {
-    headers: { origin: new URL(page.url()).origin },
+    headers,
     data: { timezone: "Europe/London", attendanceWindow: 7 },
   });
   expect(restored.ok()).toBe(true);
+  const scale = await page.request.post(`/api/schools/${schoolId}/result-value-scale`, {
+    headers,
+    data: { values: ["A", "B", "C", "D", "F"].map((label) => ({ label })) },
+  });
+  expect([201, 409]).toContain(scale.status());
   await openSection(page, "Settings");
   await expect(page.getByRole("heading", { level: 1, name: "School settings" })).toBeVisible();
   return { schoolId };
@@ -113,6 +124,67 @@ test("the Attendance window changes only once its confirmation names what it clo
   expect(patches).toEqual([{ attendanceWindow: 3 }]);
 });
 
+test("the Result value scale is edited in place and saved as a new version", async ({ page, audit }) => {
+  await onSettings(page);
+  const section = page.getByRole("region", { name: "Result value scale" });
+  const shown = section.locator(".scale-values li");
+  await expect(shown).toHaveText(["A", "B", "C", "D", "F"]);
+  const version = Number((await section.getByText(/^Version \d+\./).textContent())!.match(/\d+/)![0]);
+  const form = page.getByRole("form", { name: "Change the Result value scale" });
+  const posts: unknown[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/result-value-scale")) {
+      posts.push(request.postDataJSON());
+    }
+  });
+
+  // Two labels the same but for letter case are caught before anything is sent.
+  await form.getByRole("group", { name: "Value 5" }).getByLabel("Label").fill("d");
+  await form.getByRole("button", { name: "Review scale" }).click();
+  await expect(form.getByRole("alert")).toHaveText(
+    "Values 4 and 5 are both labelled d. Each label must differ, ignoring letter case.",
+  );
+  await form.getByRole("group", { name: "Value 5" }).getByLabel("Label").fill("F");
+
+  // Add a value, describe it, and move it to the top from the keyboard.
+  await form.getByRole("button", { name: "Add a value" }).click();
+  const added = form.getByRole("group", { name: "Value 6" });
+  await expect(added.getByLabel("Label")).toBeFocused();
+  await page.keyboard.type("A+");
+  await added.getByLabel("Description (optional)").fill("With distinction");
+  await form.getByRole("button", { name: "Move value 6 up" }).focus();
+  for (let press = 0; press < 5; press += 1) {
+    await page.keyboard.press("Enter");
+  }
+  // At the top it can move up no further, so the focus is on the way down.
+  await expect(form.getByRole("button", { name: "Move value 1 down" })).toBeFocused();
+  await expect(form.getByRole("group", { name: "Value 1" }).getByLabel("Label")).toHaveValue("A+");
+  await form.getByRole("button", { name: "Remove value 5" }).click();
+
+  await form.getByRole("button", { name: "Review scale" }).click();
+  const dialog = page.getByRole("dialog", { name: "Save a new version of the scale?" });
+  await expect(dialog).toContainText(`Version ${version + 1} will hold A+, A, B, C, F, in that order.`);
+  await audit(page);
+  await dialog.getByRole("button", { name: `Save version ${version + 1}` }).click();
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("status")).toHaveText(`Version ${version + 1} of the Result value scale is saved.`);
+  await expect(shown).toHaveText(["A+ — With distinction", "A", "B", "C", "F"]);
+  expect(posts).toEqual([
+    {
+      values: [
+        { label: "A+", description: "With distinction" },
+        ...["A", "B", "C", "F"].map((label) => ({ label, description: null })),
+      ],
+    },
+  ]);
+
+  // What the sheet shows is what the server holds.
+  await page.reload();
+  await expect(shown).toHaveText(["A+ — With distinction", "A", "B", "C", "F"]);
+  await expect(section.getByText(`Version ${version + 1}.`, { exact: false })).toBeVisible();
+});
+
 test("navigation offers Settings only to a School Administrator", async ({ page }) => {
   const { faculty, schools } = seeded();
   await signIn(page, faculty);
@@ -132,7 +204,7 @@ test.describe("on a phone", () => {
     test(`the sheet holds 360px in the ${colorScheme} rendition`, async ({ page, audit }) => {
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
       await onSettings(page);
-      for (const name of ["Change timezone", "Review change"]) {
+      for (const name of ["Change timezone", "Review change", "Move value 1 down", "Review scale"]) {
         const button = page.getByRole("button", { name });
         await button.scrollIntoViewIfNeeded();
         await expect(button).toBeInViewport();

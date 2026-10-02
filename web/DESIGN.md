@@ -291,7 +291,7 @@ Soft, consistent corners: 10px on controls, fields, notices and the School block
 ### Buttons
 - **Primary:** indigo fill, white words at 650, 10px corner, 44px tall, a 1px contact shadow and a faint inner highlight. Hover deepens; press drops 1px.
 - **Ghost (secondary):** a white block: surface fill, strong-rule border, ink words, the block shadow. Hover darkens the border.
-- **Quiet:** words on nothing, soft ink, 40px tall; hover lays the wash and inks the words. Sign out and Start over.
+- **Quiet:** words on nothing, soft ink, 40px tall; hover lays the wash and inks the words. Sign out.
 - **Stamp:** an action that takes something away: surface fill, 55% alarm border, alarm words; hover adds a 10% alarm tint.
 - **Held:** a dashed border and a diagonal hatch of the wash, soft-ink words, no shadow.
 

@@ -55,7 +55,10 @@ export type ConflictDetail =
   | { conflict: "not_rostered_on_date" }
   /** The Student's Enrollment had ended by the School date. */
   | { conflict: "enrollment_ended" }
-  /** A Correction request would propose the value its target already holds. */
+  /**
+   * A Correction request would propose the value its target already holds, or
+   * a Result value scale save the values the current version already holds.
+   */
   | { conflict: "unchanged" }
   /** The Correction request has already been approved, rejected, or withdrawn. */
   | { conflict: "not_pending" }
@@ -65,7 +68,18 @@ export type ConflictDetail =
    */
   | { conflict: "own_request" }
   /** The Correction request's target no longer holds its before value: approving it would overwrite a newer one. */
-  | { conflict: "target_changed" };
+  | { conflict: "target_changed" }
+  /** A Term result Correction request names a result that is a draft, or none: a draft is changed by saving it. */
+  | { conflict: "not_published" }
+  /** A Term result would be given a value the School's current Result value scale does not hold. */
+  | { conflict: "value_not_in_scale" }
+  /**
+   * Publication waits while these active roster members of the Class Offering
+   * have no value, each named so the publisher knows whose to give.
+   */
+  | { conflict: "values_missing"; students: { id: string; displayName: string }[] }
+  /** Every result of the Class Offering carrying a value is already published. */
+  | { conflict: "nothing_to_publish" };
 
 /**
  * Thrown by a handler whose caller was authorized and sent a well-formed

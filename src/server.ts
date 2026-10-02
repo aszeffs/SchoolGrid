@@ -10,12 +10,12 @@ import {
 } from "./config.ts";
 import { recordAuthenticationAttempt } from "./audit/index.ts";
 import { registerAcademicStructureRoutes } from "./academic-structure/routes.ts";
-import { registerCorrectionRequestRoutes } from "./attendance/correction-request-routes.ts";
 import { registerAttendanceRoutes } from "./attendance/routes.ts";
 import { registerAccessRoutes } from "./access/routes.ts";
 import { registerAuditRoutes } from "./audit/routes.ts";
 import { createAuthenticator, registerAuthenticationRoutes } from "./authentication/index.ts";
 import { registerCalendarRoutes } from "./calendar/routes.ts";
+import { registerCorrectionRequestRoutes } from "./correction-requests/routes.ts";
 import type { Database } from "./db/pool.ts";
 import { API_PREFIX } from "./http/api.ts";
 import { acceptEveryBody } from "./http/body-parsing.ts";
@@ -27,6 +27,9 @@ import { registerSecurityHeaders, setSecurityHeaders, type CacheControlFor } fro
 import { cacheControlFor, serveWebApp, webAppFileFor, type WebApp } from "./http/web-app.ts";
 import { registerIdentityRoutes } from "./identity/routes.ts";
 import { registerPlatformRoutes } from "./platform/routes.ts";
+import { registerResultRoutes } from "./results/routes.ts";
+import { registerTermResultRoutes } from "./results/term-result-routes.ts";
+import { registerTermReportRoutes } from "./results/term-report-routes.ts";
 import { registerTrialRoutes } from "./trials/routes.ts";
 
 export interface ServerOptions {
@@ -166,6 +169,9 @@ export function buildServer({
       registerAcademicStructureRoutes(api, database, authenticator);
       registerAttendanceRoutes(api, database, authenticator);
       registerCorrectionRequestRoutes(api, database, authenticator);
+      registerResultRoutes(api, database, authenticator);
+      registerTermResultRoutes(api, database, authenticator);
+      registerTermReportRoutes(api, database, authenticator);
       registerPlatformRoutes(api, database, authenticator);
       registerTrialRoutes(api, { database, authenticator, publicOrigin, settings: trials });
     },

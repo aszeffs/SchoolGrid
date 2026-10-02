@@ -13,12 +13,13 @@ const PATHS = {
   schools: "/schools",
   signIn: "/sign-in",
   invitation: "/invitation",
-  howThisWasBuilt: "/how-this-was-built",
   trialEnded: "/trial-ended",
   account: "/schools/:schoolId/account",
   classes: "/schools/:schoolId/classes",
   yourAttendance: "/schools/:schoolId/attendance",
+  yourTermReport: "/schools/:schoolId/term-report",
   persons: "/schools/:schoolId/persons",
+  termReport: "/schools/:schoolId/persons/:personId/term-report",
   invitations: "/schools/:schoolId/invitations",
   memberships: "/schools/:schoolId/memberships",
   enrollments: "/schools/:schoolId/enrollments",
@@ -30,6 +31,7 @@ const PATHS = {
   classOffering: "/schools/:schoolId/class-offerings/:classOfferingId",
   attendance: "/schools/:schoolId/class-offerings/:classOfferingId/attendance",
   attendanceOn: "/schools/:schoolId/class-offerings/:classOfferingId/attendance/:date",
+  termResults: "/schools/:schoolId/class-offerings/:classOfferingId/term-results",
   correctionRequests: "/schools/:schoolId/correction-requests",
   settings: "/schools/:schoolId/settings",
 } as const;
@@ -107,6 +109,8 @@ const WITHIN = {
   classOffering: "classOfferings",
   attendance: "classOfferings",
   attendanceOn: "classOfferings",
+  termResults: "classOfferings",
+  termReport: "persons",
 } as const satisfies Partial<Record<SchoolRouteName, SchoolRouteName>>;
 
 /** A page within a School that is a section of its own, reached from the navigation with the School alone. */
@@ -136,6 +140,7 @@ export const SECTIONS: readonly Section[] = [
   { name: "account", label: "Your account", reachedBy: null },
   { name: "classes", label: "Your classes", reachedBy: ["faculty", "student"], reachedByTaught: true },
   { name: "yourAttendance", label: "Your attendance", reachedBy: ["student"] },
+  { name: "yourTermReport", label: "Your Term report", reachedBy: ["student"] },
   { name: "persons", label: "People", reachedBy: null },
   { name: "invitations", label: "Invitations", reachedBy: ["school_administrator"] },
   { name: "memberships", label: "Roles", reachedBy: ["school_administrator"] },

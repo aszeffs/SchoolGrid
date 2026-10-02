@@ -1,4 +1,3 @@
-import { HowThisWasBuilt } from "./HowThisWasBuilt.tsx";
 import { Landing } from "./Landing.tsx";
 import { RedeemInvitation } from "./RedeemInvitation.tsx";
 import { SignedIn } from "./Shell.tsx";
@@ -15,8 +14,6 @@ export function App() {
       return <SignIn />;
     case "invitation":
       return <RedeemInvitation />;
-    case "howThisWasBuilt":
-      return <HowThisWasBuilt />;
     case "trialEnded":
       return <TrialEnded />;
     default:

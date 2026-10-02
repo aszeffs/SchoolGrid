@@ -29,9 +29,10 @@
 # drives the image that ships, and why it needs no boot script of its own.
 #
 # Before that command, the image is started once more as the public showcase
-# runs it: without the owner's credentials and with TRIALS_ENABLED on.
-# SCHOOLGRID_TRIALS_ORIGIN tells the command where. The first container keeps
-# trials off, as every other deployment does.
+# runs it: without the owner's credentials and with TRIALS_ENABLED on, its
+# visitors signing in with GitHub or Google at a stand-in OAuth provider this
+# script runs on the host. SCHOOLGRID_TRIALS_ORIGIN tells the command where.
+# The first container keeps trials off, as every other deployment does.
 #
 # On the way out, pass or fail, it prints the most /api requests each of those
 # two containers was sent in any one minute, against the rate limit it ran with.
@@ -71,11 +72,14 @@ SMOKE_POLL_INTERVAL_SECONDS="${SMOKE_POLL_INTERVAL_SECONDS:-2}"
 # The rate limit every container here runs with: see `start_image` for why it
 # is wider than production's, and `report_headroom` for how close it came.
 RATE_LIMIT_MAX="${SMOKE_RATE_LIMIT_MAX:-1000}"
-# How many Trial Schools the container offering them lets one client start
-# an hour.
-# Production allows 2 (DEFAULT_TRIAL_SETTINGS in src/config.ts); the browser
-# suite starts every trial from this one IP, for the same reason as above.
-TRIAL_PER_IP_HOUR="${SMOKE_TRIAL_PER_IP_HOUR:-1000}"
+# The stand-in OAuth provider the container offering trials signs visitors in
+# through (tests/support/fake-oauth-provider.ts), where it listens on this
+# host, and the command that runs it, from the repository's root.
+FAKE_PROVIDER_PORT="${SMOKE_FAKE_PROVIDER_PORT:-3002}"
+FAKE_PROVIDER_COMMAND="${SMOKE_FAKE_PROVIDER_COMMAND:-node tests/support/fake-oauth-provider-cli.ts}"
+FAKE_PROVIDER_CLIENT_ID="schoolgrid-smoke"
+FAKE_PROVIDER_CLIENT_SECRET="smoke-client-secret"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # `localhost` rather than the loopback address. Browsers keep a `Secure` cookie
 # over plain http only on a host they treat as a secure context, and the image's
@@ -175,6 +179,9 @@ cleanup() {
   for id in ${containers[@]+"${containers[@]}"}; do
     docker rm --force "$id" >/dev/null 2>&1 || true
   done
+  if [ -n "${fake_provider_pid:-}" ]; then
+    kill "$fake_provider_pid" 2>/dev/null || true
+  fi
   if [ -n "$taken_from_record" ]; then
     restore_record || echo "(the migration record could not be restored)" >&2
   fi
@@ -269,7 +276,30 @@ start_image() {
   if [ "$mode" = "with-owner" ]; then
     args+=(--env "MIGRATION_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}")
   elif [ "$mode" = "trials" ]; then
-    args+=(--env "TRIALS_ENABLED=true" --env "TRIAL_PER_IP_HOUR=${TRIAL_PER_IP_HOUR}")
+    # GitHub and Google sign-in, both at the stand-in provider: the browser
+    # reaches its consent page on this host, and the container its token and
+    # user endpoints through the same host-gateway name it reaches Postgres by.
+    # It names the subject as each provider does, GitHub's `id` at /user and
+    # Google's `sub` at /userinfo.
+    local provider="http://${CONTAINER_POSTGRES_HOST}:${FAKE_PROVIDER_PORT}"
+    args+=(
+      --env "TRIALS_ENABLED=true"
+      --env "TRIAL_IDENTITY_KEY=smoke-test-identity-key-not-a-secret"
+    )
+    local name user_path
+    for name in GITHUB GOOGLE; do
+      case "$name" in
+        GITHUB) user_path=/user ;;
+        GOOGLE) user_path=/userinfo ;;
+      esac
+      args+=(
+        --env "TRIAL_${name}_CLIENT_ID=${FAKE_PROVIDER_CLIENT_ID}"
+        --env "TRIAL_${name}_CLIENT_SECRET=${FAKE_PROVIDER_CLIENT_SECRET}"
+        --env "TRIAL_${name}_AUTHORIZE_URL=http://localhost:${FAKE_PROVIDER_PORT}/authorize"
+        --env "TRIAL_${name}_TOKEN_URL=${provider}/token"
+        --env "TRIAL_${name}_USER_URL=${provider}${user_path}"
+      )
+    done
   fi
 
   local id
@@ -281,6 +311,33 @@ start_image() {
     fail "the container could not be started"
     exit 1
   fi
+}
+
+# Starts the stand-in OAuth provider in the background, listening on every
+# interface so the container reaches it through host-gateway, and waits until
+# it says it is listening.
+start_fake_provider() {
+  local ready="${workdir}/fake-provider-ready"
+  (
+    cd "$repo_root"
+    FAKE_PROVIDER_HOST=0.0.0.0 \
+      FAKE_PROVIDER_PORT="$FAKE_PROVIDER_PORT" \
+      FAKE_PROVIDER_CLIENT_ID="$FAKE_PROVIDER_CLIENT_ID" \
+      FAKE_PROVIDER_CLIENT_SECRET="$FAKE_PROVIDER_CLIENT_SECRET" \
+      FAKE_PROVIDER_READY="$ready" \
+      exec bash -c "exec ${FAKE_PROVIDER_COMMAND}"
+  ) &
+  fake_provider_pid=$!
+  local waited=0
+  until [ -e "$ready" ]; do
+    if ! kill -0 "$fake_provider_pid" 2>/dev/null || [ "$waited" -ge "$SMOKE_TIMEOUT_SECONDS" ]; then
+      fail "the stand-in OAuth provider did not start: ${FAKE_PROVIDER_COMMAND}"
+      exit 1
+    fi
+    sleep 1
+    waited=$(( waited + 1 ))
+  done
+  pass "the stand-in OAuth provider listens on port ${FAKE_PROVIDER_PORT}"
 }
 
 # Removes a container this script is done with, freeing its port.
@@ -525,6 +582,7 @@ echo "the smoke test passed: ${IMAGE} starts, migrates and reports the database 
 if [ "$#" -gt 0 ]; then
   echo
 
+  start_fake_provider
   start_image trials_container "$OWNERLESS_HOST_PORT" trials
   await_healthy "$trials_container" "$OWNERLESS_HOST_PORT" "the container started with TRIALS_ENABLED on"
   pass "with TRIALS_ENABLED on, ${IMAGE} offers trials at ${TRIALS_ORIGIN}"

@@ -1,21 +1,31 @@
 import type { Page } from "@playwright/test";
+import { SALES_PITCH } from "./app.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
  * The sheets a visitor sees before signing in: the site's front door.
  *
  * What each page says about the domain belongs to its own spec — a trial to
- * trial-school.spec.ts, the build's provenance to how-this-was-built.spec.ts.
+ * trial-school.spec.ts.
  * What is asserted here is what all of them owe a visitor who arrives on
  * them cold: that they explain themselves, that they can be worked by the
  * keyboard, that they hold 360px, and that they follow the theme the browser
  * asks for and stay legible in both.
  */
 
+const HEADLINE = "A K-12 School's Attendance and Term results, each seen by the right role";
+
+/** The landing page's tour, in the order it leads with, and the role each feature is seen as. */
+const TOUR = [
+  { heading: "Attendance in a few clicks", role: "Faculty" },
+  { heading: "Term results, published safely", role: "Faculty" },
+  { heading: "Guardians see only what they're granted", role: "Guardian" },
+  { heading: "Security and audit", role: "School Administrator" },
+] as const;
+
 const PUBLIC_SHEETS = [
-  { path: "/", heading: "Academic records for K-12 Schools" },
+  { path: "/", heading: HEADLINE },
   { path: "/sign-in", heading: "Sign in to SchoolGrid" },
-  { path: "/how-this-was-built", heading: "How this was built" },
 ] as const;
 
 /** The element that fills the frame, and so the one carrying the page's ground. */
@@ -36,20 +46,29 @@ async function focused(page: Page): Promise<{ name: string; ring: string } | und
   });
 }
 
-test("the landing page says what SchoolGrid is, how it holds records, and that it is a showcase", async ({ page }) => {
+test("the landing page says what SchoolGrid does, tours what each role sees, and that it is a showcase", async ({
+  page,
+}) => {
   await page.goto("/");
 
   const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { level: 1 })).toHaveText("Academic records for K-12 Schools");
-  await expect(main.getByText(/School Administrator runs the School/)).toBeVisible();
+  await expect(main.getByRole("heading", { level: 1 })).toHaveText(HEADLINE);
 
-  const trust = page.getByRole("region", { name: "Trust & security" });
-  for (const term of ["Records isolated per School", "Audit trail", "Signed and verified builds"]) {
-    await expect(trust.getByRole("term").filter({ hasText: term })).toBeVisible();
+  // The tour leads with what a School does every day, and ends on how its records are held.
+  await expect(main.getByRole("heading", { level: 2 })).toHaveText(TOUR.map(({ heading }) => heading));
+  for (const { heading, role } of TOUR) {
+    await expect(main.getByRole("region", { name: heading }).getByText(`Seen as ${role}`, { exact: true })).toBeVisible();
   }
-  await trust.getByRole("link", { name: "How this was built" }).click();
-  await expect(page).toHaveURL("/how-this-was-built");
-  await page.goBack();
+
+  const security = main.getByRole("region", { name: "Security and audit" });
+  for (const term of ["Records isolated per School", "Audit trail", "Signed and verified builds"]) {
+    await expect(security.getByRole("term").filter({ hasText: term })).toBeVisible();
+  }
+  // The build's story is told in the README, beside the code it describes.
+  await expect(security.getByRole("link", { name: "How this was built" })).toHaveAttribute(
+    "href",
+    "https://github.com/aszeffs/SchoolGrid#how-this-was-built",
+  );
 
   await expect(
     main.getByText(
@@ -60,13 +79,37 @@ test("the landing page says what SchoolGrid is, how it holds records, and that i
     "href",
     "https://github.com/aszeffs/SchoolGrid",
   );
-  // Nothing on it frames the site as anything but the product it shows.
+  // Nothing on it frames the site as anything but the product it shows, and
+  // nothing asks for money: the one way in is a trial.
   await expect(page.locator("body")).not.toContainText(/learn|practice|portfolio|DevSecOps/i);
+  await expect(page.locator("body")).not.toContainText(SALES_PITCH);
 
   // This deployment offers no trial, so the page offers none.
-  await expect(main.getByRole("button", { name: "Start a trial" })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: /^Continue with / })).toHaveCount(0);
   await main.getByRole("link", { name: "Sign in" }).click();
   await expect(page).toHaveURL("/sign-in");
+});
+
+test("the tour shows each feature as the app draws it, in the browser's own rendition", async ({ page, audit }) => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+    await page.goto("/");
+
+    for (const { heading } of TOUR) {
+      const screenshot = page.getByRole("region", { name: heading }).getByRole("img");
+      // Described for whoever cannot see it, not merely labelled.
+      await expect(screenshot).toHaveAttribute("alt", /\w+( \w+){4,}/);
+      // Lazy, so it loads only once it is near.
+      await screenshot.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => screenshot.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
+        .toBe(true);
+      expect(await screenshot.evaluate((image: HTMLImageElement) => image.currentSrc)).toMatch(
+        new RegExp(`/tour/[a-z]+-${colorScheme}\\.png$`),
+      );
+    }
+    await audit(page);
+  }
 });
 
 test("the landing page is worked by the keyboard alone, and every stop shows the ring", async ({ page }) => {

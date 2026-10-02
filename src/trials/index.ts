@@ -9,14 +9,15 @@ import {
   ROLES,
   type Role,
 } from "../access/index.ts";
-import { raiseCorrectionRequest } from "../attendance/correction-requests.ts";
+import { raiseCorrectionRequest } from "../correction-requests/index.ts";
+import { currentResultValueIds, publishTermResults, recordTermResults, termResultsIn } from "../results/term-results.ts";
 import { recordTakenSessions, type TakenSession } from "../attendance/sessions.ts";
 import { appendAuditRecord } from "../audit/index.ts";
 import type { UserAccount } from "../authentication/index.ts";
 import { instructionalDaysBetween, schoolDateAt, schoolDatePlus } from "../calendar/index.ts";
 import { transactionTime, type Queryable } from "../db/transaction.ts";
 import { createPerson, createSchool, schoolSettingsOf, type Person, type School } from "../identity/index.ts";
-import { INVENTED_SCHOOL_NAME, inventedAttendance, inventedSchool, NO_LABEL } from "./invented-school.ts";
+import { INVENTED_SCHOOL_NAME, inventedAttendance, inventedResults, inventedSchool, NO_LABEL } from "./invented-school.ts";
 
 /**
  * The Trials module starts Trial Schools, lets their visitor change role
@@ -32,16 +33,19 @@ import { INVENTED_SCHOOL_NAME, inventedAttendance, inventedSchool, NO_LABEL } fr
 export const TRIAL_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
 /**
- * Taken by every trial start for the rest of its transaction, so two starts
- * cannot both count the same live trials and between them pass the cap.
+ * Taken by every trial sign-in for the rest of its transaction, so two cannot
+ * both count the same live trials and between them pass the cap, nor both
+ * find one visitor with no live trial and start them two, nor one forget a
+ * Trial visitor the other is starting a trial for.
  */
 const TRIAL_START_LOCK = 0x7472_6961_6c;
 
-/** A Trial School just started, and the account its visitor first acts as. */
-export interface StartedTrial {
-  school: School;
-  expiresAt: Date;
+/** The Trial School a visitor started or returned to, and the account they act as in it. */
+export interface EnteredTrial {
+  schoolId: string;
   schoolAdministrator: UserAccount;
+  /** Whether it was already theirs and live, rather than started now. */
+  returned: boolean;
 }
 
 /**
@@ -55,28 +59,62 @@ export async function deleteExpiredTrialSchools(database: Queryable): Promise<nu
 }
 
 /**
- * Starts a Trial School of invented data in the School's own timezone, with a
- * role account for each School role, or returns null, starting nothing, when
- * `liveCap` Trial Schools are live already.
+ * The Trial visitor this identity names (ADR-0013) enters their Trial School:
+ * the live one they have, or a new one when they have none. Returns null,
+ * starting nothing, when they have none and `liveCap` Trial Schools are live
+ * already. `visitor` is the keyed hash `visitorIdentity` makes, never the
+ * subject itself.
  *
- * Everything is built in the caller's transaction, so a trial exists whole or
- * not at all.
+ * Expired trials are deleted first, so the ones they held count no longer.
+ * Everything is done in the caller's transaction, under the start lock, so a
+ * visitor signing in twice at once still has one live trial, and a new one
+ * exists whole or not at all.
  */
-export async function startTrialSchool(
+export async function enterTrialSchool(
   transaction: Queryable,
-  { timezone, liveCap }: { timezone: string; liveCap: number },
-): Promise<StartedTrial | null> {
+  { timezone, liveCap, visitor }: { timezone: string; liveCap: number; visitor: Buffer },
+): Promise<EnteredTrial | null> {
   await transaction.query(`SELECT pg_advisory_xact_lock($1)`, [TRIAL_START_LOCK]);
+  await deleteExpiredTrialSchools(transaction);
+  const live = await transaction.query<{ schoolId: string; id: string; username: string }>(
+    `SELECT school.id AS "schoolId", account.id, account.username
+     FROM app.trial_visitor visitor
+     JOIN app.school school ON school.trial_visitor_id = visitor.id
+     JOIN app.user_account account ON account.created_in_school_id = school.id AND account.trial_role = 'school_administrator'
+     WHERE visitor.identity = $1 AND school.trial_expires_at > now()`,
+    [visitor],
+  );
+  if (live.rows.length > 0) {
+    const { schoolId, ...schoolAdministrator } = live.rows[0]!;
+    return { schoolId, schoolAdministrator, returned: true };
+  }
+
   const { rows } = await transaction.query<{ live: number }>(
     `SELECT count(*)::integer AS live FROM app.school WHERE trial_expires_at > now()`,
   );
   if (rows[0]!.live >= liveCap) {
     return null;
   }
+  const started = await startTrialSchool(transaction, { timezone, visitor });
+  return { ...started, returned: false };
+}
 
+/**
+ * Starts a Trial School of invented data in the School's own timezone, with a
+ * role account for each School role, for this Trial visitor.
+ */
+async function startTrialSchool(
+  transaction: Queryable,
+  { timezone, visitor }: { timezone: string; visitor: Buffer },
+): Promise<{ schoolId: string; schoolAdministrator: UserAccount }> {
   const now = await transactionTime(transaction);
   const expiresAt = new Date(now.getTime() + TRIAL_LIFETIME_MS);
-  const school = await createSchool(transaction, { name: INVENTED_SCHOOL_NAME, timezone, trialExpiresAt: expiresAt });
+  const school = await createSchool(transaction, {
+    name: INVENTED_SCHOOL_NAME,
+    timezone,
+    trialExpiresAt: expiresAt,
+    trialVisitorId: await trialVisitorFor(transaction, visitor),
+  });
   // Built around today as the School sees it, so its dates look right to the visitor.
   const today = (await schoolDateAt(transaction, { schoolId: school.id, at: now }))!;
   const invented = inventedSchool(today);
@@ -200,6 +238,7 @@ export async function startTrialSchool(
   if (correctionRequest !== null) {
     const { course, label, student, ...request } = correctionRequest;
     await raiseCorrectionRequest(transaction, {
+      kind: "attendance",
       schoolId: school.id,
       classOfferingId: current.get(offeringKey(course, label))!.classOfferingId,
       studentPersonId: students.get(student)!.id,
@@ -208,7 +247,52 @@ export async function startTrialSchool(
     });
   }
 
-  return { school, expiresAt, schoolAdministrator: accounts.get("school_administrator")! };
+  // Recorded as drafts by whoever teaches each offering, in the School's
+  // first scale, and one offering published by them, unaudited as above.
+  const results = inventedResults(invented);
+  const valueIds = await currentResultValueIds(transaction, school.id);
+  await recordTermResults(
+    transaction,
+    results.results.map(({ course, label, student, value, score, comment }) => {
+      const { classOfferingId, assigned } = current.get(offeringKey(course, label))!;
+      return {
+        schoolId: school.id,
+        classOfferingId,
+        studentPersonId: students.get(student)!.id,
+        resultValueId: value === null ? null : valueIds.get(value)!,
+        score,
+        comment,
+        recordedByPersonId: assigned.id,
+      };
+    }),
+  );
+  const published = current.get(offeringKey(results.published.course, results.published.label))!;
+  const publishedKey = { schoolId: school.id, classOfferingId: published.classOfferingId };
+  await publishTermResults(transaction, publishedKey, published.assigned.id, await termResultsIn(transaction, publishedKey));
+  const resultRequest = results.correctionRequest;
+  await raiseCorrectionRequest(transaction, {
+    kind: "term_result",
+    schoolId: school.id,
+    classOfferingId: current.get(offeringKey(resultRequest.course, resultRequest.label))!.classOfferingId,
+    studentPersonId: students.get(resultRequest.student)!.id,
+    before: resultRequest.before,
+    after: resultRequest.after,
+    reason: resultRequest.reason,
+    requestedByPersonId: faculty.id,
+  });
+
+  return { schoolId: school.id, schoolAdministrator: accounts.get("school_administrator")! };
+}
+
+/** The Trial visitor with this identity, recorded now if they are not already. */
+async function trialVisitorFor(transaction: Queryable, identity: Buffer): Promise<string> {
+  await transaction.query(`INSERT INTO app.trial_visitor (identity) VALUES ($1) ON CONFLICT (identity) DO NOTHING`, [
+    identity,
+  ]);
+  const { rows } = await transaction.query<{ id: string }>(`SELECT id FROM app.trial_visitor WHERE identity = $1`, [
+    identity,
+  ]);
+  return rows[0]!.id;
 }
 
 /** One invented Class Offering's key: its Course's code and its label, NO_LABEL for none. */

@@ -12,7 +12,7 @@
 # The Node major here must match the distroless runtime below. Compiled output
 # and installed dependencies built on one major and run on another work until a
 # dependency or a language feature depends on the difference.
-FROM node:24-bookworm@sha256:6dac556d980b7f0e5498d08f08cee0ca67798b4ad6c23964a9214920e67758d0 AS node-base
+FROM node:24-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4 AS node-base
 
 # ---- build -----------------------------------------------------------------
 # A full Node image, because compiling needs the toolchain. Nothing from this
@@ -50,9 +50,11 @@ COPY web/package.json ./web/
 RUN npm ci --workspace=@schoolgrid/web --include-workspace-root=false
 
 # The bounds the page holds a form to are the service's, imported rather than
-# restated (src/validation/bounds.ts). That one directory, and not the rest of
-# the service, so a change to a route does not invalidate this layer.
+# restated (src/validation/bounds.ts), and so is the Result value scale's
+# same-values check (src/results). Those directories, and not the rest of the
+# service, so a change elsewhere does not invalidate this layer.
 COPY src/validation ./src/validation
+COPY src/results ./src/results
 COPY web ./web
 RUN npm run build --workspace=@schoolgrid/web
 

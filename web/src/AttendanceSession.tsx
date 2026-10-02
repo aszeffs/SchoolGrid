@@ -12,7 +12,8 @@ import {
   type RefusedMark,
   type TaughtClassOffering as Offering,
 } from "./api.ts";
-import { correctionConflictMessage, STATUS_NAMES, STATUSES } from "./attendance.ts";
+import { STATUS_NAMES, STATUSES } from "./attendance.ts";
+import { correctionConflictMessage } from "./corrections.ts";
 import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { NotAvailable } from "./NotAvailable.tsx";

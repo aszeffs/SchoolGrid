@@ -80,10 +80,16 @@ Production environment variables, one `vercel env add <NAME> production` each:
 | `CLIENT_ADDRESS_HEADER` | `x-vercel-forwarded-for`. Inside the function every request comes from `127.0.0.1`, so without it every visitor shares one rate-limit count. Vercel overwrites the header, so a caller cannot choose their own. |
 | `TRIALS_ENABLED` | `true`. Lets any visitor start a Trial School (ADR-0012). Off unless set. |
 | `TRIAL_LIVE_CAP` | Optional; `30` unless set. The most Trial Schools live at once, the hard bound on what trials may hold in the free database tier. |
-| `TRIAL_PER_IP_HOUR` | Optional; `2` unless set. The most trials one client address may start an hour, counted per instance. |
+| `TRIAL_IDENTITY_KEY` | Required with trials on: a secret of at least 32 characters (`openssl rand -base64 32`). A Trial visitor is kept only as a hash keyed with it (ADR-0013). Changing it forgets every visitor. |
+| `TRIAL_GITHUB_CLIENT_ID`, `TRIAL_GITHUB_CLIENT_SECRET` | From the GitHub OAuth app below. GitHub sign-in is offered only when both are set. |
+| `TRIAL_GOOGLE_CLIENT_ID`, `TRIAL_GOOGLE_CLIENT_SECRET` | From the Google OAuth client below. Google sign-in is offered only when both are set. |
 | `LOG_LEVEL` | `info` |
 
-A project set up before Trial Schools still holds `DEMO_MODE`, which nothing reads any more: remove it with `vercel env rm DEMO_MODE production`.
+A project set up before Trial Schools still holds `DEMO_MODE`, and one set up before trial sign-in `TRIAL_PER_IP_HOUR`, which nothing reads any more: remove each with `vercel env rm <NAME> production`.
+
+A visitor starts a trial by signing in with GitHub or Google, whichever are configured; with neither, the landing page offers no trial. For GitHub, register a GitHub OAuth app under **Settings → Developer settings → OAuth Apps → New OAuth App**, with the production domain as its homepage URL and `https://` + the production domain + `/api/trials/callback/github` as its authorization callback URL. It asks for no scope: SchoolGrid reads only the account's numeric id, and keeps only a keyed hash of it. Generate a client secret, and set both values above.
+
+For Google, in the [Google Cloud console](https://console.cloud.google.com/), set up the **Google Auth Platform** for an external audience, with SchoolGrid's name, the production domain as an authorized domain, and no scope beyond `openid`. Publish the app, so any Google account can sign in, not only test users. Then, under **Clients → Create client**, create a **Web application** client with `https://` + the production domain + `/api/trials/callback/google` as its authorized redirect URI. SchoolGrid asks only for `openid` and reads only the account's `sub`, and keeps only a keyed hash of it. Set the client's id and secret above.
 
 `MIGRATION_DATABASE_URL` is deliberately absent: the service verifies the database is migrated and refuses to start if not. `IMAGE_DIGEST` is not set here; the deploy supplies it per deployment with `--env`.
 
@@ -154,4 +160,4 @@ A Trial School is deleted once expired, whenever the next trial starts, with eve
 
 - `GET /api/health` answers `200` with `"database": "reachable"`. The first request after 5 idle minutes wakes both the function and Neon, and takes a few seconds.
 - `GET /api/build-info` shows the commit and the digest that was verified.
-- The landing page at `/` offers **Start a trial**, which lands in a Trial School as its School Administrator, and *Viewing as* switches to each of the other three roles.
+- The landing page at `/` offers **Continue with GitHub** and **Continue with Google**, for each provider configured. Each signs in at that provider and lands in a Trial School as its School Administrator, and *Viewing as* switches to each of the other three roles.

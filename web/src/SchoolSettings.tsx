@@ -1,14 +1,33 @@
 import { useState, type FormEvent } from "react";
 import { MAX_ATTENDANCE_WINDOW } from "../../src/validation/bounds.ts";
-import { api, type AttendanceWindowChange, type ReachedSchool, type SchoolSettings as Settings } from "./api.ts";
+import {
+  api,
+  readAll,
+  type AttendanceWindowChange,
+  type ReachedSchool,
+  type ResultValue,
+  type ResultValueScale as Scale,
+  type SchoolSettings as Settings,
+} from "./api.ts";
 import { ConfirmDialog } from "./Dialog.tsx";
 import { Link } from "./Link.tsx";
 import { NotAvailable } from "./NotAvailable.tsx";
+import { ResultValueScale, type SaveScale } from "./ResultValueScale.tsx";
 import { useScreen } from "./screen.ts";
 import { Key, Sheet, type SheetKind } from "./Sheet.tsx";
 
 /** Which sheet this page is, named once so its states cannot drift apart. */
 const SHEET: SheetKind = { name: "School settings" };
+
+/** The School's settings, the timezones worth offering, and its current Result value scale. */
+async function list(schoolId: string) {
+  const answered = await readAll([api.schoolSettings(schoolId), api.resultValueScale(schoolId)]);
+  if (!answered.ok) {
+    return answered;
+  }
+  const [{ settings, timezones }, { resultValueScale }] = answered.body;
+  return { ok: true as const, body: { settings, timezones, resultValueScale } };
+}
 
 /** A window change waiting on its confirmation, with what the server says it would open or close. */
 interface ProposedWindowChange {
@@ -18,15 +37,16 @@ interface ProposedWindowChange {
 
 /**
  * What a School Administrator configures about their School: its timezone,
- * where each of the School's days begins and ends, and its Attendance window,
- * how long after a School date its Attendance can still be recorded normally.
+ * where each of the School's days begins and ends, its Attendance window,
+ * how long after a School date its Attendance can still be recorded normally,
+ * and its Result value scale, the values a Term result is given from.
  *
  * The session names this page to a School Administrator only (ADR-0007), and
  * the server refuses anyone else with the one "not available" state.
  */
 export function SchoolSettings({ school }: { school: ReachedSchool }) {
   const { schoolId } = school;
-  const { showing, busy, change } = useScreen(schoolId, api.schoolSettings);
+  const { showing, busy, change } = useScreen(schoolId, list);
   /** What the last change did, said once so a screen reader hears it land. */
   const [changed, setChanged] = useState<string | null>(null);
   const [proposed, setProposed] = useState<ProposedWindowChange | null>(null);
@@ -68,6 +88,15 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
     }
   };
 
+  const saveResultValueScale = async (values: ResultValue[]) => {
+    setChanged(null);
+    const sent = await change(() => api.saveResultValueScale(schoolId, values));
+    if (sent.ok) {
+      setChanged(`Version ${sent.body.resultValueScale.version} of the Result value scale is saved.`);
+    }
+    return sent;
+  };
+
   switch (showing.kind) {
     case "loading":
       return <Sheet {...SHEET} busy />;
@@ -80,10 +109,12 @@ export function SchoolSettings({ school }: { school: ReachedSchool }) {
             schoolId={schoolId}
             settings={showing.records.settings}
             timezones={showing.records.timezones}
+            resultValueScale={showing.records.resultValueScale}
             busy={busy}
             changed={changed}
             onSetTimezone={setTimezone}
             onProposeAttendanceWindow={proposeAttendanceWindow}
+            onSaveResultValueScale={saveResultValueScale}
           />
           {proposed !== null && (
             <ConfirmDialog
@@ -132,23 +163,27 @@ function SettingsSheet({
   schoolId,
   settings,
   timezones,
+  resultValueScale,
   busy,
   changed,
   onSetTimezone,
   onProposeAttendanceWindow,
+  onSaveResultValueScale,
 }: {
   schoolId: string;
   settings: Settings;
   timezones: string[];
+  resultValueScale: Scale;
   busy: boolean;
   changed: string | null;
   onSetTimezone: (event: FormEvent<HTMLFormElement>) => void;
   onProposeAttendanceWindow: (event: FormEvent<HTMLFormElement>) => void;
+  onSaveResultValueScale: SaveScale;
 }) {
   const legend = (
     <>
       <h2>Key</h2>
-      <p>How this School keeps its calendar.</p>
+      <p>How this School keeps its calendar and its results.</p>
       <dl>
         <Key term="Timezone">
           Where each School date begins and ends. A day is recorded as the School saw it, whatever the time where you
@@ -161,6 +196,10 @@ function SettingsSheet({
         <Key term="Attendance window">
           How many days after a School date Faculty can still record or correct its Attendance. After that, a
           correction takes a Correction request.
+        </Key>
+        <Key term="Result value scale">
+          The values a Term result is given from. Each save is a new version, and a result keeps the version it was
+          recorded with.
         </Key>
       </dl>
     </>
@@ -233,6 +272,8 @@ function SettingsSheet({
           Review change
         </button>
       </form>
+
+      <ResultValueScale scale={resultValueScale} busy={busy} onSave={onSaveResultValueScale} />
     </Sheet>
   );
 }

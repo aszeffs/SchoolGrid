@@ -556,7 +556,7 @@ body {
 
 /*
  * A Trial School's strip across the top of the sheet: what this School is and
- * how long it has left, with the way to a fresh one at its right.
+ * how long it has left.
  */
 .trial-banner {
   display: flex;
@@ -585,11 +585,6 @@ body {
   font-family: var(--type-figures);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-}
-
-.trial-banner .error {
-  flex-basis: 100%;
-  order: 1;
 }
 
 /*
@@ -902,10 +897,22 @@ fieldset legend {
   font-weight: 650;
 }
 
-/* One Term among a year's, edited in place: its fields, then the way to remove it. */
-.term-draft {
+/*
+ * One Term among a year's, or one value of a Result value scale, edited in
+ * place: its fields, then the ways to move or remove it.
+ */
+.term-draft,
+.value-draft {
   gap: calc(var(--step) * 1.5);
   padding-bottom: calc(var(--step) * 1.5);
+}
+
+/* A Result value scale as it stands: its values in their order, numbered. */
+.scale-values {
+  display: grid;
+  gap: calc(var(--step) * 0.5);
+  margin: 0;
+  padding-left: calc(var(--step) * 3);
 }
 
 .term-draft > button,
@@ -913,7 +920,8 @@ fieldset > button {
   justify-self: start;
 }
 
-button {
+button,
+.start-trial a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -937,7 +945,8 @@ button {
 }
 
 @media (hover: hover) {
-  button:hover:not(:disabled) {
+  button:hover:not(:disabled),
+  .start-trial a:hover {
     background: var(--action-strong);
     border-color: var(--action-strong);
   }
@@ -980,7 +989,8 @@ button {
   }
 }
 
-button:active:not(:disabled) {
+button:active:not(:disabled),
+.start-trial a:active {
   transform: translateY(1px);
 }
 
@@ -1208,6 +1218,20 @@ button:disabled {
   flex-wrap: nowrap;
   justify-content: flex-end;
   gap: var(--step);
+}
+
+/*
+ * A class's Term results, edited in their rows: a score is a few characters
+ * wide, and a comment takes what the row leaves it, down to a phone's width.
+ */
+.term-results__score {
+  width: 6.5rem;
+}
+
+.term-results__comment {
+  width: 100%;
+  min-width: min(14rem, 100%);
+  resize: vertical;
 }
 
 /* ---- Courses and the wall chart -------------------------------------- */
@@ -1651,37 +1675,99 @@ dialog.slip::backdrop {
 
 /* ---- Landing --------------------------------------------------------- */
 
+/* The first screen: what SchoolGrid does for a School, and the trial, its one way in. */
+.landing__hero {
+  padding-bottom: calc(var(--step) * 4);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.landing__hero h1 {
+  max-width: 24ch;
+}
+
+.landing__lede {
+  max-width: var(--measure);
+  margin: 0;
+  font-size: var(--size-lead);
+  color: var(--ink-soft);
+}
+
 .landing__trial {
   display: grid;
   gap: calc(var(--step) * 2);
   justify-items: start;
   margin-top: calc(var(--step) * 3);
+  max-width: var(--measure);
 }
 
 .landing__trial p {
   margin: 0;
 }
 
-.landing__trust {
-  margin-top: calc(var(--step) * 6);
-  padding-top: calc(var(--step) * 3);
-  border-top: 1px solid var(--rule-strong);
+/*
+ * A sign-in for each provider, side by side while they fit. Each is a link,
+ * since it leaves for the provider, struck as the primary button.
+ */
+.start-trial {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step);
 }
 
-.landing__trust h2 {
-  margin-top: 0;
+.start-trial a {
+  text-decoration: none;
 }
 
-.landing__trust dl {
-  margin: calc(var(--step) * 2) 0 0;
+/*
+ * One stop on the tour, ruled off from the next, with the role it is seen as
+ * under its heading. Its words keep to a readable measure; the app shown
+ * below them takes the run's whole width.
+ */
+.landing__feature {
+  padding: calc(var(--step) * 4) 0;
+  border-bottom: 1px solid var(--rule);
 }
 
-.landing__trust dt {
+.landing__feature h2 {
+  margin: 0;
+}
+
+.landing__role {
+  margin: calc(var(--step) * 0.5) 0 calc(var(--step) * 1.5);
+  font-size: var(--size-label);
+  font-weight: 650;
+  color: var(--action);
+}
+
+.landing__feature > p,
+.landing__feature dl {
+  max-width: var(--measure);
+}
+
+.landing__feature dl {
+  margin: 0;
+}
+
+.landing__feature dt {
   font-weight: 650;
 }
 
-.landing__trust dd {
+.landing__feature dd {
   margin: calc(var(--step) * 0.5) 0 calc(var(--step) * 3);
+}
+
+.landing__feature dd:last-child {
+  margin-bottom: 0;
+}
+
+.landing__screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: calc(var(--step) * 3);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
 }
 
 .foot .landing__links {
@@ -1725,16 +1811,6 @@ dialog.slip::backdrop {
 
 .disclosure[open] summary::before {
   transform: rotate(45deg);
-}
-
-.not-built {
-  margin-top: calc(var(--step) * 6);
-  padding-top: calc(var(--step) * 2);
-  border-top: 1px solid var(--rule-strong);
-}
-
-.not-built h2 {
-  margin-top: 0;
 }
 
 /* A record's identifier, set in figures under the name it is given. */
@@ -2143,4 +2219,73 @@ td[aria-selected="true"] > .day {
   ::view-transition-new(*) {
     animation: none !important;
   }
+}
+
+/* ---- A Term report's controls --------------------------------------- */
+
+.report-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: calc(var(--step) * 2);
+}
+
+/* ---- Print ----------------------------------------------------------- */
+
+/*
+ * A page printed from the browser, as a Term report is meant to be: the
+ * record alone, in ink on white paper. The shell, its navigation, the key and
+ * every control stay on screen.
+ */
+@media print {
+  body,
+  .sheet {
+    background: #fff;
+    color: #000;
+    min-height: 0;
+  }
+
+  .sheet,
+  .sheet--school,
+  .sheet__main,
+  .sheet__body {
+    display: block;
+  }
+
+  .sheet__head,
+  .trial-banner,
+  .legend,
+  .foot,
+  .report-controls,
+  button,
+  select,
+  form {
+    display: none !important;
+  }
+}
+
+/*
+ * A Term result correction's parts, each named beside what it was and what it
+ * would be, one part to a line at any width.
+ */
+.correction-change {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: calc(var(--step) * 0.5) calc(var(--step) * 2);
+  margin: 0;
+}
+
+.correction-change div {
+  display: contents;
+}
+
+.correction-change dt {
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 650;
+}
+
+.correction-change dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }

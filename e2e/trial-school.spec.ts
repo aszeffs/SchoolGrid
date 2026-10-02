@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { acknowledgeIssuedLink, issueInvitationFor, recordRows } from "./app.ts";
+import { acknowledgeIssuedLink, issueInvitationFor, recordRows, SALES_PITCH } from "./app.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
@@ -19,15 +20,30 @@ const ROLES = [
 ] as const;
 
 /**
- * Starts a Trial School from the front page's button, from the keyboard, and
- * opens it. The visitor lands in it as its School Administrator.
+ * Starts a Trial School from the front page's link for `provider` (GitHub
+ * unless given), from the keyboard, signing in at the stand-in provider
+ * scripts/smoke-test.sh runs as `subject` (a fresh visitor unless given), and
+ * opens it, or returns to that visitor's live one. The visitor lands in it as
+ * its School Administrator.
  */
-async function startTrial(page: Page): Promise<string> {
+async function startTrial(
+  page: Page,
+  { subject, provider = "GitHub" }: { subject?: string; provider?: "GitHub" | "Google" } = {},
+): Promise<string> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start a trial" }).focus();
+  await page.getByRole("link", { name: `Continue with ${provider}` }).focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
+  if (subject !== undefined) {
+    await page.getByLabel("Subject").fill(subject);
+  }
+  await approveAtProvider(page);
   return new URL(page.url()).pathname.split("/")[2]!;
+}
+
+/** Approves the sign-in at the stand-in provider's consent page, and waits to land in the visitor's School. */
+async function approveAtProvider(page: Page) {
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
 }
 
 /** Waits for the sheet to finish being read, which strikes it afresh and would close a list opened meanwhile. */
@@ -53,23 +69,38 @@ test.describe("in a Trial School", () => {
   test.use({ baseURL: SHOWCASE_ORIGIN });
 
   test("the landing page says plainly when the site is too busy to start a trial", async ({ page }) => {
-    // The live cap, reached: arranged by answering as the server does rather
-    // than by filling the showcase with thirty trials.
-    await page.route("/api/trials", (route) =>
-      route.request().method() === "POST" ? route.fulfill({ status: 503, json: { status: "busy" } }) : route.fallback(),
-    );
-    await page.goto("/");
-
-    await page.getByRole("button", { name: "Start a trial" }).click();
+    // The live cap, reached: arranged by arriving where the server sends a
+    // visitor back to then, rather than by filling the showcase with thirty trials.
+    await page.goto("/?trial=busy");
 
     await expect(page.getByRole("alert")).toHaveText("SchoolGrid is busy right now. Try again in a little while.");
+    // Said once: the address no longer says it.
     await expect(page).toHaveURL("/");
-    await expect(page.getByRole("button", { name: "Start a trial" })).toBeEnabled();
+    // The trial is the hero's one call to action, offered before the tour.
+    const hero = page.getByRole("region", { name: /each seen by the right role$/ });
+    await expect(hero.getByRole("link", { name: /^Continue with / })).toHaveText([
+      "Continue with GitHub",
+      "Continue with Google",
+    ]);
+    await expect(page.locator("body")).not.toContainText(SALES_PITCH);
+  });
+
+  test("a visitor who cancels at the provider is back on the front page, told so, with no trial", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Continue with GitHub" }).click();
+
+    await page.getByRole("button", { name: "Cancel" }).click();
+
+    await expect(page).toHaveURL("/");
+    await expect(page.getByRole("alert")).toHaveText("Sign-in was cancelled, so no trial was started.");
+    expect(await (await page.request.get("/api/session")).json()).toEqual({ status: "refused" });
   });
 
   test("views the School as each role from the keyboard, landing on each role's home", async ({ page }) => {
     const schoolId = await startTrial(page);
     await expect(banner(page)).toContainText(BANNER);
+    // A visitor's trial is theirs until it ends: the strip offers no other.
+    await expect(banner(page).getByRole("button")).toHaveCount(0);
 
     for (const { name, home } of ROLES) {
       await settled(page);
@@ -90,11 +121,15 @@ test.describe("in a Trial School", () => {
   test("finds Attendance already there in every role, and a request waiting for the School Administrator", async ({ page }) => {
     const schoolId = await startTrial(page);
     const { correctionRequests } = (await (await page.request.get(`/api/schools/${schoolId}/correction-requests`)).json()) as {
-      correctionRequests: { classOffering: { label: string; course: { name: string }; term: { name: string } } }[];
+      correctionRequests: {
+        kind: string;
+        classOffering: { label: string; course: { name: string }; term: { name: string } };
+      }[];
     };
+    const attendanceRequest = correctionRequests.find((request) => request.kind === "attendance");
     // A Term's first day has no day behind it to have been taken.
-    test.skip(correctionRequests.length === 0, "the trial started on its Term's first day");
-    const { classOffering } = correctionRequests[0]!;
+    test.skip(attendanceRequest === undefined, "the trial started on its Term's first day");
+    const { classOffering } = attendanceRequest!;
     const offeringName = `${classOffering.course.name}, ${classOffering.label}`;
     // Class Offering or Student, then Present, Tardy, Excused absence, Unexcused absence, Absent pending review, and Not recorded.
     const pendingReview = (row: ReturnType<typeof recordRows>) => row.getByRole("cell").nth(5);
@@ -132,21 +167,6 @@ test.describe("in a Trial School", () => {
     await expect(pendingReview(linkedRow)).toHaveText("1");
   });
 
-  test("starts over in a fresh School, and the old Session is over", async ({ page, context, playwright }) => {
-    const schoolId = await startTrial(page);
-    const before = (await context.cookies()).map(({ name, value }) => `${name}=${value}`).join("; ");
-
-    await banner(page).getByRole("button", { name: "Start over" }).click();
-
-    await expect(page).toHaveURL(
-      (url) => /^\/schools\/[^/]+\/persons$/.test(url.pathname) && !url.pathname.includes(schoolId),
-    );
-    await expect(page.getByRole("banner").locator("summary")).toHaveText("Viewing as School Administrator");
-    const old = await playwright.request.newContext({ baseURL: SHOWCASE_ORIGIN!, extraHTTPHeaders: { cookie: before } });
-    expect(await (await old.get("/api/session")).json()).toEqual({ status: "refused" });
-    await old.dispose();
-  });
-
   test("once the trial expires, says it was deleted and starts a new one", async ({ page }) => {
     await page.clock.install();
     await startTrial(page);
@@ -157,9 +177,35 @@ test.describe("in a Trial School", () => {
 
     // Back to the time the server keeps, which the new trial's two hours are counted from.
     await page.clock.setSystemTime(Date.now());
-    await page.getByRole("button", { name: "Start a new trial" }).click();
-    await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
+    await expect(page.getByRole("link", { name: /^Continue with / })).toHaveText(["Continue with GitHub", "Continue with Google"]);
+    await page.getByRole("link", { name: "Continue with GitHub" }).click();
+    await approveAtProvider(page);
     await expect(banner(page)).toContainText(BANNER);
+  });
+
+  test("a visitor who leaves and signs in again is back in the same School", async ({ page, browser }) => {
+    const subject = randomUUID();
+    const schoolId = await startTrial(page, { subject });
+    await page.close();
+
+    // Another browser, holding no Session: only the sign-in says who this is.
+    const returning = await browser.newPage({ baseURL: SHOWCASE_ORIGIN! });
+    expect(await startTrial(returning, { subject })).toBe(schoolId);
+    await expect(banner(returning)).toContainText(BANNER);
+    await returning.close();
+  });
+
+  test("offers GitHub and Google, and the same subject at each is a visitor with their own School", async ({ page, browser }) => {
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: /^Continue with / })).toHaveText(["Continue with GitHub", "Continue with Google"]);
+    const subject = randomUUID();
+    const github = await startTrial(page, { subject });
+    await page.close();
+
+    const google = await browser.newPage({ baseURL: SHOWCASE_ORIGIN! });
+    expect(await startTrial(google, { subject, provider: "Google" })).not.toBe(github);
+    await expect(banner(google)).toContainText(BANNER);
+    await google.close();
   });
 
   test("issues an Invitation whose redeemed account sees the trial but views it as no other role", async ({
@@ -188,7 +234,7 @@ test.describe("in a Trial School", () => {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width: 360, height: 800 });
       await page.goto("/");
-      await expect(page.getByRole("button", { name: "Start a trial" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Continue with GitHub" })).toBeVisible();
       await expectNoSidewaysScroll(page);
       await audit(page);
 

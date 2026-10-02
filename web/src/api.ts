@@ -8,7 +8,10 @@ import type {
   UnmarkableBecause,
 } from "../../src/attendance/sessions.ts";
 import type { Weekday } from "../../src/calendar/index.ts";
+import type { TrialProvider } from "../../src/config.ts";
 import type { ConflictDetail } from "../../src/http/conflict.ts";
+import type { ResultValue, ResultValueScale } from "../../src/results/index.ts";
+import type { DraftRefusal, TermResultContent } from "../../src/results/term-results.ts";
 
 /**
  * The API, reached on the page's own origin.
@@ -242,6 +245,9 @@ export interface SchoolSettings {
 
 export type { AttendanceWindowChange };
 
+/** A School's Result value scale, imported rather than restated: a version, and its values in their order. */
+export type { ResultValue, ResultValueScale };
+
 /** One Term of an Academic Year, bounded by School dates written `YYYY-MM-DD`, both inclusive. */
 export interface Term {
   id: string;
@@ -413,6 +419,28 @@ export interface StudentAttendance {
   })[];
 }
 
+/**
+ * One Student's Term report: the Terms they were rostered in, the latest
+ * first, and one of them with each Class Offering they were rostered in. An
+ * offering carries its published Term result and its Attendance totals only
+ * where `shows` says the reader may read that part; nothing stands in for a
+ * part withheld. A draft never appears.
+ */
+export interface TermReport {
+  student: { id: string; displayName: string };
+  /** The School's today, in its own timezone. */
+  today: string;
+  shows: { termResults: boolean; attendanceTotals: boolean };
+  terms: ClassOffering["term"][];
+  /** Null for a Student rostered in no Class Offering. */
+  term: ClassOffering["term"] | null;
+  classOfferings: (ClassOffering & {
+    /** Null while none is published. */
+    termResult?: { value: string; score: number | null; comment: string | null; publishedAt: string } | null;
+    attendanceTotals?: AttendanceTotals;
+  })[];
+}
+
 /** One mark a save refused while the rest applied, with the Attendance as it now stands. */
 export interface RefusedMark {
   studentPersonId: string;
@@ -427,22 +455,82 @@ export interface Mark {
   status: AttendanceStatus;
 }
 
-export type CorrectionRequestState = "pending" | "approved" | "rejected" | "withdrawn";
+/** What a Term result says, imported rather than restated: a value, score and comment, each possibly null. */
+export type { TermResultContent };
+
+/** One Student's Term result in a Class Offering, bound to the scale version its value came from. */
+export interface TermResult extends TermResultContent {
+  /** Null with no value. */
+  scaleVersion: number | null;
+  recordedBy: { id: string; displayName: string };
+  recordedAt: string;
+  /** When it was published; null for a draft. A published result is never a draft again. */
+  publishedAt: string | null;
+}
 
 /**
- * A proposed change to one Student's Attendance in one Class Offering on one
- * School date, as a School Administrator or its requester reads it. `before`
- * is null when none was recorded when it was raised.
+ * A Class Offering's Term results, drafts included, as the actor is served
+ * them: why they are read-only for them if they are, the scale a value is
+ * chosen from, and every Student ever rostered in it with their result.
  */
-export interface CorrectionRequest {
+export interface ClassOfferingResults {
+  classOfferingId: string;
+  /** Null when the actor may record drafts. */
+  readOnlyBecause: "not_teaching" | null;
+  /** Whether the actor may request a correction to a published result. */
+  mayRequestCorrections: boolean;
+  /**
+   * Whether the actor may publish, and what a Publication would now do: how
+   * many results it would publish, and the active roster members without a
+   * value it would be refused for.
+   */
+  publication: { mayPublish: boolean; missingValue: { id: string; displayName: string }[]; ready: number };
+  resultValueScale: ResultValueScale;
+  students: {
+    person: { id: string; displayName: string };
+    /** A null last date is open: it runs to the end of the Term. */
+    rosterMemberships: { firstDate: string; lastDate: string | null }[];
+    termResult: TermResult | null;
+  }[];
+}
+
+/** One draft in a save: what it should now say, and the content the caller loaded, null for none. */
+export interface TermResultDraft extends TermResultContent {
+  studentPersonId: string;
+  loaded: TermResultContent | null;
+}
+
+/** One draft a save refused while the rest applied, with the result as it now stands. */
+export interface RefusedDraft {
+  studentPersonId: string;
+  because: DraftRefusal;
+  termResult: TermResult | null;
+}
+
+export type CorrectionRequestState = "pending" | "approved" | "rejected" | "withdrawn";
+
+/** What a published Term result says, as a Correction request proposes to change it: it always has a value. */
+export interface PublishedContent extends TermResultContent {
+  value: string;
+}
+
+/**
+ * A proposed change, as a School Administrator or its requester reads it: to
+ * one Student's Attendance in one Class Offering on one School date, `before`
+ * null when none was recorded when it was raised; or to one Student's
+ * published Term result in one Class Offering.
+ */
+export type CorrectionRequest = CorrectionRequestCommon &
+  (
+    | { kind: "attendance"; date: string; before: AttendanceStatus | null; after: AttendanceStatus }
+    | { kind: "term_result"; before: PublishedContent; after: PublishedContent }
+  );
+
+interface CorrectionRequestCommon {
   id: string;
-  kind: "attendance";
   state: CorrectionRequestState;
   student: { id: string; displayName: string };
   classOffering: ClassOffering;
-  date: string;
-  before: AttendanceStatus | null;
-  after: AttendanceStatus;
   reason: string;
   requestedBy: { id: string; displayName: string };
   raisedAt: string;
@@ -453,6 +541,12 @@ export interface CorrectionRequest {
   /** Approved by its requester as the School's only School Administrator. */
   selfApproved: boolean;
 }
+
+/** What raising a Correction request for one Student in one Class Offering proposes, and why. */
+export type CorrectionRaising = { classOfferingId: string; studentPersonId: string; reason: string } & (
+  | { kind: "attendance"; date: string; after: AttendanceStatus }
+  | { kind: "term_result"; after: PublishedContent }
+);
 
 /** Where a Pending Correction request is taken: rejecting needs a reason. */
 export type CorrectionDecision =
@@ -473,12 +567,6 @@ export interface ProposedTerm {
   name: string;
   firstDate: string;
   lastDate: string;
-}
-
-/** What the running site was built from. Either is absent when the server does not know it. */
-export interface BuildInfo {
-  commit?: string;
-  digest?: string;
 }
 
 /** A path within one School. */
@@ -511,43 +599,13 @@ async function redeemInvitation(credentials: {
   return { status: "refused" };
 }
 
-/** A Trial School just started: the School to open, and when it will be deleted. */
-export interface StartedTrial {
-  schoolId: string;
-  expiresAt: string;
-}
-
-/**
- * Starting a Trial School has one outcome beyond the generic refusal: busy,
- * when this deployment holds as many trials as it may or this browser has
- * started as many as it may this hour. It is no refusal of anything, so it is
- * said plainly, and a visitor told to try again later is not left thinking
- * the site is broken.
- */
-async function startTrial(
-  timezone: string,
-): Promise<{ status: "started"; trial: StartedTrial } | { status: "busy" } | { status: "refused" }> {
-  const sent = await send("POST", "/trials", { timezone });
-  const body = sent?.body as { status?: unknown; trial?: StartedTrial } | undefined;
-  if (sent?.status === 201 && body?.trial !== undefined) {
-    return { status: "started", trial: body.trial };
-  }
-  if (body?.status === "busy") {
-    return { status: "busy" };
-  }
-  return { status: "refused" };
-}
-
 export const api = {
-  buildInfo: () => request<BuildInfo>("GET", "/build-info"),
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),
   signOut: () => request<undefined>("DELETE", "/session"),
-  /** Whether this deployment offers Trial Schools at all. */
-  trials: () => request<{ enabled: boolean }>("GET", "/trials"),
-  /** Starts a Trial School in this timezone, ending whatever Session the browser held. */
-  startTrial,
+  /** Whether this deployment offers Trial Schools at all, and which providers a visitor signs in with to start one. */
+  trials: () => request<{ enabled: boolean; providers: TrialProvider[] }>("GET", "/trials"),
   /** Ends this Trial School Session and starts one for the role's account in the same School. */
   switchRole: (role: Role) => request<{ expiresAt: string }>("POST", "/trials/role", { role }),
   account: (schoolId: string) => request<{ account: OwnAccount }>("GET", inSchool(schoolId, "/account")),
@@ -661,6 +719,11 @@ export const api = {
     ),
   setAttendanceWindow: (schoolId: string, attendanceWindow: number) =>
     request<{ settings: SchoolSettings }>("PATCH", inSchool(schoolId, "/settings"), { attendanceWindow }),
+  resultValueScale: (schoolId: string) =>
+    request<{ resultValueScale: ResultValueScale }>("GET", inSchool(schoolId, "/result-value-scale")),
+  /** Saves these values, in this order, as the scale's next version. */
+  saveResultValueScale: (schoolId: string, values: ResultValue[]) =>
+    request<{ resultValueScale: ResultValueScale }>("POST", inSchool(schoolId, "/result-value-scale"), { values }),
   academicYears: (schoolId: string) =>
     request<{ academicYears: AcademicYear[] }>("GET", inSchool(schoolId, "/academic-years")),
   createAcademicYear: (schoolId: string, year: { name: string; firstDate: string; lastDate: string }) =>
@@ -734,6 +797,15 @@ export const api = {
       "GET",
       inSchool(schoolId, `/persons/${encodeURIComponent(personId)}/attendance`),
     ),
+  /** A Student's Term report for this Term, or for the one the server picks when none is named. */
+  termReport: (schoolId: string, personId: string, termId: string | null) =>
+    request<{ termReport: TermReport }>(
+      "GET",
+      inSchool(
+        schoolId,
+        `/persons/${encodeURIComponent(personId)}/term-report${termId === null ? "" : `?termId=${encodeURIComponent(termId)}`}`,
+      ),
+    ),
   /** The session on this date, or on the School's today when none is named. */
   attendanceSession: (schoolId: string, classOfferingId: string, date: string | null) =>
     request<{ attendanceSession: AttendanceSession }>(
@@ -761,24 +833,34 @@ export const api = {
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/attendance-session`),
       save,
     ),
+  /** A Class Offering's Term results, drafts included, and the scale a value is chosen from. */
+  classOfferingResults: (schoolId: string, classOfferingId: string) =>
+    request<{ classOfferingResults: ClassOfferingResults }>(
+      "GET",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/term-results`),
+    ),
+  /** Saves these drafts; one changed since it was loaded is refused and returned as it stands. */
+  saveTermResults: (schoolId: string, classOfferingId: string, drafts: TermResultDraft[]) =>
+    request<{ classOfferingResults: ClassOfferingResults; refusedDrafts: RefusedDraft[] }>(
+      "PATCH",
+      inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/term-results`),
+      { drafts },
+    ),
+  /** Publishes every unpublished result carrying a value; refused, naming each, while an active roster member has none. */
+  publishTermResults: (schoolId: string, classOfferingId: string) =>
+    request<{
+      publication: { id: string; publishedAt: string; publishedBy: { id: string; displayName: string }; resultCount: number };
+      classOfferingResults: ClassOfferingResults;
+    }>("POST", inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/publications`), {}),
   /** A School Administrator's queue, every request; anyone else's, their own. Pending first, oldest first. */
   correctionRequests: (schoolId: string) =>
     request<{ correctionRequests: CorrectionRequest[] }>("GET", inSchool(schoolId, "/correction-requests")),
-  /** Proposes a change to one Student's Attendance, with a reason, whatever the date. */
-  raiseCorrectionRequest: (
-    schoolId: string,
-    { classOfferingId, ...raising }: {
-      classOfferingId: string;
-      studentPersonId: string;
-      date: string;
-      after: AttendanceStatus;
-      reason: string;
-    },
-  ) =>
+  /** Proposes a change, with a reason: to one Student's Attendance whatever the date, or to their published Term result. */
+  raiseCorrectionRequest: (schoolId: string, { classOfferingId, ...raising }: CorrectionRaising) =>
     request<{ correctionRequest: CorrectionRequest }>(
       "POST",
       inSchool(schoolId, `/class-offerings/${encodeURIComponent(classOfferingId)}/correction-requests`),
-      { kind: "attendance", ...raising },
+      raising,
     ),
   /** Approves, rejects, or withdraws a Pending request. Approval applies its change at once. */
   decideCorrectionRequest: (schoolId: string, correctionRequestId: string, decision: CorrectionDecision) =>

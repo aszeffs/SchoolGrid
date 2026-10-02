@@ -248,6 +248,10 @@ DOUBLE
 chmod +x "$workdir/bin/docker" "$workdir/bin/psql" "$workdir/bin/curl"
 export PATH="$workdir/bin:$PATH"
 
+# The stand-in OAuth provider, doubled too: it says it is listening, as the
+# real one does once it is, and stays up until the subject stops it.
+fake_provider_command='bash -c '\''echo "$FAKE_PROVIDER_CLIENT_ID" > "$FAKE_PROVIDER_READY"; exec sleep 30'\'''
+
 # --- the assertion ----------------------------------------------------------
 #
 # Asserts the exit code, and for a failing case that the output names the
@@ -273,6 +277,7 @@ expect() {
     STATE="$state" \
     SMOKE_TIMEOUT_SECONDS=2 \
     SMOKE_POLL_INTERVAL_SECONDS=1 \
+    SMOKE_FAKE_PROVIDER_COMMAND="${fake_provider_command}" \
     bash "$subject" schoolgrid:test ${then_command[@]+"${then_command[@]}"} 2>&1
   )" || code=$?
 
@@ -433,6 +438,12 @@ then_command=(bash -c 'test -e "$STATE/trials" && echo "then saw trials at ${SCH
 expect "a command given after the image runs against a container offering trials" healthy 0 \
   "then saw trials at http://localhost:3001"
 expect "trials are served with TRIALS_ENABLED on" healthy 0 "with TRIALS_ENABLED on"
+expect "the stand-in OAuth provider is started for the container offering trials" healthy 0 \
+  "the stand-in OAuth provider listens on port 3002"
+fake_provider_command="false"
+expect "a stand-in OAuth provider that will not start fails before the command runs" healthy 1 \
+  "the stand-in OAuth provider did not start" "then saw trials"
+fake_provider_command='bash -c '\''echo "$FAKE_PROVIDER_CLIENT_ID" > "$FAKE_PROVIDER_READY"; exec sleep 30'\'''
 
 # The browser suite failing must fail the job, not print and pass.
 then_command=(false)

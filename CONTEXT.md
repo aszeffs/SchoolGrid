@@ -137,11 +137,11 @@ The set of Roster memberships captured when an Attendance session opens. Later r
 _Avoid_: Live roster, attendance list
 
 **Result value scale**:
-The versioned list of allowed result values a School permits, such as A through F. Each Term result is bound to the version in force when it was recorded, so changing the scale never alters an existing result.
+The versioned, ordered list of allowed result values a School permits. Each value is a short label with an optional description, and no two labels in a version are the same, ignoring letter case; a version holds at least one. Every School starts with a first version holding A, B, C, D and F. A School Administrator changes the scale by saving a new version, and Faculty and School Administrators read the current one. Each Term result is bound to the version in force when it was recorded, so changing the scale never alters an existing result.
 _Avoid_: Grading scale, rubric
 
 **Term result**:
-A Faculty-created academic result for a Student in a Class Offering for one Term. It begins as a draft and carries a value from the School's Result value scale, an optional numeric score, and an optional comment. Drafts are visible only to Faculty ever assigned to that Class Offering and to School Administrators. Changing a draft's value binds it to the scale version then in force; an untouched draft keeps its version, and a published result never changes version.
+A Faculty-created academic result for a Student in a Class Offering for one Term. It begins as a draft and carries a value from the School's Result value scale, an optional score from 0 to 100 with one decimal, and an optional comment of up to 500 characters. Drafts are visible only to Faculty ever assigned to that Class Offering and to School Administrators. Changing a draft's value binds it to the scale version then in force; an untouched draft keeps its version. A published result changes only through an approved Correction request, which binds a changed value to the version then in force.
 _Avoid_: Grade, marking-period result, assignment grade
 
 **Term report**:
@@ -149,11 +149,11 @@ One Student's view of one Term: each Class Offering they were rostered in, with 
 _Avoid_: Report card, transcript
 
 **Publication**:
-The irreversible transition making one Student's Term result visible to that Student and to permitted Guardians. It is performed for a Class Offering at once, publishing every result carrying a value at that moment, and is refused while any active roster member's result lacks a value. A result created afterwards is published by a later act without reversing or re-asserting anything. Publication applies to results only; Attendance does not publish.
+The irreversible transition making one Student's Term result visible to that Student and to permitted Guardians. It is performed for a Class Offering at once, by a Faculty member currently assigned to it or by a School Administrator, publishing every result carrying a value at that moment, and is refused while any active roster member's result lacks a value. A result created afterwards is published by a later act without reversing or re-asserting anything. Publication applies to results only; Attendance does not publish.
 _Avoid_: Approval, release
 
 **Correction request**:
-A record of a proposed change requiring School Administrator approval: Attendance outside its window, resolution of an Absent-pending-review, or a published Term result. It carries the requester, a reason, the before and after values, its state, and the approver, and may be raised at any time with no deadline. Faculty and School Administrators may raise one; a School Administrator other than the requester approves it, unless the School has a single Administrator, whose self-approval is marked on the Audit record. Approval applies the change and records it in the same transaction. A Correction request is Pending until it is Approved, Rejected with a reason, or Withdrawn by its requester. Approval is refused while the target's current value differs from the request's before value, which is none when the request adds Attendance where none was recorded. Faculty may raise one only for a Class Offering they are currently assigned to.
+A record of a proposed change requiring School Administrator approval: Attendance outside its window, resolution of an Absent-pending-review, or a published Term result, whose value, score and comment it may each change, a new value coming from the current Result value scale. It carries the requester, a reason, the before and after values, its state, and the approver, and may be raised at any time with no deadline. Faculty and School Administrators may raise one; a School Administrator other than the requester approves it, unless the School has a single Administrator, whose self-approval is marked on the Audit record. Approval applies the change and records it in the same transaction. A Correction request is Pending until it is Approved, Rejected with a reason, or Withdrawn by its requester. Approval is refused while the target's current value differs from the request's before value, which is none when the request adds Attendance where none was recorded. Faculty may raise one only for a Class Offering they are currently assigned to.
 _Avoid_: Edit request, change ticket
 
 **Audit record**:

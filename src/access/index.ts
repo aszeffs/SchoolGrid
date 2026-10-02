@@ -817,6 +817,27 @@ export function authorizeManageSchoolSettings(actor: Actor): string {
 }
 
 /**
+ * Returns the School whose Result value scale the actor may read, and refuses
+ * otherwise. Faculty read it to choose a Term result's value from it, and
+ * School Administrators to keep it; no one else needs it.
+ */
+export function authorizeReadResultValueScale(actor: Actor): string {
+  if (!holds(actor, "school_administrator") && !holds(actor, "faculty")) {
+    throw new Refused("forbidden", { type: "school", id: actor.schoolId });
+  }
+  return actor.schoolId;
+}
+
+/**
+ * Returns the School whose Result value scale the actor may save a new version
+ * of, and refuses otherwise. Only a School Administrator may, as for the
+ * School's other settings, asked before the body is read.
+ */
+export function authorizeSaveResultValueScale(actor: Actor): string {
+  return authorizeManageRelationships(actor);
+}
+
+/**
  * Returns the School whose calendar the actor may ask about, and refuses
  * otherwise. For now only a School Administrator may: which School date an
  * instant falls on tells the asker the School's timezone, which is one of its
@@ -1014,6 +1035,29 @@ export function authorizeReadAttendanceOf<O extends { id: string; schoolId: stri
   classOfferingId: string,
   target: O | null,
 ): O {
+  return authorizeReadClassRecordsOf(actor, classOfferingId, target);
+}
+
+/**
+ * Returns the Class Offering whose Term results, drafts included, the actor
+ * may read, and refuses otherwise: a School Administrator, and anyone ever
+ * assigned to teach it, as for its Attendance. A Student and a Guardian never
+ * read a draft; what is published reaches them through the Term report.
+ */
+export function authorizeReadTermResultsOf<O extends { id: string; schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
+  return authorizeReadClassRecordsOf(actor, classOfferingId, target);
+}
+
+/** The one decision on reading what a Class Offering holds about its whole class. */
+function authorizeReadClassRecordsOf<O extends { id: string; schoolId: string }>(
+  actor: Actor,
+  classOfferingId: string,
+  target: O | null,
+): O {
   const reason =
     outOfReach(actor, target) ??
     (holds(actor, "school_administrator") || hasTaught(actor, target!) ? null : "forbidden");
@@ -1048,6 +1092,42 @@ export function authorizeReadAttendanceOfStudent(actor: Actor, personId: string,
     throw new Refused(reason, { type: "person", id: personId });
   }
   return target!;
+}
+
+/** Whose Term report the actor may read, and which of its parts. */
+export interface TermReportReach {
+  student: Person;
+  termResults: boolean;
+  attendanceTotals: boolean;
+}
+
+/**
+ * Returns the Person whose Term report the actor may read, with the parts
+ * they may read of it, and refuses otherwise (CONTEXT.md: Term report).
+ *
+ * A Student reads their own in full whatever their Enrollment: it holds only
+ * published results and Attendance, both theirs after departure. A School
+ * Administrator reads any in the School in full. A Guardian reads a linked
+ * Student's while the link is in force, each part only as its Access profile
+ * grants, and is refused when it grants neither. Faculty read results by the
+ * Class Offering they taught, never one Student's across offerings.
+ */
+export function authorizeReadTermReport(actor: Actor, personId: string, target: Person | null): TermReportReach {
+  const unreachable = outOfReach(actor, target);
+  const reach = unreachable === null ? termReportPartsFor(actor, target!) : null;
+  if (reach === null || (!reach.termResults && !reach.attendanceTotals)) {
+    throw new Refused(unreachable ?? "forbidden", { type: "person", id: personId });
+  }
+  return { student: target!, ...reach };
+}
+
+/** The parts of a Student's Term report in the actor's School the actor may read, by who they are to that Student. */
+function termReportPartsFor(actor: Actor, student: Person): Omit<TermReportReach, "student"> {
+  if (holds(actor, "school_administrator") || student.id === actor.person.id) {
+    return { termResults: true, attendanceTotals: true };
+  }
+  const profile = standingOf.get(actor)?.linkedStudents.get(student.id);
+  return { termResults: profile?.resultsRead ?? false, attendanceTotals: profile?.attendanceRead ?? false };
 }
 
 /**
@@ -1115,19 +1195,92 @@ export async function authorizeRecordAttendance<O extends { id: string; schoolId
 }
 
 /**
+ * Why the actor may not record a Class Offering's draft Term results, or null
+ * when they may: they need a Teaching assignment for it that is active now
+ * (CONTEXT.md: Term result). An open one stays active after the Term ends, so
+ * results due after its last day can still be given. One whose assignment has
+ * ended reads the drafts and records nothing, and so does a School
+ * Administrator: their changes come after Publication, through a Correction
+ * request. Only for an offering the actor has already been permitted to read.
+ */
+export async function termResultsRecordingRefusal(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+): Promise<"not_teaching" | null> {
+  return (await currentTeachingAssignment(database, actor, offering)) === undefined ? "not_teaching" : null;
+}
+
+/**
+ * Returns the Class Offering whose draft Term results the actor may record,
+ * and refuses otherwise: see termResultsRecordingRefusal.
+ */
+export async function authorizeRecordTermResults<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+): Promise<O> {
+  if ((await termResultsRecordingRefusal(database, actor, offering)) !== null) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
+ * Whether the actor may publish a Class Offering's Term results: a School
+ * Administrator, and a Faculty member whose Teaching assignment for it is
+ * active now (CONTEXT.md: Publication). Only for an offering the actor has
+ * already been permitted to read the results of.
+ */
+export async function mayPublishTermResults(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+): Promise<boolean> {
+  return holds(actor, "school_administrator") || (await currentTeachingAssignment(database, actor, offering)) !== undefined;
+}
+
+/**
+ * Returns the Class Offering whose Term results the actor may publish, and
+ * refuses otherwise: see mayPublishTermResults.
+ */
+export async function authorizePublishTermResults<O extends { id: string; schoolId: string }>(
+  database: Queryable,
+  actor: Actor,
+  offering: O,
+): Promise<O> {
+  if (!(await mayPublishTermResults(database, actor, offering))) {
+    throw new Refused("forbidden", { type: "class_offering", id: offering.id });
+  }
+  return offering;
+}
+
+/**
+ * Whether the actor may raise a Correction request for a Class Offering's
+ * records: any School Administrator, and a Faculty member currently teaching
+ * it, whatever date or result the request is for (CONTEXT.md: Correction
+ * request). One whose assignment has ended no longer speaks for it; whoever
+ * teaches it now does. Only for an offering the actor has already been
+ * permitted to read the Attendance, or the Term results, of.
+ */
+export async function mayRaiseCorrectionRequest(
+  database: Queryable,
+  actor: Actor,
+  offering: { id: string; schoolId: string },
+): Promise<boolean> {
+  return holds(actor, "school_administrator") || (await currentTeachingAssignment(database, actor, offering)) !== undefined;
+}
+
+/**
  * Returns the Class Offering the actor may raise a Correction request for,
- * and refuses otherwise: any School Administrator, and a Faculty member
- * currently teaching it, whatever date the request is for (CONTEXT.md:
- * Correction request). One whose assignment has ended no longer speaks for
- * it; whoever teaches it now does. Only for an offering the actor has already
- * been permitted to read the Attendance of.
+ * and refuses otherwise: see mayRaiseCorrectionRequest.
  */
 export async function authorizeRaiseCorrectionRequest<O extends { id: string; schoolId: string }>(
   database: Queryable,
   actor: Actor,
   offering: O,
 ): Promise<O> {
-  if (!holds(actor, "school_administrator") && (await currentTeachingAssignment(database, actor, offering)) === undefined) {
+  if (!(await mayRaiseCorrectionRequest(database, actor, offering))) {
     throw new Refused("forbidden", { type: "class_offering", id: offering.id });
   }
   return offering;

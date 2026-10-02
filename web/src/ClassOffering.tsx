@@ -483,6 +483,18 @@ function OfferingSheet({
       )}
 
       {attendance !== null && (
+        <section>
+          <h2>Term results</h2>
+          <p>
+            <Link to={{ name: "termResults", schoolId, classOfferingId: offering.id }}>
+              Term results for {term.name}
+            </Link>{" "}
+            <span className="muted">Each Student&rsquo;s value, score and comment, drafts included.</span>
+          </p>
+        </section>
+      )}
+
+      {attendance !== null && (
         <OfferingAttendance
           schoolId={schoolId}
           classOfferingId={offering.id}

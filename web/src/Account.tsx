@@ -138,17 +138,34 @@ function AccountSheet({ account, linkedAttendance, school }: Held & { school: Re
         </section>
       )}
 
-      {/* Term results are still to come for Guardians. */}
-      {holds("guardian") && (
-        <section className="not-built">
-          <h2>Not built yet</h2>
-          <p>
-            Term results are not built yet, so there are none to show you here. What this School holds for you today
-            is above, in full.
-          </p>
-        </section>
-      )}
+      {holds("guardian") && <LinkedTermReports schoolId={school.schoolId} account={account} />}
     </Sheet>
+  );
+}
+
+/**
+ * Each linked Student's Term report, for the links whose Access profile grants
+ * results read or attendance read. A link granting neither offers none, and
+ * nothing says so: the report is simply not offered.
+ */
+function LinkedTermReports({ schoolId, account }: { schoolId: string; account: OwnAccount }) {
+  const reported = account.linkedStudents.filter(
+    ({ accessProfile }) => accessProfile.resultsRead || accessProfile.attendanceRead,
+  );
+  if (reported.length === 0) {
+    return null;
+  }
+  return (
+    <section>
+      <h2>Term reports</h2>
+      <ul>
+        {reported.map(({ student }) => (
+          <li key={student.id}>
+            <Link to={{ name: "termReport", schoolId, personId: student.id }}>{student.displayName}&rsquo;s Term report</Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

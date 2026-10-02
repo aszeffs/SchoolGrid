@@ -323,7 +323,10 @@ describe("Platform Administrator", () => {
           "POST /api/platform/schools",
           "GET /api/trials",
           "HEAD /api/trials",
-          "POST /api/trials",
+          "GET /api/trials/start/:provider",
+          "HEAD /api/trials/start/:provider",
+          "GET /api/trials/callback/:provider",
+          "HEAD /api/trials/callback/:provider",
           "POST /api/trials/role",
         ].sort(),
       );
@@ -376,6 +379,12 @@ describe("Platform Administrator", () => {
           { method: "GET", url: "/api/schools/:schoolId/correction-requests" },
           { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/correction-requests" },
           { method: "PATCH", url: "/api/schools/:schoolId/correction-requests/:correctionRequestId" },
+          { method: "GET", url: "/api/schools/:schoolId/result-value-scale" },
+          { method: "POST", url: "/api/schools/:schoolId/result-value-scale" },
+          { method: "GET", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/term-results" },
+          { method: "PATCH", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/term-results" },
+          { method: "POST", url: "/api/schools/:schoolId/class-offerings/:classOfferingId/publications" },
+          { method: "GET", url: "/api/schools/:schoolId/persons/:personId/term-report" },
         ]),
       );
 
