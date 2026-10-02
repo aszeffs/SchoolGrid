@@ -85,3 +85,14 @@ vulnerabilities:
       resolves to the digest already pinned. Bump the base as soon as one
       exists.
     expired_at: 2026-11-11
+
+  # A seventh on the same libssl3 3.0.18-1~deb12u2, raised on 2026-09-30.
+  # Unlike the six above, Debian has published no fix for it yet, so there is
+  # nothing for a distroless rebuild to carry either. The gcr.io tag was
+  # checked the same day and still resolves to the pinned digest.
+  - id: CVE-2026-84782
+    statement: >-
+      Information disclosure in libssl3 3.0.18-1~deb12u2 in the distroless
+      base. Neither Debian nor distroless has published a fixed build yet.
+      Drop this entry once a rebuilt base carrying a fixed libssl3 is pinned.
+    expired_at: 2026-11-30
