@@ -76,7 +76,13 @@ test.describe("in a Trial School", () => {
     await expect(page.getByRole("alert")).toHaveText("SchoolGrid is busy right now. Try again in a little while.");
     // Said once: the address no longer says it.
     await expect(page).toHaveURL("/");
-    await expect(page.getByRole("link", { name: "Continue with GitHub" })).toBeVisible();
+    // The trial is the hero's one call to action, offered before the tour.
+    const hero = page.getByRole("region", { name: /each seen by the right role$/ });
+    await expect(hero.getByRole("link", { name: /^Continue with / })).toHaveText([
+      "Continue with GitHub",
+      "Continue with Google",
+    ]);
+    await expect(page.locator("body")).not.toContainText(/\b(pric(e|es|ing)|plans?|subscri\w*|contact sales)\b/i);
   });
 
   test("a visitor who cancels at the provider is back on the front page, told so, with no trial", async ({ page }) => {

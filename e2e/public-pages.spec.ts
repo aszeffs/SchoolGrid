@@ -12,8 +12,18 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * asks for and stay legible in both.
  */
 
+const HEADLINE = "A K-12 School's attendance and results, each seen by the right role";
+
+/** The landing page's tour, in the order it leads with, and the role each feature is seen as. */
+const TOUR = [
+  { heading: "Attendance in a few clicks", role: "Faculty" },
+  { heading: "Term results, published safely", role: "Faculty" },
+  { heading: "Guardians see only what they're granted", role: "Guardian" },
+  { heading: "Security and audit", role: "School Administrator" },
+] as const;
+
 const PUBLIC_SHEETS = [
-  { path: "/", heading: "Academic records for K-12 Schools" },
+  { path: "/", heading: HEADLINE },
   { path: "/sign-in", heading: "Sign in to SchoolGrid" },
   { path: "/how-this-was-built", heading: "How this was built" },
 ] as const;
@@ -36,18 +46,25 @@ async function focused(page: Page): Promise<{ name: string; ring: string } | und
   });
 }
 
-test("the landing page says what SchoolGrid is, how it holds records, and that it is a showcase", async ({ page }) => {
+test("the landing page says what SchoolGrid does, tours what each role sees, and that it is a showcase", async ({
+  page,
+}) => {
   await page.goto("/");
 
   const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { level: 1 })).toHaveText("Academic records for K-12 Schools");
-  await expect(main.getByText(/School Administrator runs the School/)).toBeVisible();
+  await expect(main.getByRole("heading", { level: 1 })).toHaveText(HEADLINE);
 
-  const trust = page.getByRole("region", { name: "Trust & security" });
-  for (const term of ["Records isolated per School", "Audit trail", "Signed and verified builds"]) {
-    await expect(trust.getByRole("term").filter({ hasText: term })).toBeVisible();
+  // The tour leads with what a School does every day, and ends on how its records are held.
+  await expect(main.getByRole("heading", { level: 2 })).toHaveText(TOUR.map(({ heading }) => heading));
+  for (const { heading, role } of TOUR) {
+    await expect(main.getByRole("region", { name: heading }).getByText(`Seen as ${role}`, { exact: true })).toBeVisible();
   }
-  await trust.getByRole("link", { name: "How this was built" }).click();
+
+  const security = main.getByRole("region", { name: "Security and audit" });
+  for (const term of ["Records isolated per School", "Audit trail", "Signed and verified builds"]) {
+    await expect(security.getByRole("term").filter({ hasText: term })).toBeVisible();
+  }
+  await security.getByRole("link", { name: "How this was built" }).click();
   await expect(page).toHaveURL("/how-this-was-built");
   await page.goBack();
 
@@ -60,8 +77,10 @@ test("the landing page says what SchoolGrid is, how it holds records, and that i
     "href",
     "https://github.com/aszeffs/SchoolGrid",
   );
-  // Nothing on it frames the site as anything but the product it shows.
+  // Nothing on it frames the site as anything but the product it shows, and
+  // nothing asks for money: the one way in is a trial.
   await expect(page.locator("body")).not.toContainText(/learn|practice|portfolio|DevSecOps/i);
+  await expect(page.locator("body")).not.toContainText(/\b(pric(e|es|ing)|plans?|subscri\w*|contact sales)\b/i);
 
   // This deployment offers no trial, so the page offers none.
   await expect(main.getByRole("link", { name: /^Continue with / })).toHaveCount(0);
