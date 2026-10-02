@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { Link } from "./Link.tsx";
 import { Sheet } from "./Sheet.tsx";
 import { StartTrial } from "./StartTrial.tsx";
 import { rememberTrial, useTrialProviders } from "./trial.ts";
@@ -17,14 +16,7 @@ export function TrialEnded() {
   const providers = useTrialProviders();
 
   return (
-    <Sheet
-      name="Trial ended"
-      foot={
-        <p className="muted">
-          <Link to={{ name: "howThisWasBuilt" }}>How this was built</Link>
-        </p>
-      }
-    >
+    <Sheet name="Trial ended">
       <h1>Your trial School has been deleted</h1>
       <div className="panel">
         <p>

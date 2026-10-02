@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "./api.ts";
-import { Link } from "./Link.tsx";
 import { navigate } from "./navigation.ts";
 import { Key, Sheet } from "./Sheet.tsx";
 
@@ -60,13 +59,6 @@ export function SignIn() {
     <Sheet
       name="Sign in"
       legend={legend}
-      foot={
-        <p className="muted">
-          <Link to={{ name: "howThisWasBuilt" }}>
-            How this was built
-          </Link>
-        </p>
-      }
     >
       <h1>Sign in to SchoolGrid</h1>
       {/*

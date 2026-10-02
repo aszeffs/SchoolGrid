@@ -141,8 +141,8 @@ export function Landing() {
           </Key>
           <Key term="Signed and verified builds">
             The site runs one container image, tested, scanned and signed before it was published.{" "}
-            <Link to={{ name: "howThisWasBuilt" }}>How this was built</Link> names that image and gives the command to
-            check it yourself.
+            <a href={`${REPOSITORY_URL}#how-this-was-built`}>How this was built</a> follows an image from commit to
+            deploy and gives the command to check it yourself.
           </Key>
         </dl>
       </Feature>
