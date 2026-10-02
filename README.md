@@ -4,9 +4,59 @@ Unified digital infrastructure for school administration, course management, and
 
 Built as a practice ground for DevSecOps. The domain is deliberately security-heavy: every record belongs to exactly one School, access derives from scoped relationships rather than from credentials, and every refusal is designed to leak nothing about what exists. The security properties are in the domain, not bolted on afterwards.
 
-## Security pipeline
+## What it does
 
-Live at **<https://schoolgrid-phi.vercel.app>**, running the current `main`. Its landing page offers a trial, started by signing in with GitHub: a private Trial School of invented data, seen as its School Administrator, Faculty, Student or Guardian with no password, and deleted two hours later. The ["How this was built" page](https://schoolgrid-phi.vercel.app/how-this-was-built) shows the commit and image digest the site is serving, with the command to verify them yourself.
+A School keeps its Attendance and Term results in SchoolGrid, and each role sees only its own part of them. Every screenshot below is the real app, made by `npm run screenshots` from a Trial School and shown in your browser's light or dark rendition.
+
+### Attendance in a few clicks — seen as Faculty
+
+Open today's Attendance session from the Class Offering, mark everyone Present in one action, then change only the Students who are late or away. Faculty assigned to the Class Offering share one session, and a mark someone else changed meanwhile is shown, never overwritten. Once the Attendance window closes, a change goes through a Correction request.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/tour/attendance-dark.png">
+  <img src="web/public/tour/attendance-light.png" alt="A Faculty member's Attendance session for Mathematics, with every Student marked Present in one action and one changed to Tardy, ready to save." width="720">
+</picture>
+
+### Term results, published safely — seen as Faculty
+
+Term results stay drafts, seen only by the Class Offering's Faculty and School Administrators, until Publication makes a whole Class Offering's results visible at once. Publication is refused while any Student's result is missing, and a published result changes only through an approved Correction request.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/tour/publication-dark.png">
+  <img src="web/public/tour/publication-light.png" alt="Publishing three Term results for Mathematics: a confirmation warns that Publication cannot be undone, and that a published result changes only through a Correction request." width="720">
+</picture>
+
+### Guardians see only what they're granted — seen as Guardian
+
+Each Guardian link carries its own Access profile: Attendance, Term results, or both. The Term report shows a Guardian exactly what theirs grants, with nothing marking what is withheld, and the link ends with the Student's Enrollment.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/tour/guardian-dark.png">
+  <img src="web/public/tour/guardian-light.png" alt="A Guardian's view of their Student's Term report: each Class Offering with its published Term result and Attendance totals." width="720">
+</picture>
+
+### Security and audit — seen as School Administrator
+
+Every record belongs to exactly one School, and a request for a record you do not reach is refused the same way as one for a record that does not exist. Every sign-in, refusal and sensitive change is written to the School's append-only Audit trail.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/tour/security-dark.png">
+  <img src="web/public/tour/security-light.png" alt="The School's Audit trail, newest first: an approved Correction request, the change it made with its reason, and each sign-in, each with who acted and when." width="720">
+</picture>
+
+To make them again after a change to the app, run `npm run build` and then `npm run screenshots`. It boots its own database, stand-in sign-in provider and service, and rewrites the PNGs in `web/public/tour/`, which the landing page serves and this README shows.
+
+### What a trial is not
+
+- It runs on Vercel's free **Hobby plan**, for non-commercial personal use. It scales to zero when nobody is using it, so the first request after a quiet spell waits for the function and the database to wake.
+- The data is **invented**. The site hosts no real School, and nothing you type into a trial should be real either.
+- A trial is **yours alone, for two hours**, then deleted whole: its Persons, its records, its Audit records, and any account an Invitation created in it ([ADR-0012](docs/adr/0012-trial-schools-replace-the-shared-demo.md)). Expired trials are deleted when the next one starts, and daily by [`trial-sweep.yml`](.github/workflows/trial-sweep.yml). That deletion is the one exception to Audit records being append-only, and only a database function that refuses any other School can make it.
+- **No sign-in is published.** A trial's role accounts have no password; the trial hands the browser a Session for each.
+- At most 30 trials are live at once, and one client may start 2 an hour. The **rate limits are counted per instance**, in memory. Vercel may run several at once, which multiplies them by however many are up.
+
+## How this was built
+
+Live at **<https://schoolgrid-phi.vercel.app>**, running the current `main`. Its landing page offers a trial, started by signing in with GitHub or Google: a private Trial School of invented data, seen as its School Administrator, Faculty, Student or Guardian with no password, and deleted two hours later. The site names the image it is running at [`/api/build-info`](https://schoolgrid-phi.vercel.app/api/build-info): the commit it was built from and its digest, which [Verifying an image](#verifying-an-image) checks against the image's signatures rather than against the site's word.
 
 Nothing reaches that URL by hand. A commit takes the path below, and from the image build onwards each step has to pass before the next one runs.
 
@@ -42,19 +92,11 @@ Each box above is a row below, under the same name, with what it stops and a lin
 
 That is the whole path, in summary. The detail behind it is further down: [Security controls](#security-controls) for what each control catches, and [Published images](#published-images) for pulling an image and verifying it yourself.
 
-### What a trial is not
-
-- It runs on Vercel's free **Hobby plan**, for non-commercial personal use. It scales to zero when nobody is using it, so the first request after a quiet spell waits for the function and the database to wake.
-- The data is **invented**. The site hosts no real School, and nothing you type into a trial should be real either.
-- A trial is **yours alone, for two hours**, then deleted whole: its Persons, its records, its Audit records, and any account an Invitation created in it ([ADR-0012](docs/adr/0012-trial-schools-replace-the-shared-demo.md)). Expired trials are deleted when the next one starts, and daily by [`trial-sweep.yml`](.github/workflows/trial-sweep.yml). That deletion is the one exception to Audit records being append-only, and only a database function that refuses any other School can make it.
-- **No sign-in is published.** A trial's role accounts have no password; the trial hands the browser a Session for each.
-- At most 30 trials are live at once, and one client may start 2 an hour. The **rate limits are counted per instance**, in memory. Vercel may run several at once, which multiplies them by however many are up.
-
 ## Status
 
-The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). `GET /api/session` names the actor: the account, and each School it reaches with the Person it resolves to there and the roles that Person holds — facts, never permissions ([ADR-0007](docs/adr/0007-the-session-response-carries-the-actors-facts.md)). A browser holds its session in a cookie; a client that sends `"session": "bearer"` with its credentials gets a Bearer token instead. No School-scoped behaviour yet.
+The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). `GET /api/session` names the actor: the account, and each School it reaches with the Person it resolves to there and the roles that Person holds — facts, never permissions ([ADR-0007](docs/adr/0007-the-session-response-carries-the-actors-facts.md)). A browser holds its session in a cookie; a client that sends `"session": "bearer"` with its credentials gets a Bearer token instead.
 
-A web app in `web/` (React, Vite, TypeScript) is built into the image and served by the service on every path outside `/api`, on the same origin. It signs in with the cookie session, lists the Schools the account reaches, and signs out.
+A web app in `web/` (React, Vite, TypeScript) is built into the image and served by the service on every path outside `/api`, on the same origin. It signs in with the cookie session and carries every page shown under [What it does](#what-it-does).
 
 ## Running it
 
@@ -147,7 +189,7 @@ Prefer the commit tag. `latest` tells you what is newest, not what you are runni
 
 The package is public so that anyone, not only the maintainer, can verify where an image came from. Nothing sets that by hand: the image carries an `org.opencontainers.image.source` label pointing at this repository and is pushed with the workflow's own token, so GHCR links the package to the repository and gives it the repository's public visibility. A package can still be made private from its settings, independently of the repository, and the anonymous pull job after every publish is what would catch that.
 
-The running site says which image it is: `GET /api/build-info` returns the commit the image was built from, baked in as the `BUILD_COMMIT` build argument, and the digest it was deployed as, which the deploy supplies as `IMAGE_DIGEST` because an image cannot carry its own digest. Either is left out when unknown, as both are in local development. The web app's "How this was built" page, linked from the sign-in page, shows both with the command below filled in.
+The running site says which image it is: `GET /api/build-info` returns the commit the image was built from, baked in as the `BUILD_COMMIT` build argument, and the digest it was deployed as, which the deploy supplies as `IMAGE_DIGEST` because an image cannot carry its own digest. Either is left out when unknown, as both are in local development. To check the live site, take both from <https://schoolgrid-phi.vercel.app/api/build-info> and put them in the command below.
 
 ### Verifying an image
 

@@ -172,9 +172,9 @@ jobs:
         # The image keeps its default rate limit, so a page that spends a
         # browser's allowance fails here rather than for a user.
         #
-        # SCHOOLGRID_EXPECTED_COMMIT is what the browser suite requires the
-        # "How this was built" page to show, so an image that lost its commit
-        # between the build arg and the page fails here.
+        # SCHOOLGRID_EXPECTED_COMMIT is what the browser suite requires
+        # /api/build-info to report, so an image that lost its commit between
+        # the build arg and the server fails here.
         env:
           CI: "true"
           SCHOOLGRID_EXPECTED_COMMIT: ${{ github.sha }}

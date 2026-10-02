@@ -6,7 +6,7 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * The sheets a visitor sees before signing in: the site's front door.
  *
  * What each page says about the domain belongs to its own spec — a trial to
- * trial-school.spec.ts, the build's provenance to how-this-was-built.spec.ts.
+ * trial-school.spec.ts.
  * What is asserted here is what all of them owe a visitor who arrives on
  * them cold: that they explain themselves, that they can be worked by the
  * keyboard, that they hold 360px, and that they follow the theme the browser
@@ -26,7 +26,6 @@ const TOUR = [
 const PUBLIC_SHEETS = [
   { path: "/", heading: HEADLINE },
   { path: "/sign-in", heading: "Sign in to SchoolGrid" },
-  { path: "/how-this-was-built", heading: "How this was built" },
 ] as const;
 
 /** The element that fills the frame, and so the one carrying the page's ground. */
@@ -65,9 +64,11 @@ test("the landing page says what SchoolGrid does, tours what each role sees, and
   for (const term of ["Records isolated per School", "Audit trail", "Signed and verified builds"]) {
     await expect(security.getByRole("term").filter({ hasText: term })).toBeVisible();
   }
-  await security.getByRole("link", { name: "How this was built" }).click();
-  await expect(page).toHaveURL("/how-this-was-built");
-  await page.goBack();
+  // The build's story is told in the README, beside the code it describes.
+  await expect(security.getByRole("link", { name: "How this was built" })).toHaveAttribute(
+    "href",
+    "https://github.com/aszeffs/SchoolGrid#how-this-was-built",
+  );
 
   await expect(
     main.getByText(

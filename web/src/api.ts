@@ -569,12 +569,6 @@ export interface ProposedTerm {
   lastDate: string;
 }
 
-/** What the running site was built from. Either is absent when the server does not know it. */
-export interface BuildInfo {
-  commit?: string;
-  digest?: string;
-}
-
 /** A path within one School. */
 const inSchool = (schoolId: string, path: string) => `/schools/${encodeURIComponent(schoolId)}${path}`;
 
@@ -606,7 +600,6 @@ async function redeemInvitation(credentials: {
 }
 
 export const api = {
-  buildInfo: () => request<BuildInfo>("GET", "/build-info"),
   signIn: (credentials: { username: string; password: string }) =>
     request<{ expiresAt: string }>("POST", "/session", credentials),
   session: () => request<Session>("GET", "/session"),

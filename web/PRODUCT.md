@@ -33,8 +33,7 @@ The security properties live in the domain, not in a layer bolted on afterwards:
 ## Capabilities and Constraints
 
 - Stack in place: React 19 + Vite + TypeScript SPA in `web/`, built into the service image and served on every path outside `/api` from the same origin. No router library — a typed route table in `src/routes.ts` with `src/navigation.ts`. No component library, because the Content Security Policy below rules out what they ship (ADR-0006). No CSS framework — a single `src/styles.css` holds the whole design system as custom properties.
-- Shipped surfaces today: the landing page with a trial started by signing in with GitHub or Google, sign-in, invitation redeem, "How this was built", and `NotAvailable` before sign-in; inside a School shell, Schools, Your account, Persons, Invitations, School memberships, Enrollments, Guardian links, and Audit records (cursor-paged, ADR-0008).
-- Not yet built: attendance sessions, results entry and publication, correction requests, roster management, and the Student and Guardian read views.
+- Shipped surfaces today: the landing page with a trial started by signing in with GitHub or Google, sign-in, invitation redeem, Trial ended, and `NotAvailable` before sign-in; inside a School shell, Schools, Your account, Persons, Invitations, School memberships, Enrollments, Guardian links, Academic Years, Courses, Class Offerings, Attendance sessions, Term results and their Publication, Correction requests, the Term report, School settings, and Audit records (cursor-paged, ADR-0008).
 - **The whole app is being restyled** (2026-09-26, spec #207) from the calm seal-blue record into "The Timetable Wall Chart": a sidebar shell, white blocks on a grey ground, and one colour per Course. The direction lives in `.impeccable/surfaces/src-shell-tsx.md` and `DESIGN.md` records the built result. Light and dark renditions follow the browser's setting (ADR-0010). Product truth, content, routes, and behaviour carry over.
 - **No inline code, enforced at build time.** The service's Content Security Policy allows only same-origin files: no inline `<script>`, no inline `<style>`, no `style=` attribute, no `on*=` handler, and no `data:` URL inlining. `vite.config.ts` fails the build on any of them. Styling goes in `src/styles.css` (or another emitted stylesheet); CSS-in-JS and inline style objects are not available.
 - Development runs Vite on its own origin with `/api` proxied to the service on `:3000`, so the page and the API share one origin exactly as they do in the image.
@@ -50,7 +49,7 @@ The name **SchoolGrid** is fixed. Nothing else is: no logo, no committed palette
 - `CONTEXT.md` — the authoritative domain vocabulary; UI copy derives from it.
 - `docs/adr/` — recorded decisions, including ADR-0002 (safe denial) and ADR-0005 (production runs the verified image).
 - `README.md` — the security pipeline, step by step, with what each step prevents.
-- A live public demo with real deployment provenance on `/how-this-was-built` (commit and image digest, with the command to verify them).
+- A live public demo with real deployment provenance at `/api/build-info` (commit and image digest), told in the README with the command to verify them.
 - No real Student, Guardian, or School data exists anywhere, and none may be invented in UI copy, screenshots, or seeds. There are no customers, no testimonials, no benchmarks, and no pricing — do not fabricate any.
 
 ## Product Principles

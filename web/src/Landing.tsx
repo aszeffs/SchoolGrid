@@ -91,9 +91,10 @@ export function Landing() {
         screenshot="A Faculty member's Attendance session for Mathematics, with every Student marked Present in one action and one changed to Tardy, ready to save."
       >
         <p>
-          Open today&apos;s Attendance session from the Class Offering, mark everyone Present in one action, then change only the
-          Students who are late or away. Co-teachers share one session, and a mark someone else changed meanwhile is
-          shown, never overwritten. Once the Attendance window closes, a change goes through a Correction request.
+          Open today&apos;s Attendance session from the Class Offering, mark everyone Present in one action, then change
+          only the Students who are late or away. Faculty assigned to the Class Offering share one session, and a mark
+          someone else changed meanwhile is shown, never overwritten. Once the Attendance window closes, a change goes
+          through a Correction request.
         </p>
       </Feature>
 
@@ -141,8 +142,8 @@ export function Landing() {
           </Key>
           <Key term="Signed and verified builds">
             The site runs one container image, tested, scanned and signed before it was published.{" "}
-            <Link to={{ name: "howThisWasBuilt" }}>How this was built</Link> names that image and gives the command to
-            check it yourself.
+            <a href={`${REPOSITORY_URL}#how-this-was-built`}>How this was built</a> follows an image from commit to
+            deploy and gives the command to check it yourself.
           </Key>
         </dl>
       </Feature>
