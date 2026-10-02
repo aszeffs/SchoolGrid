@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Link } from "./Link.tsx";
-import { MiniatureSchool } from "./MiniatureSchool.tsx";
 import { Key, Sheet } from "./Sheet.tsx";
 import { StartTrial } from "./StartTrial.tsx";
 import { useTrialProviders } from "./trial.ts";
@@ -9,7 +8,6 @@ const REPOSITORY_URL = "https://github.com/aszeffs/SchoolGrid";
 
 /**
  * The public front page, pitched to a School: what SchoolGrid does for one,
- * beside a School in miniature to try it in before signing in for a trial,
  * a tour of it feature by feature as the role that sees each, and how
  * seriously it holds a School's records. Public, like sign-in, and the same
  * for everyone, signed in or not.
@@ -31,19 +29,20 @@ export function Landing() {
       <p>The words every sheet of SchoolGrid is struck in.</p>
       <dl>
         <Key term="School">
-          The boundary every record belongs to: each Person, Class Offering and record about them belongs to exactly one
-          School.
+          The boundary every record belongs to. A Person, a Class Offering and every record about them belong to exactly
+          one School.
         </Key>
         <Key term="Guardian">
-          Someone linked to one Student, whose Access profile grants that Student&apos;s Attendance, Term results, or
-          both.
+          Someone linked to one Student, with an Access profile saying whether they may read that Student&apos;s
+          Attendance, Term results, or both.
         </Key>
         <Key term="Term report">
           One Student&apos;s Term: each Class Offering, its published Term result, and its Attendance totals.
         </Key>
         {trialsOffered && (
           <Key term="Trial School">
-            A School of your own, with invented data, seen by nobody else. It is deleted whole after two hours.
+            A School of your own, filled with invented data and seen by nobody else. It lives two hours, and is then
+            deleted whole.
           </Key>
         )}
       </dl>
@@ -65,24 +64,24 @@ export function Landing() {
       }
     >
       <section className="landing__hero" aria-labelledby="landing-headline">
-        <div className="landing__pitch">
-          <h1 id="landing-headline">A K-12 School&apos;s Attendance and Term results, each seen by the right role</h1>
-          <p className="landing__lede">
-            Faculty take Attendance in a few clicks and publish Term results when all are ready. Guardians see what
-            their Access profile grants, and School Administrators see every change on the Audit trail.
-          </p>
-          {trialsOffered && (
-            <div className="landing__trial">
-              <p>Try it in a School of your own, with invented data, as each School role. It is deleted after two hours.</p>
-              <StartTrial providers={providers} />
-              <p className="muted">
-                Signing in only proves you are a person. SchoolGrid keeps no name, email or token, just a keyed hash of
-                your account&apos;s id, deleted with your trial.
-              </p>
-            </div>
-          )}
-        </div>
-        <MiniatureSchool />
+        <h1 id="landing-headline">A K-12 School&apos;s Attendance and Term results, each seen by the right role</h1>
+        <p className="landing__lede">
+          Faculty take Attendance in a few clicks and publish Term results only when every one is ready. Each Guardian
+          sees what their Access profile grants, and a School Administrator sees every change on the Audit trail.
+        </p>
+        {trialsOffered && (
+          <div className="landing__trial">
+            <p>
+              Try it in a School of your own, filled with invented Persons, Attendance and Term results. View it as
+              each School role, and after two hours it ends and is deleted.
+            </p>
+            <StartTrial providers={providers} />
+            <p className="muted">
+              Signing in proves you are a person, not a script. SchoolGrid keeps no name, email or token from it, only
+              a keyed hash of your account&apos;s id, and forgets that once your trial is deleted.
+            </p>
+          </div>
+        )}
       </section>
 
       <Feature
@@ -92,9 +91,10 @@ export function Landing() {
         screenshot="A Faculty member's Attendance session for Mathematics, with every Student marked Present in one action and one changed to Tardy, ready to save."
       >
         <p>
-          Mark everyone Present in one action, then change only the Students who are late or away. Faculty of the same
-          Class Offering share one session, and a mark someone else changed is shown, never overwritten. After the
-          Attendance window closes, a change needs a Correction request.
+          Open today&apos;s Attendance session from the Class Offering, mark everyone Present in one action, then change
+          only the Students who are late or away. Faculty assigned to the Class Offering share one session, and a mark
+          someone else changed meanwhile is shown, never overwritten. Once the Attendance window closes, a change goes
+          through a Correction request.
         </p>
       </Feature>
 
@@ -106,8 +106,8 @@ export function Landing() {
       >
         <p>
           Term results stay drafts, seen only by the Class Offering&apos;s Faculty and School Administrators, until
-          Publication shows them all at once. It is refused while any result is missing, and a published result changes
-          only through an approved Correction request.
+          Publication makes a whole Class Offering&apos;s results visible at once. Publication is refused while any Student&apos;s result is missing,
+          and a published result changes only through an approved Correction request.
         </p>
       </Feature>
 
@@ -118,8 +118,9 @@ export function Landing() {
         screenshot="A Guardian's view of their Student's Term report: each Class Offering with its published Term result and Attendance totals."
       >
         <p>
-          Each Guardian link has its own Access profile: Attendance, Term results, or both. The Term report shows exactly
-          what it grants, with nothing marking what is withheld, and the link ends with the Student&apos;s Enrollment.
+          Each Guardian link carries its own Access profile: Attendance, Term results, or both. The Term report shows a
+          Guardian exactly what theirs grants, with nothing marking what is withheld, and the link ends with the
+          Student&apos;s Enrollment.
         </p>
       </Feature>
 
@@ -131,17 +132,18 @@ export function Landing() {
       >
         <dl>
           <Key term="Records isolated per School">
-            Every record belongs to exactly one School. A record you cannot reach is refused exactly like one that does
-            not exist, so a refusal gives nothing away.
+            Every record belongs to exactly one School, and nothing is shared between Schools. A request for a record
+            you do not reach is refused the same way as one for a record that does not exist, so a refusal gives
+            nothing away.
           </Key>
           <Key term="Audit trail">
-            Every sign-in, refusal and sensitive change is written to the School&apos;s Audit trail: who, what and when.
-            No one can alter or remove an Audit record; only an expired Trial School takes its own with it.
+            Every sign-in, refusal and sensitive change in a School is written to its Audit trail: who, what and
+            when. No one can alter or remove an Audit record; only a whole expired Trial School takes its own with it.
           </Key>
           <Key term="Signed and verified builds">
-            The site runs one container image, tested, scanned and signed before publishing.{" "}
-            <a href={`${REPOSITORY_URL}#how-this-was-built`}>How this was built</a> traces it from commit to deploy,
-            with the command to check it yourself.
+            The site runs one container image, tested, scanned and signed before it was published.{" "}
+            <a href={`${REPOSITORY_URL}#how-this-was-built`}>How this was built</a> follows an image from commit to
+            deploy and gives the command to check it yourself.
           </Key>
         </dl>
       </Feature>
