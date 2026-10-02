@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { acknowledgeIssuedLink, issueInvitationFor, recordRows } from "./app.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
@@ -165,6 +166,27 @@ test.describe("in a Trial School", () => {
     await page.getByRole("link", { name: "Continue with GitHub" }).click();
     await approveAtProvider(page);
     await expect(banner(page)).toContainText(BANNER);
+  });
+
+  test("a visitor who leaves and signs in again is back in the same School", async ({ page, browser }) => {
+    const subject = randomUUID();
+    await page.goto("/");
+    await page.getByRole("link", { name: "Continue with GitHub" }).click();
+    await page.getByLabel("Subject").fill(subject);
+    await approveAtProvider(page);
+    const schoolUrl = page.url();
+    await page.close();
+
+    // Another browser, holding no Session: only the sign-in says who this is.
+    const returning = await browser.newPage({ baseURL: SHOWCASE_ORIGIN! });
+    await returning.goto("/");
+    await returning.getByRole("link", { name: "Continue with GitHub" }).click();
+    await returning.getByLabel("Subject").fill(subject);
+    await approveAtProvider(returning);
+
+    await expect(returning).toHaveURL(schoolUrl);
+    await expect(banner(returning)).toContainText(BANNER);
+    await returning.close();
   });
 
   test("issues an Invitation whose redeemed account sees the trial but views it as no other role", async ({

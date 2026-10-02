@@ -516,18 +516,19 @@ describe("Trial Schools", () => {
       ]);
     });
 
-    it("keeps only a keyed hash of the provider and subject, one Trial visitor for each identity", async () => {
+    it("keeps only a keyed hash of the provider and subject, one Trial visitor and School for each identity", async () => {
       const subject = "583231";
-      await server().startTrial({ subject });
-      await server().startTrial({ subject });
+      const first = await server().startTrial({ subject });
+      await server().expireTrialSchool(first.schoolId);
       await server().startTrial({ subject: "9001" });
+      await server().startTrial({ subject });
 
       const { rows } = await server().ownerDatabase.query<{ identity: Buffer; schools: number }>(
         `SELECT visitor.identity, count(school.id)::integer AS schools
          FROM app.trial_visitor visitor JOIN app.school school ON school.trial_visitor_id = visitor.id
-         GROUP BY visitor.identity ORDER BY schools DESC`,
+         GROUP BY visitor.id ORDER BY visitor.created_at DESC`,
       );
-      expect(rows.map((row) => row.schools)).toEqual([2, 1]);
+      expect(rows.map((row) => row.schools)).toEqual([1, 1]);
       const expected = createHmac("sha256", createHmac("sha256", TEST_IDENTITY_KEY).update("schoolgrid-trial-identity").digest())
         .update(`github:${subject}`)
         .digest();
@@ -536,6 +537,58 @@ describe("Trial Schools", () => {
         expect(identity.toString("latin1")).not.toContain(subject);
         expect(identity.toString("latin1")).not.toContain("github");
       }
+    });
+
+    it("brings a visitor back to their live trial as its School Administrator, in a new Session, recorded as a sign-in", async () => {
+      const subject = "583231";
+      const first = await server().startTrial({ subject });
+      await switchRole(first.client, "faculty");
+
+      const again = await server().startTrial({ subject });
+
+      expect(again.schoolId).toBe(first.schoolId);
+      expect(again.expiresAt).toBe(first.expiresAt);
+      const { schools } = await sessionOf(again.client);
+      expect(schools.map((school) => school.roles)).toEqual([["school_administrator"]]);
+      expect(await schoolCount()).toBe(1);
+      const { rows } = await server().ownerDatabase.query<{ action: string; actor: string | null }>(
+        `SELECT action, person.display_name AS actor
+         FROM app.audit_record LEFT JOIN app.person person ON person.id = actor_person_id
+         WHERE audit_record.school_id = $1 AND action LIKE 'authentication.%'
+         ORDER BY audit_record.occurred_at`,
+        [first.schoolId],
+      );
+      // The role change to Faculty, then the return as the School Administrator.
+      expect(rows).toEqual([
+        { action: "authentication.succeeded", actor: expect.any(String) },
+        { action: "authentication.succeeded", actor: schools[0]!.displayName },
+      ]);
+    });
+
+    it("starts a new School at once for a visitor whose trial has expired", async () => {
+      const first = await server().startTrial({ subject: "583231" });
+      await server().expireTrialSchool(first.schoolId);
+
+      const again = await server().startTrial({ subject: "583231" });
+
+      expect(again.schoolId).not.toBe(first.schoolId);
+      expect(await schoolCount()).toBe(1);
+    });
+
+    it("starts at most one School for one visitor signing in twice at once", async () => {
+      const signIns = await Promise.all([server().beginTrialSignIn(), server().beginTrialSignIn()]);
+      const callbacks = await Promise.all(
+        signIns.map((signIn) => server().answerAtProvider(signIn, { decision: "approve", subject: "583231" })),
+      );
+
+      const responses = await Promise.all(
+        signIns.map((signIn, index) => server().client.withCookie(signIn.flowCookie).get(callbacks[index]!)),
+      );
+
+      const [first, second] = responses.map((response) => response.headers.location);
+      expect(first).toMatch(/^\/schools\/[0-9a-f-]{36}\/persons$/);
+      expect(second).toBe(first);
+      expect(await schoolCount()).toBe(1);
     });
 
     it("sends a visitor who cancels at the provider back to the front page, starting nothing", async () => {
@@ -696,10 +749,8 @@ describe("Trial Schools", () => {
     });
 
     it("forgets a Trial visitor only once no Trial School of theirs remains", async () => {
-      const expired = await server().startTrial({ subject: "kept" });
       await server().startTrial({ subject: "kept" });
       const alone = await server().startTrial({ subject: "forgotten" });
-      await server().expireTrialSchool(expired.schoolId);
       await server().expireTrialSchool(alone.schoolId);
 
       await server().database.query("SELECT app.delete_expired_trial_schools()");
