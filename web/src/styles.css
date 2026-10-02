@@ -1675,11 +1675,29 @@ dialog.slip::backdrop {
 
 /* ---- Landing --------------------------------------------------------- */
 
+/* The first screen: what SchoolGrid does for a School, and the trial, its one way in. */
+.landing__hero {
+  padding-bottom: calc(var(--step) * 4);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.landing__hero h1 {
+  max-width: 24ch;
+}
+
+.landing__lede {
+  max-width: var(--measure);
+  margin: 0;
+  font-size: var(--size-lead);
+  color: var(--ink-soft);
+}
+
 .landing__trial {
   display: grid;
   gap: calc(var(--step) * 2);
   justify-items: start;
   margin-top: calc(var(--step) * 3);
+  max-width: var(--measure);
 }
 
 .landing__trial p {
@@ -1700,26 +1718,56 @@ dialog.slip::backdrop {
   text-decoration: none;
 }
 
-.landing__trust {
-  margin-top: calc(var(--step) * 6);
-  padding-top: calc(var(--step) * 3);
-  border-top: 1px solid var(--rule-strong);
+/*
+ * One stop on the tour, ruled off from the next, with the role it is seen as
+ * under its heading. Its words keep to a readable measure; the app shown
+ * below them takes the run's whole width.
+ */
+.landing__feature {
+  padding: calc(var(--step) * 4) 0;
+  border-bottom: 1px solid var(--rule);
 }
 
-.landing__trust h2 {
-  margin-top: 0;
+.landing__feature h2 {
+  margin: 0;
 }
 
-.landing__trust dl {
-  margin: calc(var(--step) * 2) 0 0;
+.landing__role {
+  margin: calc(var(--step) * 0.5) 0 calc(var(--step) * 1.5);
+  font-size: var(--size-label);
+  font-weight: 650;
+  color: var(--action);
 }
 
-.landing__trust dt {
+.landing__feature > p,
+.landing__feature dl {
+  max-width: var(--measure);
+}
+
+.landing__feature dl {
+  margin: 0;
+}
+
+.landing__feature dt {
   font-weight: 650;
 }
 
-.landing__trust dd {
+.landing__feature dd {
   margin: calc(var(--step) * 0.5) 0 calc(var(--step) * 3);
+}
+
+.landing__feature dd:last-child {
+  margin-bottom: 0;
+}
+
+.landing__screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: calc(var(--step) * 3);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
 }
 
 .foot .landing__links {
