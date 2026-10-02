@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { TrialProvider } from "../../src/config.ts";
 
 /**
  * A stand-in for GitHub's and Google's OAuth, for the tests alone: the
@@ -28,6 +29,15 @@ export interface FakeOAuthProviderOptions {
   /** Defaults to any free port. */
   port?: number;
 }
+
+/**
+ * Where each provider names who signed in, and in which field: GitHub's `id`
+ * at its user endpoint, Google's `sub` at its userinfo endpoint.
+ */
+export const USER_ENDPOINTS: Record<TrialProvider, { path: string; field: string }> = {
+  github: { path: "/user", field: "id" },
+  google: { path: "/userinfo", field: "sub" },
+};
 
 interface Grant {
   subject: string;
@@ -60,11 +70,14 @@ export async function startFakeOAuthProvider({
     if (url.pathname === "/token" && request.method === "POST") {
       return exchange(request, response, await formOf(request));
     }
-    if (url.pathname === "/user" && request.method === "GET") {
+    // Each field is answered only where its provider answers it, so a
+    // provider read through the other's field finds no subject.
+    const field =
+      request.method === "GET" ? Object.values(USER_ENDPOINTS).find(({ path }) => path === url.pathname)?.field : undefined;
+    if (field !== undefined) {
       const token = /^Bearer (.+)$/i.exec(request.headers.authorization ?? "")?.[1];
       const subject = token === undefined ? undefined : tokens.get(token);
-      // GitHub names its subject `id`, Google `sub`: both are given.
-      return subject === undefined ? send(response, 401, { error: "invalid_token" }) : send(response, 200, { id: subject, sub: subject });
+      return subject === undefined ? send(response, 401, { error: "invalid_token" }) : send(response, 200, { [field]: subject });
     }
     send(response, 404, { error: "not_found" });
   }

@@ -102,7 +102,7 @@ export const START_FAILED: Record<StartFailure, string> = {
 };
 
 /** Each provider as its button names it. */
-export const PROVIDER_NAMES: Record<TrialProvider, string> = { github: "GitHub" };
+export const PROVIDER_NAMES: Record<TrialProvider, string> = { github: "GitHub", google: "Google" };
 
 /** Where a sign-in with this provider starts. */
 export function startPath(provider: TrialProvider): string {

@@ -20,14 +20,18 @@ const ROLES = [
 ] as const;
 
 /**
- * Starts a Trial School from the front page's link, from the keyboard,
- * signing in at the stand-in provider scripts/smoke-test.sh runs as `subject`
- * (a fresh visitor unless given), and opens it, or returns to that visitor's
- * live one. The visitor lands in it as its School Administrator.
+ * Starts a Trial School from the front page's link for `provider` (GitHub
+ * unless given), from the keyboard, signing in at the stand-in provider
+ * scripts/smoke-test.sh runs as `subject` (a fresh visitor unless given), and
+ * opens it, or returns to that visitor's live one. The visitor lands in it as
+ * its School Administrator.
  */
-async function startTrial(page: Page, subject?: string): Promise<string> {
+async function startTrial(
+  page: Page,
+  { subject, provider = "GitHub" }: { subject?: string; provider?: "GitHub" | "Google" } = {},
+): Promise<string> {
   await page.goto("/");
-  await page.getByRole("link", { name: "Continue with GitHub" }).focus();
+  await page.getByRole("link", { name: `Continue with ${provider}` }).focus();
   await page.keyboard.press("Enter");
   if (subject !== undefined) {
     await page.getByLabel("Subject").fill(subject);
@@ -167,6 +171,7 @@ test.describe("in a Trial School", () => {
 
     // Back to the time the server keeps, which the new trial's two hours are counted from.
     await page.clock.setSystemTime(Date.now());
+    await expect(page.getByRole("link", { name: /^Continue with / })).toHaveText(["Continue with GitHub", "Continue with Google"]);
     await page.getByRole("link", { name: "Continue with GitHub" }).click();
     await approveAtProvider(page);
     await expect(banner(page)).toContainText(BANNER);
@@ -174,14 +179,27 @@ test.describe("in a Trial School", () => {
 
   test("a visitor who leaves and signs in again is back in the same School", async ({ page, browser }) => {
     const subject = randomUUID();
-    const schoolId = await startTrial(page, subject);
+    const schoolId = await startTrial(page, { subject });
     await page.close();
 
     // Another browser, holding no Session: only the sign-in says who this is.
     const returning = await browser.newPage({ baseURL: SHOWCASE_ORIGIN! });
-    expect(await startTrial(returning, subject)).toBe(schoolId);
+    expect(await startTrial(returning, { subject })).toBe(schoolId);
     await expect(banner(returning)).toContainText(BANNER);
     await returning.close();
+  });
+
+  test("offers GitHub and Google, and the same subject at each is a visitor with their own School", async ({ page, browser }) => {
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: /^Continue with / })).toHaveText(["Continue with GitHub", "Continue with Google"]);
+    const subject = randomUUID();
+    const github = await startTrial(page, { subject });
+    await page.close();
+
+    const google = await browser.newPage({ baseURL: SHOWCASE_ORIGIN! });
+    expect(await startTrial(google, { subject, provider: "Google" })).not.toBe(github);
+    await expect(banner(google)).toContainText(BANNER);
+    await google.close();
   });
 
   test("issues an Invitation whose redeemed account sees the trial but views it as no other role", async ({

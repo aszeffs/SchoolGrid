@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadConfig, loadMigrationConfig } from "../src/config.ts";
+import { loadConfig, loadMigrationConfig, TRIAL_PROVIDERS } from "../src/config.ts";
 
 describe("loadConfig database connections", () => {
   beforeEach(() => {
@@ -234,7 +234,7 @@ describe("loadConfig trials", () => {
     vi.stubEnv("PUBLIC_ORIGIN", "https://schoolgrid.example");
     vi.stubEnv("TRIALS_ENABLED", undefined);
     vi.stubEnv("TRIAL_LIVE_CAP", undefined);
-    for (const name of GITHUB) {
+    for (const name of PROVIDER_SETTINGS) {
       vi.stubEnv(name, undefined);
     }
     vi.stubEnv("TRIAL_IDENTITY_KEY", undefined);
@@ -244,13 +244,11 @@ describe("loadConfig trials", () => {
     vi.unstubAllEnvs();
   });
 
-  const GITHUB = [
-    "TRIAL_GITHUB_CLIENT_ID",
-    "TRIAL_GITHUB_CLIENT_SECRET",
-    "TRIAL_GITHUB_AUTHORIZE_URL",
-    "TRIAL_GITHUB_TOKEN_URL",
-    "TRIAL_GITHUB_USER_URL",
-  ];
+  const PROVIDER_SETTINGS = TRIAL_PROVIDERS.flatMap((provider) =>
+    ["CLIENT_ID", "CLIENT_SECRET", "AUTHORIZE_URL", "TOKEN_URL", "USER_URL"].map(
+      (setting) => `TRIAL_${provider.toUpperCase()}_${setting}`,
+    ),
+  );
   const KEY = "k".repeat(32);
 
   it("offers no trials, and caps them at 30 live, when nothing is set", () => {
@@ -291,6 +289,26 @@ describe("loadConfig trials", () => {
     );
   });
 
+  it("offers Google alone when only its OAuth client is configured, at Google's own endpoints", () => {
+    vi.stubEnv("TRIALS_ENABLED", "true");
+    vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
+    vi.stubEnv("TRIAL_GOOGLE_CLIENT_ID", "client.apps.googleusercontent.com");
+    vi.stubEnv("TRIAL_GOOGLE_CLIENT_SECRET", "secret");
+
+    expect(loadConfig().trials.providers).toEqual({
+      google: {
+        clientId: "client.apps.googleusercontent.com",
+        clientSecret: "secret",
+        authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        userUrl: "https://openidconnect.googleapis.com/v1/userinfo",
+      },
+    });
+
+    vi.stubEnv("TRIAL_GOOGLE_USER_URL", "http://fake-provider:4000/userinfo");
+    expect(loadConfig().trials.providers.google?.userUrl).toBe("http://fake-provider:4000/userinfo");
+  });
+
   it("offers no provider whose OAuth app is not configured", () => {
     vi.stubEnv("TRIALS_ENABLED", "true");
     vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
@@ -305,12 +323,19 @@ describe("loadConfig trials", () => {
     expect(() => loadConfig()).toThrow(/TRIAL_IDENTITY_KEY must be a secret of at least 32 characters/);
   });
 
-  it.each(["TRIAL_GITHUB_CLIENT_ID", "TRIAL_GITHUB_CLIENT_SECRET"])("refuses to start with only %s set", (name) => {
+  it.each([
+    ["TRIAL_GITHUB_CLIENT_ID", "GITHUB"],
+    ["TRIAL_GITHUB_CLIENT_SECRET", "GITHUB"],
+    ["TRIAL_GOOGLE_CLIENT_ID", "GOOGLE"],
+    ["TRIAL_GOOGLE_CLIENT_SECRET", "GOOGLE"],
+  ])("refuses to start with only %s set", (name, provider) => {
     vi.stubEnv("TRIALS_ENABLED", "true");
     vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
     vi.stubEnv(name, "set");
 
-    expect(() => loadConfig()).toThrow(/TRIAL_GITHUB_CLIENT_ID and TRIAL_GITHUB_CLIENT_SECRET must be set together/);
+    expect(() => loadConfig()).toThrow(
+      new RegExp(`TRIAL_${provider}_CLIENT_ID and TRIAL_${provider}_CLIENT_SECRET must be set together`),
+    );
   });
 
   it.each(["github.com/login", "javascript:alert(1)", "ftp://example.com/"])(
