@@ -33,16 +33,19 @@ import { INVENTED_SCHOOL_NAME, inventedAttendance, inventedResults, inventedScho
 export const TRIAL_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
 /**
- * Taken by every trial start for the rest of its transaction, so two starts
- * cannot both count the same live trials and between them pass the cap.
+ * Taken by every trial sign-in for the rest of its transaction, so two cannot
+ * both count the same live trials and between them pass the cap, nor both
+ * find one visitor with no live trial and start them two, nor one forget a
+ * Trial visitor the other is starting a trial for.
  */
 const TRIAL_START_LOCK = 0x7472_6961_6c;
 
-/** A Trial School just started, and the account its visitor first acts as. */
-export interface StartedTrial {
-  school: School;
-  expiresAt: Date;
+/** The Trial School a visitor started or returned to, and the account they act as in it. */
+export interface EnteredTrial {
+  schoolId: string;
   schoolAdministrator: UserAccount;
+  /** Whether it was already theirs and live, rather than started now. */
+  returned: boolean;
 }
 
 /**
@@ -56,27 +59,54 @@ export async function deleteExpiredTrialSchools(database: Queryable): Promise<nu
 }
 
 /**
- * Starts a Trial School of invented data in the School's own timezone, with a
- * role account for each School role, for the Trial visitor this identity
- * names (ADR-0013), or returns null, starting nothing, when `liveCap` Trial
- * Schools are live already. `visitor` is the keyed hash `visitorIdentity`
- * makes, never the subject itself.
+ * The Trial visitor this identity names (ADR-0013) enters their Trial School:
+ * the live one they have, or a new one when they have none. Returns null,
+ * starting nothing, when they have none and `liveCap` Trial Schools are live
+ * already. `visitor` is the keyed hash `visitorIdentity` makes, never the
+ * subject itself.
  *
- * Everything is built in the caller's transaction, so a trial exists whole or
- * not at all.
+ * Expired trials are deleted first, so the ones they held count no longer.
+ * Everything is done in the caller's transaction, under the start lock, so a
+ * visitor signing in twice at once still has one live trial, and a new one
+ * exists whole or not at all.
  */
-export async function startTrialSchool(
+export async function enterTrialSchool(
   transaction: Queryable,
   { timezone, liveCap, visitor }: { timezone: string; liveCap: number; visitor: Buffer },
-): Promise<StartedTrial | null> {
+): Promise<EnteredTrial | null> {
   await transaction.query(`SELECT pg_advisory_xact_lock($1)`, [TRIAL_START_LOCK]);
+  await deleteExpiredTrialSchools(transaction);
+  const live = await transaction.query<{ schoolId: string; id: string; username: string }>(
+    `SELECT school.id AS "schoolId", account.id, account.username
+     FROM app.trial_visitor visitor
+     JOIN app.school school ON school.trial_visitor_id = visitor.id
+     JOIN app.user_account account ON account.created_in_school_id = school.id AND account.trial_role = 'school_administrator'
+     WHERE visitor.identity = $1 AND school.trial_expires_at > now()`,
+    [visitor],
+  );
+  if (live.rows.length > 0) {
+    const { schoolId, ...schoolAdministrator } = live.rows[0]!;
+    return { schoolId, schoolAdministrator, returned: true };
+  }
+
   const { rows } = await transaction.query<{ live: number }>(
     `SELECT count(*)::integer AS live FROM app.school WHERE trial_expires_at > now()`,
   );
   if (rows[0]!.live >= liveCap) {
     return null;
   }
+  const started = await startTrialSchool(transaction, { timezone, visitor });
+  return { ...started, returned: false };
+}
 
+/**
+ * Starts a Trial School of invented data in the School's own timezone, with a
+ * role account for each School role, for this Trial visitor.
+ */
+async function startTrialSchool(
+  transaction: Queryable,
+  { timezone, visitor }: { timezone: string; visitor: Buffer },
+): Promise<{ schoolId: string; schoolAdministrator: UserAccount }> {
   const now = await transactionTime(transaction);
   const expiresAt = new Date(now.getTime() + TRIAL_LIFETIME_MS);
   const school = await createSchool(transaction, {
@@ -251,7 +281,7 @@ export async function startTrialSchool(
     requestedByPersonId: faculty.id,
   });
 
-  return { school, expiresAt, schoolAdministrator: accounts.get("school_administrator")! };
+  return { schoolId: school.id, schoolAdministrator: accounts.get("school_administrator")! };
 }
 
 /** The Trial visitor with this identity, recorded now if they are not already. */

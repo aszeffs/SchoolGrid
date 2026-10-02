@@ -13,7 +13,7 @@ import {
 import type { Database } from "../db/pool.ts";
 import { withTransaction, type Queryable } from "../db/transaction.ts";
 import { refuse } from "../http/refusal.ts";
-import { deleteExpiredTrialSchools, roleAccountFor, startTrialSchool } from "./index.ts";
+import { enterTrialSchool, roleAccountFor } from "./index.ts";
 import { beginSignIn, CALLBACK_PATH, completeSignIn, EXPIRED_FLOW_COOKIE, visitorIdentity } from "./sign-in.ts";
 
 /**
@@ -144,13 +144,20 @@ export function registerTrialRoutes(
 
       const timezone = await timezoneOrUtc(database, outcome.timezone);
       const visitor = visitorIdentity(settings.identityKey, chosen.provider, outcome.subject);
-      // Expired trials go first, so the ones they held count no longer.
-      await deleteExpiredTrialSchools(database);
-      const started = await withTransaction(database, async (transaction) => {
-        const trial = await startTrialSchool(transaction, { timezone, liveCap: settings.liveCap, visitor });
-        return trial === null ? null : { trial, session: await startBrowserSession(transaction, trial.schoolAdministrator) };
+      const entered = await withTransaction(database, async (transaction) => {
+        const trial = await enterTrialSchool(transaction, { timezone, liveCap: settings.liveCap, visitor });
+        if (trial === null) {
+          return null;
+        }
+        // A return to a live trial is recorded as the School's trail records
+        // a sign-in, as a role change is. Starting one is recorded as
+        // `trial.started` instead.
+        if (trial.returned) {
+          await recordAuthenticationAttempt(transaction, { userAccountId: trial.schoolAdministrator.id, succeeded: true });
+        }
+        return { trial, session: await startBrowserSession(transaction, trial.schoolAdministrator) };
       });
-      if (started === null) {
+      if (entered === null) {
         request.log.info("busy: as many Trial Schools are live as may be");
         return backToLanding(reply, "busy");
       }
@@ -166,8 +173,8 @@ export function registerTrialRoutes(
       // this origin, once loaded.
       return reply
         .status(303)
-        .header("set-cookie", [EXPIRED_FLOW_COOKIE, started.session.cookie])
-        .header("location", `/schools/${started.trial.school.id}/persons`)
+        .header("set-cookie", [EXPIRED_FLOW_COOKIE, entered.session.cookie])
+        .header("location", `/schools/${entered.trial.schoolId}/persons`)
         .send();
     },
   );

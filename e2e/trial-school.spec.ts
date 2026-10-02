@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { acknowledgeIssuedLink, issueInvitationFor, recordRows } from "./app.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
@@ -20,18 +21,22 @@ const ROLES = [
 
 /**
  * Starts a Trial School from the front page's link, from the keyboard,
- * signing in at the stand-in provider scripts/smoke-test.sh runs as a fresh
- * visitor, and opens it. The visitor lands in it as its School Administrator.
+ * signing in at the stand-in provider scripts/smoke-test.sh runs as `subject`
+ * (a fresh visitor unless given), and opens it, or returns to that visitor's
+ * live one. The visitor lands in it as its School Administrator.
  */
-async function startTrial(page: Page): Promise<string> {
+async function startTrial(page: Page, subject?: string): Promise<string> {
   await page.goto("/");
   await page.getByRole("link", { name: "Continue with GitHub" }).focus();
   await page.keyboard.press("Enter");
+  if (subject !== undefined) {
+    await page.getByLabel("Subject").fill(subject);
+  }
   await approveAtProvider(page);
   return new URL(page.url()).pathname.split("/")[2]!;
 }
 
-/** Approves the sign-in at the stand-in provider's consent page, and waits to land in the new School. */
+/** Approves the sign-in at the stand-in provider's consent page, and waits to land in the visitor's School. */
 async function approveAtProvider(page: Page) {
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page).toHaveURL(/\/schools\/[^/]+\/persons$/);
@@ -165,6 +170,18 @@ test.describe("in a Trial School", () => {
     await page.getByRole("link", { name: "Continue with GitHub" }).click();
     await approveAtProvider(page);
     await expect(banner(page)).toContainText(BANNER);
+  });
+
+  test("a visitor who leaves and signs in again is back in the same School", async ({ page, browser }) => {
+    const subject = randomUUID();
+    const schoolId = await startTrial(page, subject);
+    await page.close();
+
+    // Another browser, holding no Session: only the sign-in says who this is.
+    const returning = await browser.newPage({ baseURL: SHOWCASE_ORIGIN! });
+    expect(await startTrial(returning, subject)).toBe(schoolId);
+    await expect(banner(returning)).toContainText(BANNER);
+    await returning.close();
   });
 
   test("issues an Invitation whose redeemed account sees the trial but views it as no other role", async ({
