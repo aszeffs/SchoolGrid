@@ -35,16 +35,17 @@ export const TRIAL_LIFETIME_MS = 2 * 60 * 60 * 1000;
 /**
  * Taken by every trial sign-in for the rest of its transaction, so two cannot
  * both count the same live trials and between them pass the cap, nor both
- * find one visitor with no live trial and start them two.
+ * find one visitor with no live trial and start them two, nor one forget a
+ * Trial visitor the other is starting a trial for.
  */
 const TRIAL_START_LOCK = 0x7472_6961_6c;
 
-/** The Trial School a visitor signed in to, and the account they act as in it. */
+/** The Trial School a visitor started or returned to, and the account they act as in it. */
 export interface EnteredTrial {
   schoolId: string;
   schoolAdministrator: UserAccount;
   /** Whether it was already theirs and live, rather than started now. */
-  resumed: boolean;
+  returned: boolean;
 }
 
 /**
@@ -64,6 +65,7 @@ export async function deleteExpiredTrialSchools(database: Queryable): Promise<nu
  * already. `visitor` is the keyed hash `visitorIdentity` makes, never the
  * subject itself.
  *
+ * Expired trials are deleted first, so the ones they held count no longer.
  * Everything is done in the caller's transaction, under the start lock, so a
  * visitor signing in twice at once still has one live trial, and a new one
  * exists whole or not at all.
@@ -73,6 +75,7 @@ export async function enterTrialSchool(
   { timezone, liveCap, visitor }: { timezone: string; liveCap: number; visitor: Buffer },
 ): Promise<EnteredTrial | null> {
   await transaction.query(`SELECT pg_advisory_xact_lock($1)`, [TRIAL_START_LOCK]);
+  await deleteExpiredTrialSchools(transaction);
   const live = await transaction.query<{ schoolId: string; id: string; username: string }>(
     `SELECT school.id AS "schoolId", account.id, account.username
      FROM app.trial_visitor visitor
@@ -83,7 +86,7 @@ export async function enterTrialSchool(
   );
   if (live.rows.length > 0) {
     const { schoolId, ...schoolAdministrator } = live.rows[0]!;
-    return { schoolId, schoolAdministrator, resumed: true };
+    return { schoolId, schoolAdministrator, returned: true };
   }
 
   const { rows } = await transaction.query<{ live: number }>(
@@ -93,7 +96,7 @@ export async function enterTrialSchool(
     return null;
   }
   const started = await startTrialSchool(transaction, { timezone, visitor });
-  return { ...started, resumed: false };
+  return { ...started, returned: false };
 }
 
 /**

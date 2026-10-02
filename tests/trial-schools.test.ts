@@ -539,7 +539,7 @@ describe("Trial Schools", () => {
       }
     });
 
-    it("brings a visitor back to their live trial as its School Administrator, in a new Session, recorded as a sign-in", async () => {
+    it("returns a visitor to their live trial as its School Administrator, in a new Session, recorded as a sign-in is", async () => {
       const subject = "583231";
       const first = await server().startTrial({ subject });
       await switchRole(first.client, "faculty");
@@ -808,6 +808,15 @@ describe("Trial Schools", () => {
 
       await server().expireTrialSchool(first.schoolId);
       await server().startTrial();
+    });
+
+    it("returns a visitor to their live trial even once the cap is reached", async () => {
+      const first = await server().startTrial({ subject: "583231" });
+      await server().startTrial();
+
+      const again = await server().startTrial({ subject: "583231" });
+
+      expect(again.schoolId).toBe(first.schoolId);
     });
   });
 
