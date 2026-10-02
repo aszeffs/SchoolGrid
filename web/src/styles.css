@@ -1718,9 +1718,12 @@ dialog.slip::backdrop {
   text-decoration: none;
 }
 
-/* One stop on the tour, ruled off from the next, with the role it is seen as under its heading. */
+/*
+ * One stop on the tour, ruled off from the next, with the role it is seen as
+ * under its heading. Its words keep to a readable measure; the app shown
+ * below them takes the run's whole width.
+ */
 .landing__feature {
-  max-width: var(--measure);
   padding: calc(var(--step) * 4) 0;
   border-bottom: 1px solid var(--rule);
 }
@@ -1736,8 +1739,9 @@ dialog.slip::backdrop {
   color: var(--action);
 }
 
-.landing__feature p:last-child {
-  margin-bottom: 0;
+.landing__feature > p,
+.landing__feature dl {
+  max-width: var(--measure);
 }
 
 .landing__feature dl {
@@ -1754,6 +1758,16 @@ dialog.slip::backdrop {
 
 .landing__feature dd:last-child {
   margin-bottom: 0;
+}
+
+.landing__screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: calc(var(--step) * 3);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
 }
 
 .foot .landing__links {

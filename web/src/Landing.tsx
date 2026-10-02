@@ -84,7 +84,12 @@ export function Landing() {
         )}
       </section>
 
-      <Feature id="attendance" heading="Attendance in a few clicks" role="Faculty">
+      <Feature
+        id="attendance"
+        heading="Attendance in a few clicks"
+        role="Faculty"
+        screenshot="A Faculty member's Attendance session for Mathematics, with every Student marked Present in one action and one changed to Tardy, ready to save."
+      >
         <p>
           Open today&apos;s Attendance session from the class, mark everyone Present in one action, then change only the
           Students who are late or away. Co-teachers share one session, and a mark someone else changed meanwhile is
@@ -92,7 +97,12 @@ export function Landing() {
         </p>
       </Feature>
 
-      <Feature id="publication" heading="Term results, published safely" role="Faculty">
+      <Feature
+        id="publication"
+        heading="Term results, published safely"
+        role="Faculty"
+        screenshot="Publishing three Term results for Mathematics: a confirmation warns that Publication cannot be undone, and that a published result changes only through a Correction request."
+      >
         <p>
           Term results stay drafts, seen only by the class&apos;s Faculty and School Administrators, until Publication
           releases a whole Class Offering at once. Publication is refused while any Student&apos;s result is missing,
@@ -100,7 +110,12 @@ export function Landing() {
         </p>
       </Feature>
 
-      <Feature id="guardians" heading="Guardians see only what they're granted" role="Guardian">
+      <Feature
+        id="guardian"
+        heading="Guardians see only what they're granted"
+        role="Guardian"
+        screenshot="A Guardian's view of their Student's Term report: each Class Offering with its published Term result and Attendance totals."
+      >
         <p>
           Each Guardian link carries its own Access profile: Attendance, Term results, or both. The Term report shows a
           Guardian exactly what theirs grants, with nothing marking what is withheld, and the link ends with the
@@ -108,7 +123,12 @@ export function Landing() {
         </p>
       </Feature>
 
-      <Feature id="security" heading="Security and audit" role="School Administrator">
+      <Feature
+        id="security"
+        heading="Security and audit"
+        role="School Administrator"
+        screenshot="The School's Audit trail, newest first: an approved Correction request, the change it made with its reason, and each sign-in, each with who acted and when."
+      >
         <dl>
           <Key term="Records isolated per School">
             Every record belongs to exactly one School, and nothing is shared between Schools. A request for a record
@@ -130,14 +150,40 @@ export function Landing() {
   );
 }
 
-/** One stop on the tour: a feature, the role it is seen as, and what it does. */
-function Feature({ id, heading, role, children }: { id: string; heading: string; role: string; children: ReactNode }) {
+/**
+ * One stop on the tour: a feature, the role it is seen as, what it does, and
+ * the app showing it. The screenshot is made by `npm run screenshots` in each
+ * rendition, and the browser takes the one its own setting asks for
+ * (ADR-0010). Each is the size it is shot at, so the page holds its place
+ * while it loads.
+ */
+function Feature({
+  id,
+  heading,
+  role,
+  screenshot,
+  children,
+}: {
+  id: string;
+  heading: string;
+  role: string;
+  /** What the screenshot shows, for whoever cannot see it. */
+  screenshot: string;
+  children: ReactNode;
+}) {
   const headingId = `tour-${id}`;
   return (
     <section className="landing__feature" aria-labelledby={headingId}>
       <h2 id={headingId}>{heading}</h2>
       <p className="landing__role">Seen as {role}</p>
       {children}
+      <picture className="landing__screenshot">
+        <source srcSet={`/tour/${id}-dark.png`} media="(prefers-color-scheme: dark)" />
+        <img src={`/tour/${id}-light.png`} alt={screenshot} width={SHOT.width} height={SHOT.height} loading="lazy" />
+      </picture>
     </section>
   );
 }
+
+/** The size every tour screenshot is shot at (playwright.tour.config.ts). */
+const SHOT = { width: 1440, height: 900 };

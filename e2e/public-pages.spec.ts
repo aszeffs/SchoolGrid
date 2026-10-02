@@ -88,6 +88,28 @@ test("the landing page says what SchoolGrid does, tours what each role sees, and
   await expect(page).toHaveURL("/sign-in");
 });
 
+test("the tour shows each feature as the app draws it, in the browser's own rendition", async ({ page, audit }) => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+    await page.goto("/");
+
+    for (const { heading } of TOUR) {
+      const screenshot = page.getByRole("region", { name: heading }).getByRole("img");
+      // Described for whoever cannot see it, not merely labelled.
+      await expect(screenshot).toHaveAttribute("alt", /\w+( \w+){4,}/);
+      // Lazy, so it loads only once it is near.
+      await screenshot.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => screenshot.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
+        .toBe(true);
+      expect(await screenshot.evaluate((image: HTMLImageElement) => image.currentSrc)).toMatch(
+        new RegExp(`/tour/[a-z]+-${colorScheme}\\.png$`),
+      );
+    }
+    await audit(page);
+  }
+});
+
 test("the landing page is worked by the keyboard alone, and every stop shows the ring", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
