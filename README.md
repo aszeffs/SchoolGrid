@@ -10,7 +10,7 @@ A School keeps its Attendance and Term results in SchoolGrid, and each role sees
 
 ### Attendance in a few clicks — seen as Faculty
 
-Open today's Attendance session from the Class Offering, mark everyone Present in one action, then change only the Students who are late or away. Co-teachers share one session, and a mark someone else changed meanwhile is shown, never overwritten. Once the Attendance window closes, a change goes through a Correction request.
+Open today's Attendance session from the Class Offering, mark everyone Present in one action, then change only the Students who are late or away. Faculty assigned to the Class Offering share one session, and a mark someone else changed meanwhile is shown, never overwritten. Once the Attendance window closes, a change goes through a Correction request.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="web/public/tour/attendance-dark.png">
@@ -45,6 +45,14 @@ Every record belongs to exactly one School, and a request for a record you do no
 </picture>
 
 To make them again after a change to the app, run `npm run build` and then `npm run screenshots`. It boots its own database, stand-in sign-in provider and service, and rewrites the PNGs in `web/public/tour/`, which the landing page serves and this README shows.
+
+### What a trial is not
+
+- It runs on Vercel's free **Hobby plan**, for non-commercial personal use. It scales to zero when nobody is using it, so the first request after a quiet spell waits for the function and the database to wake.
+- The data is **invented**. The site hosts no real School, and nothing you type into a trial should be real either.
+- A trial is **yours alone, for two hours**, then deleted whole: its Persons, its records, its Audit records, and any account an Invitation created in it ([ADR-0012](docs/adr/0012-trial-schools-replace-the-shared-demo.md)). Expired trials are deleted when the next one starts, and daily by [`trial-sweep.yml`](.github/workflows/trial-sweep.yml). That deletion is the one exception to Audit records being append-only, and only a database function that refuses any other School can make it.
+- **No sign-in is published.** A trial's role accounts have no password; the trial hands the browser a Session for each.
+- At most 30 trials are live at once, and one client may start 2 an hour. The **rate limits are counted per instance**, in memory. Vercel may run several at once, which multiplies them by however many are up.
 
 ## How this was built
 
@@ -84,19 +92,11 @@ Each box above is a row below, under the same name, with what it stops and a lin
 
 That is the whole path, in summary. The detail behind it is further down: [Security controls](#security-controls) for what each control catches, and [Published images](#published-images) for pulling an image and verifying it yourself.
 
-### What a trial is not
-
-- It runs on Vercel's free **Hobby plan**, for non-commercial personal use. It scales to zero when nobody is using it, so the first request after a quiet spell waits for the function and the database to wake.
-- The data is **invented**. The site hosts no real School, and nothing you type into a trial should be real either.
-- A trial is **yours alone, for two hours**, then deleted whole: its Persons, its records, its Audit records, and any account an Invitation created in it ([ADR-0012](docs/adr/0012-trial-schools-replace-the-shared-demo.md)). Expired trials are deleted when the next one starts, and daily by [`trial-sweep.yml`](.github/workflows/trial-sweep.yml). That deletion is the one exception to Audit records being append-only, and only a database function that refuses any other School can make it.
-- **No sign-in is published.** A trial's role accounts have no password; the trial hands the browser a Session for each.
-- At most 30 trials are live at once, and one client may start 2 an hour. The **rate limits are counted per instance**, in memory. Vercel may run several at once, which multiplies them by however many are up.
-
 ## Status
 
 The service boots, connects to Postgres and answers a health endpoint, and the test harness is in place. User accounts can authenticate, carry a session across requests, and end it (`POST`, `GET` and `DELETE /api/session`). `GET /api/session` names the actor: the account, and each School it reaches with the Person it resolves to there and the roles that Person holds — facts, never permissions ([ADR-0007](docs/adr/0007-the-session-response-carries-the-actors-facts.md)). A browser holds its session in a cookie; a client that sends `"session": "bearer"` with its credentials gets a Bearer token instead.
 
-A web app in `web/` (React, Vite, TypeScript) is built into the image and served by the service on every path outside `/api`, on the same origin. It signs in with the cookie session, lists the Schools the account reaches, and signs out.
+A web app in `web/` (React, Vite, TypeScript) is built into the image and served by the service on every path outside `/api`, on the same origin. It signs in with the cookie session and carries every page shown under [What it does](#what-it-does).
 
 ## Running it
 

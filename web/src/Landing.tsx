@@ -91,9 +91,10 @@ export function Landing() {
         screenshot="A Faculty member's Attendance session for Mathematics, with every Student marked Present in one action and one changed to Tardy, ready to save."
       >
         <p>
-          Open today&apos;s Attendance session from the Class Offering, mark everyone Present in one action, then change only the
-          Students who are late or away. Co-teachers share one session, and a mark someone else changed meanwhile is
-          shown, never overwritten. Once the Attendance window closes, a change goes through a Correction request.
+          Open today&apos;s Attendance session from the Class Offering, mark everyone Present in one action, then change
+          only the Students who are late or away. Faculty assigned to the Class Offering share one session, and a mark
+          someone else changed meanwhile is shown, never overwritten. Once the Attendance window closes, a change goes
+          through a Correction request.
         </p>
       </Feature>
 

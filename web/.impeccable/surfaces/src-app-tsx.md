@@ -2,12 +2,12 @@
 version: 1
 slug: "src-app-tsx"
 primary_target: "src/App.tsx"
-related_targets: ["src/SignIn.tsx","src/Schools.tsx","src/Persons.tsx","src/Invitations.tsx","src/RedeemInvitation.tsx","src/HowThisWasBuilt.tsx","src/NotAvailable.tsx","src/styles.css"]
+related_targets: ["src/SignIn.tsx","src/Schools.tsx","src/Persons.tsx","src/Invitations.tsx","src/RedeemInvitation.tsx","src/NotAvailable.tsx","src/styles.css"]
 ---
 
 ## Scope
 
-Every shipped page of the SchoolGrid web app, rebuilt under one replacement visual world: sign-in (with demo roles), Schools, Persons, issued-invitation link, pending invitations, redeem invitation, How this was built, Not available. Visitor mode: **Operate**, with How this was built inheriting the world as a Read page.
+Every shipped page of the SchoolGrid web app, rebuilt under one replacement visual world: sign-in (with demo roles), Schools, Persons, issued-invitation link, pending invitations, redeem invitation, Not available. Visitor mode: **Operate**.
 
 ## Audience and task
 
