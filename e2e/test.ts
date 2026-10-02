@@ -133,11 +133,17 @@ async function auditFor(page: Page): Promise<void> {
   // A control fading between states, such as a button coming back from
   // disabled once a change lands, is measured as it will stand rather than
   // midway: a colour halfway through a transition is neither one the sheet
-  // shows at rest. A looping animation never finishes, so it is not awaited.
+  // shows at rest. A looping animation never finishes, and one driven by the
+  // scroll rests wherever the scroll leaves it, so neither is awaited.
   await page.waitForFunction(() =>
     document
       .getAnimations()
-      .every((animation) => animation.playState !== "running" || animation.effect?.getTiming().iterations === Infinity),
+      .every(
+        (animation) =>
+          animation.playState !== "running" ||
+          animation.effect?.getTiming().iterations === Infinity ||
+          !(animation.timeline instanceof DocumentTimeline),
+      ),
   );
   const results = await page.evaluate(
     (options: RunOptions) =>

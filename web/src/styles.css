@@ -1704,6 +1704,377 @@ dialog.slip::backdrop {
   margin: 0;
 }
 
+/* The pitch, and beside it once there is room, the School in miniature to try. */
+.landing__pitch {
+  min-width: 0;
+}
+
+.landing__hero > .mini {
+  margin-top: calc(var(--step) * 4);
+}
+
+@media (min-width: 75rem) {
+  .landing__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 25rem);
+    gap: calc(var(--step) * 5);
+    align-items: start;
+  }
+
+  .landing__hero > .mini {
+    margin-top: 0;
+  }
+}
+
+/*
+ * A Trial School in miniature: a white block holding the School, a row of the
+ * roles to view it as, and what the chosen role sees. The current role sits on
+ * the sidebar's seal, which slides to the next one.
+ */
+.mini {
+  display: grid;
+  align-content: start;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-block);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.mini__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--step) calc(var(--step) * 1.25);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.mini__badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: var(--action);
+  color: var(--on-action);
+  font-size: var(--size-label);
+  font-weight: 750;
+}
+
+.mini__school {
+  font-weight: 700;
+}
+
+.mini__invented {
+  flex-basis: 100%;
+  color: var(--ink-soft);
+  font-size: var(--size-small);
+  font-weight: 600;
+}
+
+.mini__roles {
+  display: flex;
+  gap: calc(var(--step) * 0.5);
+  padding: calc(var(--step) * 0.75);
+  background: var(--rail);
+  border-bottom: 1px solid var(--rule);
+}
+
+.mini__roles button {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 2.5rem;
+  padding: 0 calc(var(--step) * 1.25);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.mini__roles button[aria-selected="true"] {
+  color: var(--action-strong);
+}
+
+.mini__seal {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: var(--action-wash);
+}
+
+.mini__role,
+.mini__count {
+  position: relative;
+}
+
+/* How many Audit records arrived while another role was in view. */
+.mini__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 calc(var(--step) * 0.5);
+  border-radius: 50%;
+  background: var(--action);
+  color: var(--on-action);
+  font-size: var(--size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.mini__panel {
+  display: grid;
+  align-content: start;
+  gap: calc(var(--step) * 1.5);
+  min-height: 22rem;
+  padding: calc(var(--step) * 2);
+  animation: mini-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mini__panel p,
+.mini__panel ul,
+.mini__panel ol {
+  margin: 0;
+}
+
+.mini__context {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+  font-weight: 650;
+}
+
+.mini__chip {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--course-indigo);
+}
+
+.mini__roster,
+.mini__audit {
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--corner);
+}
+
+.mini__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, min(11rem, 48%));
+  align-items: center;
+  gap: calc(var(--step) * 1.25);
+  padding: calc(var(--step) * 0.75) var(--step) calc(var(--step) * 0.75) calc(var(--step) * 1.5);
+}
+
+.mini__row + .mini__row,
+.mini__entry + .mini__entry {
+  border-top: 1px solid var(--rule);
+}
+
+.mini__row label {
+  display: block;
+  font-size: var(--size-label);
+  font-weight: 600;
+}
+
+.mini__row select {
+  width: 100%;
+  padding-block: calc(var(--step) * 0.75);
+  font-size: var(--size-label);
+}
+
+/* Unmarked is a ring; a mark laid down fills it, as the seal is pressed. */
+.mini__disc {
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 50%;
+  transition:
+    background-color var(--settle),
+    border-color var(--settle);
+}
+
+.mini__row--marked .mini__disc {
+  background: var(--action);
+  border-color: var(--action);
+}
+
+.mini__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step);
+}
+
+.mini__said {
+  min-height: 1.4em;
+  color: var(--ink-soft);
+  font-size: var(--size-label);
+}
+
+.mini__access {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 calc(var(--step) * 2.5);
+  padding-top: var(--step);
+}
+
+.mini__access legend {
+  float: left;
+  width: 100%;
+  margin-bottom: calc(var(--step) * 0.5);
+  color: var(--ink-soft);
+}
+
+.mini__report {
+  display: grid;
+  gap: var(--step);
+  padding: 0;
+  list-style: none;
+}
+
+.mini__report li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--step) * 0.5) calc(var(--step) * 2);
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.5);
+  border: 1px solid var(--rule);
+  border-radius: var(--corner);
+}
+
+.mini__offering {
+  flex-basis: 100%;
+  font-weight: 650;
+}
+
+.mini__fact {
+  font-size: var(--size-label);
+  white-space: nowrap;
+}
+
+.mini__fact span {
+  color: var(--ink-soft);
+}
+
+.mini__fact strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.mini__entry {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: calc(var(--step) * 1.5);
+  padding: var(--step) calc(var(--step) * 1.5);
+  font-size: var(--size-label);
+}
+
+.mini__entry time {
+  color: var(--ink-soft);
+  font-family: var(--type-figures);
+  font-size: var(--size-small);
+  line-height: 1.7;
+}
+
+.mini__entry strong {
+  font-weight: 650;
+}
+
+.mini__hint {
+  color: var(--ink-soft);
+  font-size: var(--size-small);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * The miniature's motion: the seal slides between roles as the sidebar's
+ * does, and the chosen role's view settles in; Mark all Present presses each Student's mark down in turn, top to
+ * bottom; a record arriving on the Audit trail unrolls in under an indigo
+ * wash that fades; a figure granted to a Guardian settles into place.
+ */
+.mini__row--marked .mini__disc {
+  animation: mini-press 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mini__row:nth-child(2) .mini__disc {
+  transition-delay: 60ms;
+  animation-delay: 60ms;
+}
+
+.mini__row:nth-child(3) .mini__disc {
+  transition-delay: 120ms;
+  animation-delay: 120ms;
+}
+
+.mini__row:nth-child(4) .mini__disc {
+  transition-delay: 180ms;
+  animation-delay: 180ms;
+}
+
+.mini__entry--fresh {
+  animation:
+    mini-unroll 420ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    mini-wash 1600ms ease-out both;
+}
+
+.mini__fact,
+.mini__count {
+  animation: mini-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes mini-press {
+  0% {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes mini-unroll {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-0.375rem);
+  }
+  to {
+    clip-path: inset(0);
+    transform: none;
+  }
+}
+
+@keyframes mini-wash {
+  from {
+    background-color: var(--action-wash);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes mini-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+}
+
 /*
  * A sign-in for each provider, side by side while they fit. Each is a link,
  * since it leaves for the provider, struck as the primary button.
@@ -1778,6 +2149,26 @@ dialog.slip::backdrop {
   border: 1px solid var(--rule);
   border-radius: var(--corner-block);
   box-shadow: var(--shadow);
+}
+
+/* Each stop's screenshot is unrolled as it is scrolled to, like a chart pinned up sheet by sheet. */
+@supports (animation-timeline: view()) {
+  .landing__screenshot img {
+    animation: landing-unroll linear both;
+    animation-timeline: view();
+    animation-range: entry 5% cover 30%;
+  }
+}
+
+@keyframes landing-unroll {
+  from {
+    clip-path: inset(0 0 30% 0 round var(--corner-block));
+    transform: translateY(2rem);
+  }
+  to {
+    clip-path: inset(-2rem round var(--corner-block));
+    transform: none;
+  }
 }
 
 .foot .landing__links {

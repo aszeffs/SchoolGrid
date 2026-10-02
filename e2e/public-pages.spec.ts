@@ -117,7 +117,7 @@ test("the landing page is worked by the keyboard alone, and every stop shows the
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
   const reached: string[] = [];
-  for (let press = 0; press < 12 && !reached.includes("Sign in"); press += 1) {
+  for (let press = 0; press < 24 && !reached.includes("Sign in"); press += 1) {
     await page.keyboard.press("Tab");
     const stop = await focused(page);
     if (stop !== undefined && stop.name !== "") {
@@ -129,6 +129,36 @@ test("the landing page is worked by the keyboard alone, and every stop shows the
   expect(reached).toEqual(expect.arrayContaining(["How this was built", "GitHub", "Sign in"]));
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL("/sign-in");
+});
+
+test("the School in miniature keeps the app's rules, each seen as the role that sees it", async ({ page }) => {
+  await page.goto("/");
+  const school = page.getByRole("group", { name: /in miniature/ });
+  const viewAs = (role: string) => school.getByRole("tab", { name: new RegExp(`^${role}`) }).click();
+
+  // A first mark names its own recorder, so saving one leaves the Audit trail as it was.
+  await school.getByLabel("Riley Fernsby").selectOption("Tardy");
+  await school.getByRole("button", { name: "Save" }).click();
+  await expect(school.getByRole("status")).toHaveText(/every unmarked Student is marked Present/);
+  await expect(school.getByLabel("Jamie Lindqvist")).toHaveValue("present");
+
+  // Changing a saved mark is audited, and the School Administrator is told it arrived.
+  await school.getByLabel("Riley Fernsby").selectOption("Present");
+  await school.getByRole("button", { name: "Save" }).click();
+  await expect(school.getByRole("tab", { name: "School Administrator 1 new" })).toBeVisible();
+
+  // The Guardian reads only what the Access profile grants, with nothing marking the rest.
+  await viewAs("Guardian");
+  const report = school.getByRole("tabpanel").getByRole("list");
+  await expect(report).toContainText("Term result");
+  await school.getByLabel("Term results").uncheck();
+  await expect(report).not.toContainText("Term result");
+  await expect(report).toContainText("Present");
+
+  await viewAs("School Administrator");
+  const trail = school.getByRole("tabpanel").getByRole("listitem");
+  await expect(trail.first()).toContainText("Morgan Reyes changed Alex Lindqvist's Access profile");
+  await expect(trail.nth(1)).toContainText("Sam Achterberg changed Riley Fernsby's Attendance from Tardy to Present");
 });
 
 test("sign-in says what SchoolGrid is before it asks for credentials", async ({ page }) => {
@@ -149,7 +179,7 @@ test("sign-in is worked by the keyboard alone, and every stop shows the ring", a
 
   const reached: string[] = [];
   // Enough presses to cross the head and the form, whatever the head carries.
-  for (let press = 0; press < 12 && !reached.includes("Sign in"); press += 1) {
+  for (let press = 0; press < 24 && !reached.includes("Sign in"); press += 1) {
     await page.keyboard.press("Tab");
     const stop = await focused(page);
     if (stop !== undefined && stop.name !== "") {
