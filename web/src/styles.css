@@ -1732,11 +1732,21 @@ dialog.slip::backdrop {
   margin: 0;
 }
 
+/* The role is a role label, as the shell shows who is acting; indigo words alone would read as a link. */
 .landing__role {
-  margin: calc(var(--step) * 0.5) 0 calc(var(--step) * 1.5);
-  font-size: var(--size-label);
+  margin: var(--step) 0 calc(var(--step) * 2);
+  font-size: var(--size-small);
   font-weight: 650;
-  color: var(--action);
+  color: var(--ink-soft);
+}
+
+.landing__role span {
+  margin-left: calc(var(--step) * 0.5);
+  padding: 0.125rem var(--step);
+  background: var(--action-wash);
+  border-radius: 6px;
+  color: var(--action-strong);
+  white-space: nowrap;
 }
 
 .landing__feature > p,
@@ -2119,6 +2129,12 @@ td[aria-selected="true"] > .day {
 
   .legend {
     position: static;
+  }
+
+  /* The trial's sign-ins stack full width, one even column under the thumb. */
+  .landing__trial .start-trial {
+    flex-direction: column;
+    justify-self: stretch;
   }
 
   form {

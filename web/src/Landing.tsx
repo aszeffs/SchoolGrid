@@ -179,7 +179,9 @@ function Feature({
   return (
     <section className="landing__feature" aria-labelledby={headingId}>
       <h2 id={headingId}>{heading}</h2>
-      <p className="landing__role">Seen as {role}</p>
+      <p className="landing__role">
+        Seen as <span>{role}</span>
+      </p>
       {children}
       <picture className="landing__screenshot">
         <source srcSet={`/tour/${id}-dark.png`} media="(prefers-color-scheme: dark)" />
