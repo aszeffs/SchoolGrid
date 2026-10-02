@@ -171,6 +171,7 @@ test.describe("in a Trial School", () => {
 
     // Back to the time the server keeps, which the new trial's two hours are counted from.
     await page.clock.setSystemTime(Date.now());
+    await expect(page.getByRole("link", { name: /^Continue with / })).toHaveText(["Continue with GitHub", "Continue with Google"]);
     await page.getByRole("link", { name: "Continue with GitHub" }).click();
     await approveAtProvider(page);
     await expect(banner(page)).toContainText(BANNER);

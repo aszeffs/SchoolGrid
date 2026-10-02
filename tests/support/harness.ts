@@ -27,7 +27,7 @@ import {
 } from "../../src/config.ts";
 import { loadWebApp } from "../../src/http/web-app.ts";
 import { buildServer, type RegisteredRoute } from "../../src/server.ts";
-import { startFakeOAuthProvider, type FakeOAuthProvider } from "./fake-oauth-provider.ts";
+import { startFakeOAuthProvider, USER_ENDPOINTS, type FakeOAuthProvider } from "./fake-oauth-provider.ts";
 
 /** The origin every test server is configured to be served from. */
 const PUBLIC_ORIGIN = parsePublicOrigin("https://schoolgrid.test");
@@ -384,9 +384,6 @@ export interface TrialSignIn {
 /** The OAuth app every test server with trials is configured with, at the fake provider. */
 const FAKE_CLIENT = { clientId: "schoolgrid-test", clientSecret: "fake-client-secret" };
 
-/** Where the fake provider answers who signed in, as each provider would: GitHub's `id`, Google's `sub`. */
-const FAKE_USER_PATHS: Record<TrialProvider, string> = { github: "/user", google: "/userinfo" };
-
 /** The identity key every test server with trials is configured with. */
 export const TEST_IDENTITY_KEY = "test-identity-key-".padEnd(48, "0");
 
@@ -494,7 +491,7 @@ export function useTestServer({
                     ...FAKE_CLIENT,
                     authorizeUrl: `${fakeProvider!.url}/authorize`,
                     tokenUrl: `${fakeProvider!.url}/token`,
-                    userUrl: `${fakeProvider!.url}${FAKE_USER_PATHS[provider]}`,
+                    userUrl: `${fakeProvider!.url}${USER_ENDPOINTS[provider].path}`,
                   },
                 ]),
               ),

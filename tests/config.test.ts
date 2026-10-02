@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadConfig, loadMigrationConfig } from "../src/config.ts";
+import { loadConfig, loadMigrationConfig, TRIAL_PROVIDERS } from "../src/config.ts";
 
 describe("loadConfig database connections", () => {
   beforeEach(() => {
@@ -244,8 +244,10 @@ describe("loadConfig trials", () => {
     vi.unstubAllEnvs();
   });
 
-  const PROVIDER_SETTINGS = ["GITHUB", "GOOGLE"].flatMap((provider) =>
-    ["CLIENT_ID", "CLIENT_SECRET", "AUTHORIZE_URL", "TOKEN_URL", "USER_URL"].map((setting) => `TRIAL_${provider}_${setting}`),
+  const PROVIDER_SETTINGS = TRIAL_PROVIDERS.flatMap((provider) =>
+    ["CLIENT_ID", "CLIENT_SECRET", "AUTHORIZE_URL", "TOKEN_URL", "USER_URL"].map(
+      (setting) => `TRIAL_${provider.toUpperCase()}_${setting}`,
+    ),
   );
   const KEY = "k".repeat(32);
 
@@ -287,7 +289,7 @@ describe("loadConfig trials", () => {
     );
   });
 
-  it("offers Google alone when only its OAuth app is configured, at Google's own endpoints", () => {
+  it("offers Google alone when only its OAuth client is configured, at Google's own endpoints", () => {
     vi.stubEnv("TRIALS_ENABLED", "true");
     vi.stubEnv("TRIAL_IDENTITY_KEY", KEY);
     vi.stubEnv("TRIAL_GOOGLE_CLIENT_ID", "client.apps.googleusercontent.com");

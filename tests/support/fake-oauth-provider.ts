@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { TrialProvider } from "../../src/config.ts";
 
 /**
  * A stand-in for GitHub's and Google's OAuth, for the tests alone: the
@@ -29,8 +30,14 @@ export interface FakeOAuthProviderOptions {
   port?: number;
 }
 
-/** Each endpoint naming who signed in, and the field it names them in. */
-const USER_ENDPOINTS: Record<string, string> = { "/user": "id", "/userinfo": "sub" };
+/**
+ * Where each provider names who signed in, and in which field: GitHub's `id`
+ * at its user endpoint, Google's `sub` at its userinfo endpoint.
+ */
+export const USER_ENDPOINTS: Record<TrialProvider, { path: string; field: string }> = {
+  github: { path: "/user", field: "id" },
+  google: { path: "/userinfo", field: "sub" },
+};
 
 interface Grant {
   subject: string;
@@ -63,10 +70,10 @@ export async function startFakeOAuthProvider({
     if (url.pathname === "/token" && request.method === "POST") {
       return exchange(request, response, await formOf(request));
     }
-    // GitHub names its subject `id` at its user endpoint, Google `sub` at its
-    // userinfo endpoint. Each is answered only where its provider answers it,
-    // so a provider read through the other's field finds no subject.
-    const field = request.method === "GET" ? USER_ENDPOINTS[url.pathname] : undefined;
+    // Each field is answered only where its provider answers it, so a
+    // provider read through the other's field finds no subject.
+    const field =
+      request.method === "GET" ? Object.values(USER_ENDPOINTS).find(({ path }) => path === url.pathname)?.field : undefined;
     if (field !== undefined) {
       const token = /^Bearer (.+)$/i.exec(request.headers.authorization ?? "")?.[1];
       const subject = token === undefined ? undefined : tokens.get(token);
