@@ -11,7 +11,7 @@ import { expect, test, type Page } from "@playwright/test";
 const OUT = new URL("../../web/public/tour/", import.meta.url);
 
 /** Starts a Trial School through the stand-in provider, as a fresh visitor, and lands in it as its School Administrator. */
-async function startTrial(page: Page): Promise<string> {
+async function startTrial(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByRole("link", { name: "Continue with GitHub" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
@@ -21,7 +21,6 @@ async function startTrial(page: Page): Promise<string> {
   const expiresAt = await page.getByRole("region", { name: "Trial School" }).locator("time").getAttribute("datetime");
   await page.clock.setFixedTime(Date.parse(expiresAt!) - 2 * 60 * 60 * 1000);
   await expect(page.getByRole("region", { name: "Trial School" })).toContainText("deleted in 2h 0m");
-  return new URL(page.url()).pathname.split("/")[2]!;
 }
 
 /** Waits for the sheet to finish being read. */
@@ -29,6 +28,7 @@ async function settled(page: Page) {
   await expect(page.getByRole("main")).not.toHaveAttribute("aria-busy", "true");
 }
 
+/** Changes role from the switcher, and waits for the role's home to be read. */
 async function viewAs(page: Page, name: string) {
   await settled(page);
   await page.getByRole("banner").locator("summary", { hasText: /^Viewing as / }).click();

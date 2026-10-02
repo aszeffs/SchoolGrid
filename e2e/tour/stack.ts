@@ -19,10 +19,6 @@ import { startEmbeddedPostgres } from "../../tests/support/embedded-postgres.ts"
  * browser in a real trial on a developer's machine: the tour's screenshots.
  */
 export interface Showcase {
-  /** Where a browser reaches it, as `http://localhost:<port>`. */
-  origin: string;
-  /** The database it serves, as the application's own login. */
-  databaseUrl: string;
   close(): Promise<void>;
 }
 
@@ -79,8 +75,6 @@ export async function startShowcase({ port }: { port: number }): Promise<Showcas
   await app.listen({ port, host: "localhost" });
 
   return {
-    origin,
-    databaseUrl,
     async close() {
       await app.close();
       await database.end();

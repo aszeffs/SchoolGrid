@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { SALES_PITCH } from "./app.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
@@ -12,7 +13,7 @@ import { expect, expectNoSidewaysScroll, test } from "./test.ts";
  * asks for and stay legible in both.
  */
 
-const HEADLINE = "A K-12 School's attendance and results, each seen by the right role";
+const HEADLINE = "A K-12 School's Attendance and Term results, each seen by the right role";
 
 /** The landing page's tour, in the order it leads with, and the role each feature is seen as. */
 const TOUR = [
@@ -80,7 +81,7 @@ test("the landing page says what SchoolGrid does, tours what each role sees, and
   // Nothing on it frames the site as anything but the product it shows, and
   // nothing asks for money: the one way in is a trial.
   await expect(page.locator("body")).not.toContainText(/learn|practice|portfolio|DevSecOps/i);
-  await expect(page.locator("body")).not.toContainText(/\b(pric(e|es|ing)|plans?|subscri\w*|contact sales)\b/i);
+  await expect(page.locator("body")).not.toContainText(SALES_PITCH);
 
   // This deployment offers no trial, so the page offers none.
   await expect(main.getByRole("link", { name: /^Continue with / })).toHaveCount(0);

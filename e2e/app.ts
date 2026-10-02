@@ -315,3 +315,6 @@ export async function stubTrail(page: Page, pages: Record<string, TrailPage>): P
   });
   return asked;
 }
+
+/** Wording that would sell rather than show: SchoolGrid's one way in is a trial, never a price. */
+export const SALES_PITCH = /\b(pric(e|es|ing)|plans?|subscri\w*|contact sales)\b/i;

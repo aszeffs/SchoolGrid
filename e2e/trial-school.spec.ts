@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
-import { acknowledgeIssuedLink, issueInvitationFor, recordRows } from "./app.ts";
+import { acknowledgeIssuedLink, issueInvitationFor, recordRows, SALES_PITCH } from "./app.ts";
 import { expect, expectNoSidewaysScroll, test } from "./test.ts";
 
 /**
@@ -82,7 +82,7 @@ test.describe("in a Trial School", () => {
       "Continue with GitHub",
       "Continue with Google",
     ]);
-    await expect(page.locator("body")).not.toContainText(/\b(pric(e|es|ing)|plans?|subscri\w*|contact sales)\b/i);
+    await expect(page.locator("body")).not.toContainText(SALES_PITCH);
   });
 
   test("a visitor who cancels at the provider is back on the front page, told so, with no trial", async ({ page }) => {

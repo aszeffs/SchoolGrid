@@ -64,7 +64,7 @@ export function Landing() {
       }
     >
       <section className="landing__hero" aria-labelledby="landing-headline">
-        <h1 id="landing-headline">A K-12 School&apos;s attendance and results, each seen by the right role</h1>
+        <h1 id="landing-headline">A K-12 School&apos;s Attendance and Term results, each seen by the right role</h1>
         <p className="landing__lede">
           Faculty take Attendance in a few clicks and publish Term results only when every one is ready. Each Guardian
           sees what their Access profile grants, and a School Administrator sees every change on the Audit trail.
@@ -91,7 +91,7 @@ export function Landing() {
         screenshot="A Faculty member's Attendance session for Mathematics, with every Student marked Present in one action and one changed to Tardy, ready to save."
       >
         <p>
-          Open today&apos;s Attendance session from the class, mark everyone Present in one action, then change only the
+          Open today&apos;s Attendance session from the Class Offering, mark everyone Present in one action, then change only the
           Students who are late or away. Co-teachers share one session, and a mark someone else changed meanwhile is
           shown, never overwritten. Once the Attendance window closes, a change goes through a Correction request.
         </p>
@@ -104,8 +104,8 @@ export function Landing() {
         screenshot="Publishing three Term results for Mathematics: a confirmation warns that Publication cannot be undone, and that a published result changes only through a Correction request."
       >
         <p>
-          Term results stay drafts, seen only by the class&apos;s Faculty and School Administrators, until Publication
-          releases a whole Class Offering at once. Publication is refused while any Student&apos;s result is missing,
+          Term results stay drafts, seen only by the Class Offering&apos;s Faculty and School Administrators, until
+          Publication makes a whole Class Offering&apos;s results visible at once. Publication is refused while any Student&apos;s result is missing,
           and a published result changes only through an approved Correction request.
         </p>
       </Feature>
@@ -150,6 +150,9 @@ export function Landing() {
   );
 }
 
+/** The size every tour screenshot is shot at (playwright.tour.config.ts). */
+const SHOT = { width: 1440, height: 900 };
+
 /**
  * One stop on the tour: a feature, the role it is seen as, what it does, and
  * the app showing it. The screenshot is made by `npm run screenshots` in each
@@ -184,6 +187,3 @@ function Feature({
     </section>
   );
 }
-
-/** The size every tour screenshot is shot at (playwright.tour.config.ts). */
-const SHOT = { width: 1440, height: 900 };
