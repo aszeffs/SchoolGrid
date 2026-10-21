@@ -150,7 +150,11 @@ export async function redeem(client: APIRequestContext, origin: string, redempti
   }
 }
 
-/** A year far enough ahead that no other spec's can overlap it. */
+/**
+ * A year far enough ahead that no seeded record overlaps it. Two specs can
+ * still draw the same one, so withOwnTerm draws again when the School refuses
+ * it as overlapping.
+ */
 export function yearAhead(): { firstDate: string; lastDate: string } {
   const starts = 2100 + Math.floor(Math.random() * 7000);
   return { firstDate: `${starts}-09-01`, lastDate: `${starts + 1}-06-30` };
@@ -170,16 +174,25 @@ export interface OwnTerm {
  * Academic Year of the spec's own over these dates, a year ahead unless the
  * spec says otherwise, made one Term.
  */
-export async function withOwnTerm(page: Page, dates = yearAhead()): Promise<{ schoolId: string; term: OwnTerm }> {
+export async function withOwnTerm(
+  page: Page,
+  chosen?: { firstDate: string; lastDate: string },
+): Promise<{ schoolId: string; term: OwnTerm }> {
   const { schoolAdministrator, schools } = seeded();
   await signIn(page, schoolAdministrator);
   await openSchool(page, schools[0]!);
   const schoolId = await schoolIdOf(page, schools[0]!);
   const yearName = `Year ${randomUUID().slice(0, 8)}`;
-  const { academicYear } = await arrange<{ academicYear: { id: string } }>(page, schoolId, "/academic-years", {
-    name: yearName,
-    ...dates,
-  });
+  let dates = chosen ?? yearAhead();
+  let created = await createYear(page, schoolId, yearName, dates);
+  for (let draw = 1; created.status() === 409 && chosen === undefined && draw < 5; draw++) {
+    dates = yearAhead();
+    created = await createYear(page, schoolId, yearName, dates);
+  }
+  if (!created.ok()) {
+    throw new Error(`could not arrange POST /academic-years: ${created.status()}`);
+  }
+  const { academicYear } = (await created.json()) as { academicYear: { id: string } };
   const name = "Whole year";
   const divided = await page.request.patch(`/api/schools/${schoolId}/academic-years/${academicYear.id}`, {
     headers: { origin: new URL(page.url()).origin },
@@ -190,6 +203,13 @@ export async function withOwnTerm(page: Page, dates = yearAhead()): Promise<{ sc
   }
   const { academicYear: year } = (await divided.json()) as { academicYear: { terms: { id: string }[] } };
   return { schoolId, term: { id: year.terms[0]!.id, name, option: `${name}, ${yearName}`, ...dates } };
+}
+
+function createYear(page: Page, schoolId: string, name: string, dates: { firstDate: string; lastDate: string }) {
+  return page.request.post(`/api/schools/${schoolId}/academic-years`, {
+    headers: { origin: new URL(page.url()).origin },
+    data: { name, ...dates },
+  });
 }
 
 /**
@@ -257,7 +277,10 @@ export interface OwnOffering {
 }
 
 /** A School Administrator in the first School, with a Class Offering of the spec's own in a Term of its own: see withOwnTerm. */
-export async function withOwnOffering(page: Page, dates = yearAhead()): Promise<OwnOffering> {
+export async function withOwnOffering(
+  page: Page,
+  dates?: { firstDate: string; lastDate: string },
+): Promise<OwnOffering> {
   const { schoolId, term } = await withOwnTerm(page, dates);
   const courseName = `Course ${randomUUID().slice(0, 8)}`;
   const { course } = await arrange<{ course: { id: string } }>(page, schoolId, "/courses", { name: courseName });
